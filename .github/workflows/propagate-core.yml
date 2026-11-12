@@ -84,22 +84,24 @@ jobs:
         run: |
           git clone "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY_OWNER}/${{ matrix.repo }}.git" work
           cd work
-          last_sha=$(cat .core-sync-sha 2>/dev/null || git rev-list --max-parents=0 HEAD | tail -1)
+          last_sha=$(tr -d '[:space:]' < .core-sync-sha 2>/dev/null || git rev-list --max-parents=0 HEAD | tail -1)
           git remote add template "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --tags template main
           git fetch template "${{ github.event.inputs.core_ref }}"
-          fetch_sha=$(git rev-parse FETCH_HEAD)
+          fetch_sha=$(git rev-parse 'FETCH_HEAD^{commit}')
+          base_sha=$(git rev-parse "${last_sha}^{commit}")
 
-          echo "last_sha=$last_sha" >> "$GITHUB_ENV"
+          echo "last_sha=$base_sha" >> "$GITHUB_ENV"
           echo "fetch_sha=$fetch_sha" >> "$GITHUB_ENV"
           echo "branch=chore/sync-core-$(date +%Y%m%d-%H%M%S)" >> "$GITHUB_ENV"
 
-          if [ "$last_sha" = "$fetch_sha" ]; then
+          if [ "$base_sha" = "$fetch_sha" ]; then
             echo "already_synced=true" >> "$GITHUB_OUTPUT"
           else
             echo "already_synced=false" >> "$GITHUB_OUTPUT"
-            git diff "$last_sha"..FETCH_HEAD \
+            git diff "$base_sha".."$fetch_sha" \
               -- . ':!tenants-manifest.json' ':!.github/workflows/propagate-core.yml' ':!.core-version' ':!.core-sync-sha' \
-              > /tmp/core.patch || true
+              > /tmp/core.patch
           fi
 
       - name: Dry run — solo reporte
