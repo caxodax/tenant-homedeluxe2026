@@ -46,6 +46,13 @@ export async function GET(request: NextRequest) {
     }
 
     const tenantSlug = payload.tenant_slug.toLowerCase().trim();
+    const lockedTenantSlug = process.env.NEXT_PUBLIC_DEFAULT_TENANT_SLUG?.toLowerCase().trim();
+    if (lockedTenantSlug && tenantSlug !== lockedTenantSlug) {
+      return NextResponse.json(
+        { error: 'Token de impersonación emitido para otro comercio' },
+        { status: 403 }
+      );
+    }
 
     // 1. Verificar que el Super Admin firmante sigue activo
     const adminRes = await pool.query(
