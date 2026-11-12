@@ -75,6 +75,9 @@ export async function GET(
             headers: {
               "Content-Type": contentType,
               ...IMMUTABLE_CDN_HEADERS,
+              ...(response.ContentLength != null
+                ? { "Content-Length": String(response.ContentLength) }
+                : {}),
               ...(response.ETag ? { ETag: response.ETag } : {}),
             },
           });

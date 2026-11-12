@@ -44,7 +44,6 @@ import {
 } from '@/components/ui/table';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import Image from 'next/image';
 
 interface Product {
   id: string;

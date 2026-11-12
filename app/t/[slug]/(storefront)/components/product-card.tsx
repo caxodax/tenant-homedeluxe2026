@@ -19,7 +19,13 @@ export interface StorefrontProduct {
   image_url?: string;
 }
 
-export function ProductCard({ product }: { product: StorefrontProduct }) {
+export function ProductCard({
+  product,
+  priority = false,
+}: {
+  product: StorefrontProduct;
+  priority?: boolean;
+}) {
   const [isAdded, setIsAdded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalQuantity, setModalQuantity] = useState(1);
@@ -90,7 +96,9 @@ export function ProductCard({ product }: { product: StorefrontProduct }) {
                 src={product.image_url}
                 alt={product.name}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                loading="lazy"
+                loading={priority ? 'eager' : 'lazy'}
+                fetchPriority={priority ? 'high' : 'auto'}
+                decoding="async"
               />
             ) : (
               <Package className="w-10 h-10 text-slate-400 dark:text-zinc-600 group-hover:scale-110 transition-transform duration-300" />
