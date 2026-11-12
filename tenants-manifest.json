@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "channels": {
+    "canary": { "auto_merge_on_green_ci": true },
+    "stable": { "auto_merge_on_green_ci": false }
+  },
+  "tenants": [
+    {
+      "repo": "tenant-shopmarket",
+      "slug": "shopmarket",
+      "channel": "stable",
+      "enabled": true
+    }
+  ]
+}

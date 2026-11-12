@@ -1,0 +1,174 @@
+name: propagate-core
+
+on:
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: 'Lista de repos separados por coma, "manifest" o "all"'
+        required: true
+        default: 'manifest'
+      core_ref:
+        description: 'Ref del template a propagar (tag, rama o sha)'
+        required: true
+        default: 'main'
+      dry_run:
+        description: 'Solo calcular diff y reportar, sin abrir PRs'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  resolve-targets:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.resolve.outputs.matrix }}
+      has_targets: ${{ steps.resolve.outputs.has_targets }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: resolve
+        env:
+          INPUT_TARGETS: ${{ github.event.inputs.targets }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          manifest = json.load(open('tenants-manifest.json'))
+          inp = os.environ['INPUT_TARGETS'].strip()
+          tenants = [t for t in manifest['tenants'] if t.get('enabled', True)]
+          if inp in ('manifest', 'all'):
+            repos = [t['repo'] for t in tenants]
+          else:
+            allowed = {t['repo'] for t in tenants}
+            repos = [r.strip() for r in inp.split(',') if r.strip()]
+            unknown = [r for r in repos if r not in allowed]
+            if unknown:
+              raise SystemExit(f'Repos no registrados en manifest: {unknown}')
+          print(json.dumps({'repo': repos}))
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+            f.write('matrix=' + json.dumps({'repo': repos}) + '\n')
+            f.write('has_targets=' + ('true' if repos else 'false') + '\n')
+          PY
+
+  sync:
+    needs: resolve-targets
+    if: ${{ needs.resolve-targets.outputs.has_targets == 'true' }}
+    strategy:
+      matrix: ${{ fromJson(needs.resolve-targets.outputs.matrix) }}
+      fail-fast: false
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.SYNC_PAT }}
+    steps:
+      - name: Checkout template (ref solicitado)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.core_ref }}
+
+      - name: Idempotencia — ¿ya hay PR de sync abierto?
+        id: open_pr
+        run: |
+          OPEN=$(gh pr list --repo "${GITHUB_REPOSITORY_OWNER}/${{ matrix.repo }}" \
+            --state open --json headRefName \
+            --jq '[.[] | select(.headRefName | startswith("chore/sync-core"))] | length')
+          echo "count=$OPEN" >> "$GITHUB_OUTPUT"
+          if [ "$OPEN" != "0" ]; then
+            echo "::notice::Se omite ${{ matrix.repo }}: ya existe un PR chore/sync-core abierto."
+          fi
+
+      - name: Clonar repo del tenant y resolver diff base
+        id: clone
+        if: steps.open_pr.outputs.count == '0'
+        run: |
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY_OWNER}/${{ matrix.repo }}.git" work
+          cd work
+          last_sha=$(cat .core-sync-sha 2>/dev/null || git rev-list --max-parents=0 HEAD | tail -1)
+          git remote add template "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch template "${{ github.event.inputs.core_ref }}"
+          fetch_sha=$(git rev-parse FETCH_HEAD)
+
+          echo "last_sha=$last_sha" >> "$GITHUB_ENV"
+          echo "fetch_sha=$fetch_sha" >> "$GITHUB_ENV"
+          echo "branch=chore/sync-core-$(date +%Y%m%d-%H%M%S)" >> "$GITHUB_ENV"
+
+          if [ "$last_sha" = "$fetch_sha" ]; then
+            echo "already_synced=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "already_synced=false" >> "$GITHUB_OUTPUT"
+            git diff "$last_sha"..FETCH_HEAD \
+              -- . ':!tenants-manifest.json' ':!.github/workflows/propagate-core.yml' ':!.core-version' ':!.core-sync-sha' \
+              > /tmp/core.patch || true
+          fi
+
+      - name: Dry run — solo reporte
+        if: steps.open_pr.outputs.count == '0' && github.event.inputs.dry_run == 'true'
+        run: |
+          if [ "${{ steps.clone.outputs.already_synced }}" = "true" ]; then
+            echo "::notice::DRY RUN ${{ matrix.repo }}: ya sincronizado en $fetch_sha (sin cambios pendientes)."
+          else
+            cd work
+            STAT=$(git diff --stat "$last_sha"..FETCH_HEAD -- . ':!tenants-manifest.json' ':!.github/workflows/propagate-core.yml' ':!.core-version' ':!.core-sync-sha' | tail -n 1 || true)
+            echo "::notice::DRY RUN ${{ matrix.repo }} ($last_sha -> $fetch_sha): ${STAT:-sin diferencias de archivos}"
+          fi
+
+      - name: Calcular y aplicar diff del Core (--3way)
+        id: apply
+        if: steps.open_pr.outputs.count == '0' && github.event.inputs.dry_run != 'true' && steps.clone.outputs.already_synced != 'true'
+        run: |
+          cd work
+          git config user.name "marketos-core-bot"
+          git config user.email "core-bot@marketos.app"
+          git checkout -b "$branch"
+
+          if [ -s /tmp/core.patch ]; then
+            git apply --3way --whitespace=nowarn /tmp/core.patch || echo "CONFLICT=1" >> "$GITHUB_ENV"
+          fi
+
+          printf '%s\n' "$fetch_sha" > .core-sync-sha
+          git show FETCH_HEAD:.core-version > .core-version
+
+          if [ -n "$(git status --porcelain)" ]; then
+            git add -A
+            git commit -m "chore(core): sync marketos-core @ $(git rev-parse --short "$fetch_sha")"
+            echo "committed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "committed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::${{ matrix.repo }} no tuvo cambios aplicables tras evaluar el patch."
+          fi
+
+      - name: Push y abrir Pull Request
+        if: steps.apply.outputs.committed == 'true' && github.event.inputs.dry_run != 'true'
+        run: |
+          cd work
+          git push -u origin "$branch"
+          EXTRA_ARGS=()
+          if [ "${CONFLICT:-0}" = "1" ]; then
+            gh label create sync-conflict \
+              --repo "${GITHUB_REPOSITORY_OWNER}/${{ matrix.repo }}" \
+              --color d97706 \
+              --description "Conflicto detectado durante sync automático de Core" \
+              --force || true
+            EXTRA_ARGS+=(--label sync-conflict --draft)
+          fi
+          gh pr create --repo "${GITHUB_REPOSITORY_OWNER}/${{ matrix.repo }}" \
+            --base main --head "$branch" \
+            --title "chore(core): sincronización MarketOS Core ${{ github.event.inputs.core_ref }}" \
+            --body "Sync automático del Core desde \`marketos-template\` @ \`${{ github.event.inputs.core_ref }}\` (\`$fetch_sha\`).\n\n- Origen diff: \`$last_sha\`\n- Conflicto detectado: ${CONFLICT:-0}\n\n**Canal stable: requiere aprobación manual.**" \
+            "${EXTRA_ARGS[@]}"
+
+      - name: Auto-merge canal canary (solo CI verde)
+        if: steps.apply.outputs.committed == 'true' && github.event.inputs.dry_run != 'true' && env.CONFLICT != '1'
+        run: |
+          CHANNEL=$(python3 -c "import json;m=json.load(open('tenants-manifest.json'));print(next((t['channel'] for t in m['tenants'] if t['repo']=='${{ matrix.repo }}'),'stable'))")
+          if [ "$CHANNEL" = "canary" ]; then
+            gh pr list --repo "${GITHUB_REPOSITORY_OWNER}/${{ matrix.repo }}" --state open --json number,headRefName \
+              --jq '.[] | select(.headRefName | startswith("chore/sync-core")) | .number' \
+              | xargs -r -I{} gh pr merge {} --repo "${GITHUB_REPOSITORY_OWNER}/${{ matrix.repo }}" --squash --auto
+          fi
+
+      - name: Notificar conflicto
+        if: env.CONFLICT == '1'
+        run: |
+          echo "::error::Sync de ${{ matrix.repo }} requiere resolución manual de conflictos (PR draft con etiqueta sync-conflict)."
