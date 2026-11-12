@@ -3,7 +3,6 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { StorefrontHeader } from './components/storefront-header';
 import { ContingencyBanner } from './components/contingency-banner';
-import { CartProvider } from '@/lib/cart/cart-provider';
 import { TenantThemeInjector } from '@/components/tenant-theme-injector';
 import { Store, MapPin, Phone, ShieldCheck } from 'lucide-react';
 
@@ -46,7 +45,7 @@ export default async function StorefrontLayout({
   const { tenant, settings, inContingency } = data;
 
   return (
-    <CartProvider>
+    <>
       <TenantThemeInjector
         primaryColor={settings?.primary_color}
         secondaryColor={settings?.secondary_color}
@@ -123,6 +122,6 @@ export default async function StorefrontLayout({
           </div>
         </footer>
       </div>
-    </CartProvider>
+    </>
   );
 }
