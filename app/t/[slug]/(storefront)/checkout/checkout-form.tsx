@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import type { TenantPaymentMethod } from '@/lib/payment-methods';
+import { uploadTenantMedia } from '@/lib/media-client';
 
 interface CheckoutFormProps {
   slug: string;
@@ -124,21 +125,7 @@ export function CheckoutForm({
       setError(null);
       setIsUploadingProof(true);
       const sha256 = await computeSha256Hex(file);
-
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('folder', 'proofs');
-      formData.append('tenantSlug', slug);
-
-      const res = await fetch('/api/media/upload', {
-        method: 'POST',
-        body: formData,
-      });
-      const data = await res.json();
-      if (!res.ok || !data.url) {
-        throw new Error(data.error || 'No se pudo subir el comprobante');
-      }
-
+      const data = await uploadTenantMedia(file, slug, 'proofs', 1200);
       setProofUrl(data.url);
       setProofHash(sha256);
     } catch (err) {

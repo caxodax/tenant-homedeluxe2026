@@ -11,6 +11,7 @@ import {
   Loader2, Sparkles, Check, X 
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { uploadTenantMedia } from '@/lib/media-client';
 
 interface SettingsData {
   business_name: string;
@@ -54,27 +55,13 @@ export function SettingsForm({ slug, initialSettings }: { slug: string; initialS
 
     try {
       setIsUploadingLogo(true);
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('folder', 'branding');
-      formData.append('tenantSlug', slug);
-
-      const res = await fetch('/api/media/upload', {
-        method: 'POST',
-        body: formData,
+      const data = await uploadTenantMedia(file, slug, 'branding', 512);
+      setLogoUrl(data.url);
+      toast.success('Logotipo subido a Cloudflare R2');
+    } catch (err) {
+      toast.error('Error al subir el logo', {
+        description: err instanceof Error ? err.message : 'Verifica el formato del archivo.',
       });
-
-      const data = await res.json();
-      if (res.ok && data.url) {
-        setLogoUrl(data.url);
-        toast.success('Logotipo subido a Cloudflare R2');
-      } else {
-        toast.error('Error al subir el logo', {
-          description: data.error || 'Verifica el formato del archivo.',
-        });
-      }
-    } catch {
-      toast.error('Error de red al conectar con Cloudflare R2');
     } finally {
       setIsUploadingLogo(false);
     }

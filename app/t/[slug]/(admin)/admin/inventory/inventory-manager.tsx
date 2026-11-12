@@ -18,6 +18,7 @@ import {
   Image as ImageIcon,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { uploadTenantMedia } from '@/lib/media-client';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
@@ -117,29 +118,15 @@ export function InventoryManager({ slug, initialProducts, categories }: Inventor
 
     try {
       setIsUploading(true);
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('folder', 'products');
-      formData.append('tenantSlug', slug);
-
-      const res = await fetch('/api/media/upload', {
-        method: 'POST',
-        body: formData,
+      const data = await uploadTenantMedia(file, slug, 'products');
+      setImageUrl(data.url);
+      toast.success('Imagen subida con éxito a Cloudflare R2', {
+        description: data.filename,
       });
-
-      const data = await res.json();
-      if (res.ok && data.url) {
-        setImageUrl(data.url);
-        toast.success('Imagen subida con éxito a Cloudflare R2', {
-          description: data.filename,
-        });
-      } else {
-        toast.error('Error al subir la imagen', {
-          description: data.error || 'Verifica los formatos permitidos.',
-        });
-      }
-    } catch {
-      toast.error('Error de red al conectar con Cloudflare R2');
+    } catch (err) {
+      toast.error('Error al subir la imagen', {
+        description: err instanceof Error ? err.message : 'Verifica los formatos permitidos.',
+      });
     } finally {
       setIsUploading(false);
     }

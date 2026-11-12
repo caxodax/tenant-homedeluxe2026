@@ -5,6 +5,7 @@ import { useDropzone } from 'react-dropzone';
 import { Upload, X, Loader2, ImageIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { toWebpFile, uploadTenantMedia } from '@/lib/media-client';
 
 interface ImageUploaderProps {
   tenantSlug: string;
@@ -28,10 +29,10 @@ export function ImageUploader({
 
   const onDrop = useCallback(
     async (acceptedFiles: File[]) => {
-      const file = acceptedFiles[0];
-      if (!file) return;
+      const rawFile = acceptedFiles[0];
+      if (!rawFile) return;
 
-      if (file.size > maxSize * 1024 * 1024) {
+      if (rawFile.size > maxSize * 1024 * 1024) {
         toast.error(`La imagen es muy grande. Máximo ${maxSize}MB`);
         return;
       }
@@ -39,6 +40,9 @@ export function ImageUploader({
       setUploading(true);
 
       try {
+        const maxDim = path === 'logos' || path === 'branding' ? 512 : 900;
+        const file = await toWebpFile(rawFile, maxDim);
+
         // 1. Intentar presigned upload directo a Cloudflare R2
         let uploadedUrl = '';
         try {
@@ -55,7 +59,7 @@ export function ImageUploader({
 
           if (presignRes.ok) {
             const { presigned_url, public_url } = await presignRes.json();
-            
+
             // Subida PUT directa al bucket R2
             const uploadRes = await fetch(presigned_url, {
               method: 'PUT',
@@ -73,21 +77,7 @@ export function ImageUploader({
 
         // 2. Fallback de streaming si PUT directo falló por CORS en bucket
         if (!uploadedUrl) {
-          const formData = new FormData();
-          formData.append('file', file);
-          formData.append('folder', path);
-          formData.append('tenantSlug', tenantSlug);
-
-          const fallbackRes = await fetch('/api/media/upload', {
-            method: 'POST',
-            body: formData,
-          });
-
-          if (!fallbackRes.ok) {
-            throw new Error('Error al subir imagen mediante canal de carga');
-          }
-
-          const fallbackData = await fallbackRes.json();
+          const fallbackData = await uploadTenantMedia(file, tenantSlug, path, maxDim);
           uploadedUrl = fallbackData.url;
         }
 

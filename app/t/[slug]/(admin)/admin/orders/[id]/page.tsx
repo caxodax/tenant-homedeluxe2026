@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { uploadTenantMedia } from '@/lib/media-client';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -337,19 +338,7 @@ export default function AdminOrderDetailPage() {
     setUploadingProof(true);
     try {
       const hash = await computeFileSha256(file);
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('folder', 'proofs');
-      fd.append('tenantSlug', slug);
-
-      const res = await fetch('/api/media/upload', {
-        method: 'POST',
-        body: fd,
-      });
-      const data = await res.json();
-      if (!res.ok || !data.url) {
-        throw new Error(data.error || 'Error subiendo imagen del comprobante');
-      }
+      const data = await uploadTenantMedia(file, slug, 'proofs', 1200);
       setAttachProofUrl(data.url);
       setAttachProofHash(hash);
       toast.success('Comprobante subido y hash SHA-256 calculado');
