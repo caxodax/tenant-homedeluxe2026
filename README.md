@@ -154,6 +154,13 @@ Plataforma SaaS Multi-Tenant de Comercio Universal (Minimarkets, Retail, Restaur
 - **Multimoneda Base Canónica**: Selector de fijación de precios en USD ($) o EUR (€) con ajuste dinámico de simbología en mostrador, vitrina y tickets, además del método de cobro `CASH_EUR`.
 - **Desacoplamiento Estricto Core vs Plugin**: El recargo de IGTF 3% del plugin `local_venezuela` se condiciona automáticamente: solo se aplica si el comercio activa el Modo Fiscal. En Modo No Fiscal, el plugin opera sin recargos.
 
+### ✅ FASE 12.9: Estatus Terminal POS (DELIVERED), Reimpresión Térmica y Bimoneda en Admin
+- **Estatus Terminal POS (`DELIVERED`)**: Las ventas de mostrador nacen en estado `DELIVERED` y pago `VERIFIED` de forma inmediata vía `rpc_core_create_order`, liberando la cola de pedidos pendientes de despacho.
+- **Reimpresión de Ticket Térmico en Admin (`/admin/orders/[id]`)**: Soporte nativo `window.print()` para comprobantes de 58mm/80mm con desglose completo, RIF, cajero y tasa de cambio.
+- **Visualización Bimonetaria en Pedidos**: La tabla `/admin/orders` y el detalle `[id]` proyectan el monto en USD y el contravalor en Bolívares (`total_secondary` / BCV).
+- **Dashboard Bimonetario con Switcher**: En `/admin`, las métricas de Ventas Hoy y la gráfica de tendencia incorporan soporte y alternador de moneda `[ USD | Bs. ]`.
+- **Protección de Pagos**: Bloqueo del botón de rechazo para pagos ya verificados en caja física.
+
 - **Optimización CPU / Caché (Vercel Fluid Ready)**:
   - **Next.js 16 `proxy.ts`**: Migración de `middleware.ts` a `proxy.ts` con exclusión explícita de activos estáticos, `/icons/*`, `/sw.js`, `.webmanifest` y rutas `/t/*` sin reescritura innecesaria.
   - **Singleton R2 & CDN Inmutable (`lib/r2.ts`, `/api/media/[...path]`)**: Reutilización de instancia `S3Client` entre invocaciones cálidas, soporte `304 Not Modified` (`ETag`) y cabeceras `s-maxage=31536000` / `CDN-Cache-Control` para servir imágenes desde el Edge CDN.
