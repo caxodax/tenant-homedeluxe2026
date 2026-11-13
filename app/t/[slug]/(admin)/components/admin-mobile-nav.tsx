@@ -17,6 +17,7 @@ import {
   Settings,
   ShieldCheck,
   ChevronRight,
+  Tag,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { LogoutButton } from '@/components/auth/logout-button';
@@ -57,6 +58,7 @@ const NAV_SECTIONS: NavSection[] = [
     title: 'CATÁLOGO & CLIENTES',
     items: [
       { label: 'Inventario', href: '/inventory', icon: Package, permission: 'inventory', badgeColor: 'purple' },
+      { label: 'Categorías', href: '/categories', icon: Tag, permission: 'inventory', badgeColor: 'purple' },
       { label: 'Clientes', href: '/customers', icon: Users, permission: 'customers', badgeColor: 'stone' },
     ],
   },

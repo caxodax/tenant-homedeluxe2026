@@ -26,6 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft, Loader2, Save, Package } from 'lucide-react';
 import { toast } from 'sonner';
 import { ImageUploader } from '@/components/admin/image-uploader';
+import { CategoryCombobox } from '@/components/admin/category-combobox';
 
 const productSchema = z.object({
   name: z.string().min(2, 'Nombre requerido').max(200),
@@ -261,22 +262,21 @@ export default function ProductFormPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="category_id">Categoría</Label>
-                  <Select
-                    value={form.watch('category_id') || ''}
-                    onValueChange={(value) => form.setValue('category_id', value || undefined)}
-                  >
-                    <SelectTrigger className="text-xs h-10 rounded-xl">
-                      <SelectValue placeholder="Seleccionar categoría" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.map((cat) => (
-                        <SelectItem key={cat.id} value={cat.id}>
-                          {cat.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="category_id">Categoría</Label>
+                    <span className="text-[11px] text-stone-400 dark:text-zinc-500">
+                      Organiza el producto en vitrina y caja
+                    </span>
+                  </div>
+                  <CategoryCombobox
+                    slug={params.slug}
+                    value={form.watch('category_id')}
+                    categories={categories}
+                    onChange={(val) => form.setValue('category_id', val, { shouldDirty: true })}
+                    onCategoryCreated={(newCat) => {
+                      setCategories((prev) => [...prev, newCat].sort((a, b) => a.name.localeCompare(b.name)));
+                    }}
+                  />
                 </div>
 
                 {/* Subida Compacta de Imagen (Cloudflare R2) */}

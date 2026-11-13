@@ -24,6 +24,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { createProduct, updateProduct, deleteProduct, ProductInput } from '@/app/actions/tenant/products';
 import { cn } from '@/lib/utils';
+import { CategoryCombobox } from '@/components/admin/category-combobox';
 
 export interface ProductItem {
   id: string;
@@ -53,6 +54,7 @@ interface InventoryManagerProps {
 
 export function InventoryManager({ slug, initialProducts, categories }: InventoryManagerProps) {
   const [products, setProducts] = useState<ProductItem[]>(initialProducts);
+  const [categoryList, setCategoryList] = useState<CategoryItem[]>(categories);
   const [searchQuery, setSearchQuery] = useState('');
   const [isPending, startTransition] = useTransition();
 
@@ -89,7 +91,7 @@ export function InventoryManager({ slug, initialProducts, categories }: Inventor
     setName('');
     setSku(`PROD-${Math.floor(100 + Math.random() * 900)}`);
     setBarcode('');
-    setCategoryId(categories[0]?.id || '');
+    setCategoryId('');
     setDescription('');
     setPriceUsd('1.00');
     setCurrentStock('10');
@@ -600,21 +602,23 @@ export function InventoryManager({ slug, initialProducts, categories }: Inventor
                 </div>
 
                 <div className="sm:col-span-2 space-y-1">
-                  <label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                    Categoría
-                  </label>
-                  <select
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                      Categoría
+                    </label>
+                    <span className="text-[10px] text-stone-400 dark:text-zinc-500">
+                      Crea o selecciona al vuelo
+                    </span>
+                  </div>
+                  <CategoryCombobox
+                    slug={slug}
                     value={categoryId}
-                    onChange={(e) => setCategoryId(e.target.value)}
-                    className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs font-medium text-slate-900 dark:text-zinc-100"
-                  >
-                    <option value="">Sin Categoría</option>
-                    {categories.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
+                    categories={categoryList}
+                    onChange={(val) => setCategoryId(val || '')}
+                    onCategoryCreated={(newCat) => {
+                      setCategoryList((prev) => [...prev, newCat].sort((a, b) => a.name.localeCompare(b.name)));
+                    }}
+                  />
                 </div>
 
                 <div className="space-y-1">

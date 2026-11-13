@@ -12,6 +12,7 @@ import {
   Settings,
   ShieldCheck,
   ChevronRight,
+  Tag,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { hasPermission, type TenantPermission } from '@/lib/auth/rbac';
@@ -42,6 +43,7 @@ const NAV_SECTIONS: NavSection[] = [
     title: 'CATÁLOGO & CLIENTES',
     items: [
       { label: 'Inventario', href: '/inventory', icon: Package, permission: 'inventory', badgeColor: 'purple' },
+      { label: 'Categorías', href: '/categories', icon: Tag, permission: 'inventory', badgeColor: 'purple' },
       { label: 'Clientes', href: '/customers', icon: Users, permission: 'customers', badgeColor: 'stone' },
     ],
   },
