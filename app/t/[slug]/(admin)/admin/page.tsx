@@ -217,17 +217,6 @@ export default async function TenantAdminDashboard({ params }: { params: Promise
                 actionLabel="Abrir POS →"
                 actionHref={`/t/${slug}/pos`}
               />
-
-              <ActionableAlert
-                indicatorColor="emerald"
-                badgeColor="emerald"
-                icon={<CheckCircle2 className="w-4 h-4" />}
-                title="Base de datos y Motor Supabase"
-                description={`Aislamiento multi-tenant activo en esquema ${tenant.db_schema_name}`}
-                meta="Operativo"
-                actionLabel="Verificar →"
-                actionHref={`/t/${slug}/admin/reports`}
-              />
             </div>
           </Card>
         </div>
