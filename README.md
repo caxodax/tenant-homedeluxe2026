@@ -169,6 +169,24 @@ Plataforma SaaS Multi-Tenant de Comercio Universal (Minimarkets, Retail, Restaur
   - **Índices SQL Adicionales (`02_TENANT_CORE_TEMPLATE.sql`)**: Índices compuestos/parciales `products_active_name`, `orders_created_desc` y `payments_order_created`.
   - **Esquema SQL y Build Limpio**: `platform.rpc_update_tenant` incorporado en `01_PLATFORM_SCHEMA.sql` con soporte `p_storefront_enabled` y corrección de schemas Zod en formularios (`npx tsc --noEmit` con 0 errores).
 
+### ✅ FASE 10: Auditoría Génesis Inmutable, Ticket POS 80mm & Experiencia Bimonetaria Universal
+- **10.1 — Auditoría Génesis Inmutable (`FIX-AUDIT-GENESIS` & Migración 008)**:
+  - `platform.rpc_core_create_order` registra obligatoriamente el evento inicial `ORDER_CREATED` en `%I.audit_logs` con trazabilidad completa de actor (`POS_CASHIER` o `CUSTOMER`), canal, estatus y correlativo.
+  - Backfill retroactivo que garantiza que todas las órdenes históricas sin eventos cuenten con su registro génesis inmutable.
+- **10.2 — Modal de Ticket Térmico POS (80mm) con Impresión Aislada y Descarga en PDF**:
+  - Modal interactivo de alta fidelidad que reconstruye el comprobante oficial de venta con tipografía monoespaciada tabular, datos fiscales (RIF, razón social, sucursal, cajero), ítems bimonetarios y huella criptográfica SHA-256 anti-fraude.
+  - Impresión térmica directa y "Guardar como PDF" nítido mediante contenedor aislado `@media print` (`@page { size: 80mm auto; margin: 3mm; }`) sin artefactos web ni márgenes parásitos.
+- **10.3 — Desglose Bimonetario por Renglón en Detalle de Orden (`/admin/orders/[id]`)**:
+  - Cada ítem del pedido muestra su precio unitario y subtotal tanto en USD como en Bolívares (`$1.85 USD · Bs. 1.673,23`), manteniendo consistencia contable exacta con la tasa aplicada.
+- **10.4 — Recibo de Cliente en Vitrina (`/order-success/[orderId]`) con Modal Anti-Scroll**:
+  - Muestra el monto total en ambas divisas con la tasa BCV informada.
+  - Botón interactivo "Ver Detalle del Pedido" que abre un modal con la lista de productos y subtotales bimonetarios, erradicando el scroll infinito en dispositivos móviles.
+- **10.5 — Homogeneidad Bimonetaria en Pedidos Recientes (`/admin`)**:
+  - Proyección fallback de contravalor en Bolívares usando la tasa activa del comercio para órdenes históricas previas a la fijación de tasa.
+- **10.6 — Reportes Financieros Bimonetarios & Normalización Multidivisa (`/admin/reports`)**:
+  - Corrección de la agregación de ingresos por método de pago: pagos en `VES` son normalizados a `USD` mediante su `exchange_rate` registrado, eliminando distorsiones en métodos locales (Pago Móvil / Transferencia).
+  - Selector segmentado bimonetario `[ 💵 USD ($) | 🇻🇪 Bs. (BCV) ]` que permite al comerciante visualizar todos los KPIs, gráficas y desgloses en cualquiera de las dos monedas con un solo clic.
+
 ---
 
 ## 🛠️ Variables de Entorno (`.env.local`)

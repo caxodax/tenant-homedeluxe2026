@@ -221,14 +221,21 @@ function KpiCard({
 }
 
 async function RecentOrdersCard({ schema }: { schema: string }) {
-  const orders = await withTenantDb(schema, null, async (client) => {
-    const res = await client.query(`
-      SELECT order_number, customer_name, total_usd, total_secondary, status, created_at
-      FROM orders
-      ORDER BY created_at DESC
-      LIMIT 5
-    `);
-    return res.rows;
+  const { orders, exchangeRate } = await withTenantDb(schema, null, async (client) => {
+    const [ordersRes, settingsRes] = await Promise.all([
+      client.query(`
+        SELECT order_number, customer_name, total_usd, total_secondary, exchange_rate_applied, status, created_at
+        FROM orders
+        ORDER BY created_at DESC
+        LIMIT 5
+      `),
+      client.query(`
+        SELECT value FROM settings WHERE key = 'currency' LIMIT 1
+      `),
+    ]);
+    const currencyVal = settingsRes.rows[0]?.value;
+    const rate = currencyVal ? parseFloat(currencyVal.exchange_rate || '0') : 0;
+    return { orders: ordersRes.rows, exchangeRate: rate };
   });
   
   const STATUS_STYLES: Record<string, string> = {
@@ -269,11 +276,19 @@ async function RecentOrdersCard({ schema }: { schema: string }) {
                     <span className="text-sm font-bold text-slate-900 dark:text-white font-mono block">
                       ${parseFloat(order.total_usd).toFixed(2)}
                     </span>
-                    {order.total_secondary && parseFloat(order.total_secondary) > 0 && (
-                      <span className="text-[11px] font-mono font-bold text-slate-500 dark:text-zinc-400 block">
-                        Bs. {parseFloat(order.total_secondary).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                      </span>
-                    )}
+                    {(() => {
+                      const sec = parseFloat(order.total_secondary || '0');
+                      const rate = parseFloat(order.exchange_rate_applied || '0') || exchangeRate;
+                      const displayBs = sec > 0 ? sec : rate > 0 ? parseFloat(order.total_usd) * rate : 0;
+                      if (displayBs > 0) {
+                        return (
+                          <span className="text-[11px] font-mono font-bold text-slate-500 dark:text-zinc-400 block">
+                            Bs. {displayBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
                   <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold border ${STATUS_STYLES[order.status] || 'bg-slate-500/10 text-slate-600 dark:text-zinc-400'}`}>
                     {order.status.replace('_', ' ')}

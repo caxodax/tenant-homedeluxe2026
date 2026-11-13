@@ -26,6 +26,7 @@ import {
   AlertTriangle,
   RefreshCw,
   Printer,
+  FileDown,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -225,6 +226,67 @@ export default function AdminOrderDetailPage() {
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [copiedHash, setCopiedHash] = useState(false);
 
+  // Thermal Ticket POS Modal
+  const [showTicketModal, setShowTicketModal] = useState(false);
+
+  const handlePrintTicket = () => {
+    const ticketElem = document.getElementById('pos-thermal-ticket-content');
+    if (!ticketElem) return;
+    const printWindow = window.open('', '_blank', 'width=450,height=700');
+    if (printWindow) {
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Ticket_${order?.order_number || 'POS'}</title>
+            <style>
+              @page { size: 80mm auto; margin: 3mm; }
+              body {
+                font-family: 'Courier New', Courier, monospace, system-ui;
+                font-size: 11px;
+                color: #000;
+                background: #fff;
+                margin: 0;
+                padding: 4px 8px;
+                line-height: 1.35;
+              }
+              .text-center { text-align: center; }
+              .text-right { text-align: right; }
+              .text-left { text-align: left; }
+              .font-bold { font-weight: bold; }
+              .uppercase { text-transform: uppercase; }
+              .border-b { border-bottom: 1px solid #000; }
+              .border-dashed { border-bottom: 1px dashed #000; }
+              .py-1 { padding-top: 4px; padding-bottom: 4px; }
+              .py-2 { padding-top: 8px; padding-bottom: 8px; }
+              .my-1 { margin-top: 4px; margin-bottom: 4px; }
+              .flex { display: flex; justify-content: space-between; }
+              table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+              th { border-bottom: 1px solid #000; text-align: left; font-size: 10px; padding: 2px 0; }
+              td { padding: 3px 0; vertical-align: top; }
+              @media print {
+                body { margin: 0; padding: 0; }
+              }
+            </style>
+          </head>
+          <body>
+            ${ticketElem.innerHTML}
+            <script>
+              window.onload = function() {
+                window.focus();
+                window.print();
+                setTimeout(function() { window.close(); }, 1500);
+              };
+            </script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+    } else {
+      window.print();
+    }
+  };
+
   const applyPayload = useCallback((data: {
     order: OrderDetail;
     items: OrderItemRow[];
@@ -422,9 +484,9 @@ export default function AdminOrderDetailPage() {
     : null;
 
   return (
-    <div className="space-y-6 print:hidden">
+    <div className="space-y-6">
       {/* Top Breadcrumb & Header */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 print:hidden">
         <div className="space-y-1.5">
           <Link
             href={`/t/${slug}/admin/orders`}
@@ -470,11 +532,11 @@ export default function AdminOrderDetailPage() {
           </Button>
           <Button
             variant="outline"
-            onClick={() => window.print()}
-            className="bg-white dark:bg-zinc-900 border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-white font-semibold"
+            onClick={() => setShowTicketModal(true)}
+            className="bg-white dark:bg-zinc-900 border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-white font-semibold hover:border-[var(--tenant-primary)] transition-colors"
           >
-            <Printer className="w-4 h-4 mr-2" />
-            Reimprimir Ticket POS
+            <Printer className="w-4 h-4 mr-2 text-[var(--tenant-primary)]" />
+            Ticket POS / PDF
           </Button>
           <Link
             href={`/t/${slug}/order-success/${order.id}`}
@@ -504,39 +566,59 @@ export default function AdminOrderDetailPage() {
             </div>
 
             <div className="divide-y divide-slate-200 dark:divide-zinc-800 border-y border-slate-200 dark:border-zinc-800">
-              {items.map((item) => (
-                <div
-                  key={item.id}
-                  className="py-3.5 flex items-center justify-between gap-3"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    {item.image_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={item.image_url}
-                        alt={item.product_name}
-                        className="w-11 h-11 rounded-xl object-cover border border-slate-200 dark:border-zinc-800 shrink-0"
-                      />
-                    ) : (
-                      <div className="w-11 h-11 rounded-xl bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 flex items-center justify-center shrink-0">
-                        <Package className="w-5 h-5 text-slate-400" />
+              {items.map((item) => {
+                const rate = parseFloat(order.exchange_rate_applied || '0');
+                const unitPriceUsd = parseFloat(item.unit_price_usd);
+                const totalPriceUsd = parseFloat(item.total_price_usd);
+                const unitPriceBs = rate > 0 ? unitPriceUsd * rate : 0;
+                const totalPriceBs = rate > 0 ? totalPriceUsd * rate : 0;
+
+                return (
+                  <div
+                    key={item.id}
+                    className="py-3.5 flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      {item.image_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={item.image_url}
+                          alt={item.product_name}
+                          className="w-11 h-11 rounded-xl object-cover border border-slate-200 dark:border-zinc-800 shrink-0"
+                        />
+                      ) : (
+                        <div className="w-11 h-11 rounded-xl bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 flex items-center justify-center shrink-0">
+                          <Package className="w-5 h-5 text-slate-400" />
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-slate-950 dark:text-white break-words">
+                          {item.product_name}
+                        </p>
+                        <p className="text-xs font-mono text-slate-600 dark:text-zinc-400">
+                          {item.sku ? `SKU: ${item.sku} · ` : ''}
+                          {item.quantity} × ${unitPriceUsd.toFixed(2)} USD
+                          {rate > 0 && (
+                            <span className="text-slate-700 dark:text-zinc-300 font-semibold ml-1.5">
+                              (Bs. {unitPriceBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                            </span>
+                          )}
+                        </p>
                       </div>
-                    )}
-                    <div className="min-w-0">
-                      <p className="text-sm font-bold text-slate-950 dark:text-white break-words">
-                        {item.product_name}
-                      </p>
-                      <p className="text-xs font-mono text-slate-600 dark:text-zinc-400">
-                        {item.sku ? `SKU: ${item.sku} · ` : ''}
-                        {item.quantity} × ${parseFloat(item.unit_price_usd).toFixed(2)} USD
-                      </p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="font-mono font-black text-sm text-slate-950 dark:text-white">
+                        ${totalPriceUsd.toFixed(2)}
+                      </div>
+                      {rate > 0 && (
+                        <div className="text-xs font-mono font-bold text-slate-700 dark:text-zinc-300">
+                          Bs. {totalPriceBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <div className="font-mono font-black text-sm text-slate-950 dark:text-white shrink-0">
-                    ${parseFloat(item.total_price_usd).toFixed(2)}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <div className="space-y-1.5 text-sm pt-1">
@@ -1172,51 +1254,223 @@ export default function AdminOrderDetailPage() {
         </div>
       )}
 
-      {/* Ticket Térmico Imprimible (58mm/80mm, solo visible al imprimir) */}
-      <div className="hidden print:block fixed inset-0 bg-white text-black p-4 font-mono text-xs z-[9999]">
-        <div className="text-center pb-2 border-b border-black">
-          <h2 className="text-sm font-bold uppercase">{order.store_name || 'Shop Market C.A.'}</h2>
-          <p className="text-[10px]">Comprobante de Venta · Mostrador POS</p>
-          <p className="text-[10px] mt-0.5">{formatDateTime(order.created_at)}</p>
-        </div>
-        <div className="py-2 border-b border-dashed border-black text-[10px] space-y-0.5">
-          <p><strong>Orden:</strong> {order.order_number}</p>
-          {order.offline_ticket_ref && <p><strong>Ticket POS:</strong> {order.offline_ticket_ref}</p>}
-          <p><strong>Cliente:</strong> {order.customer_name}</p>
-          {primaryPayment && (
-            <p><strong>Pago:</strong> {primaryPayment.method} {primaryPayment.reference_number ? `(Ref: ${primaryPayment.reference_number})` : ''}</p>
-          )}
-        </div>
-        <div className="py-2 border-b border-black space-y-1.5">
-          {items.map((it) => (
-            <div key={it.id} className="flex justify-between items-start gap-3 text-[11px] leading-snug">
-              <span className="flex-1 break-words whitespace-normal font-medium">
-                {it.quantity}x {it.product_name}
-              </span>
-              <span className="shrink-0 font-bold tabular-nums">
-                ${parseFloat(it.total_price_usd).toFixed(2)}
-              </span>
+      {/* Modal Previsualización de Ticket POS de Alto Prestigio */}
+      {showTicketModal && (
+        <div
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 print:p-0 print:bg-white print:fixed print:inset-0"
+          onClick={() => setShowTicketModal(false)}
+        >
+          <div
+            className="relative max-w-md w-full bg-slate-900 text-white rounded-2xl border border-zinc-800 shadow-2xl overflow-hidden flex flex-col max-h-[92vh] print:max-w-none print:w-full print:border-none print:shadow-none print:p-0 print:bg-white print:text-black"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-zinc-800 bg-zinc-950/70 print:hidden">
+              <div className="flex items-center gap-2">
+                <Printer className="w-4 h-4 text-[var(--tenant-primary)]" />
+                <span className="text-sm font-extrabold tracking-tight">
+                  Ticket de Venta Oficial (80mm)
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTicketModal(false)}
+                className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
-          ))}
+
+            {/* Modal Body: Ticket Preview with realistic thermal paper design */}
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 bg-zinc-950/40 flex justify-center print:p-0 print:overflow-visible print:bg-white">
+              <div
+                id="pos-thermal-ticket-content"
+                className="w-full max-w-[360px] bg-white text-black p-5 shadow-2xl rounded-sm font-mono text-[11px] leading-relaxed border border-zinc-200 print:shadow-none print:border-none print:max-w-none print:p-0"
+              >
+                {/* Encabezado */}
+                <div className="text-center pb-2.5 border-b border-black">
+                  <h2 className="text-sm font-black uppercase tracking-wider">
+                    {order.store_name || 'SHOP MARKET C.A.'}
+                  </h2>
+                  <p className="text-[10px] text-zinc-700">RIF: J-50000000-0 · CONTRIBUYENTE ORDINARIO</p>
+                  <p className="text-[10px] text-zinc-700">{order.store_name || 'Sede Principal'}</p>
+                  <p className="text-[10px] font-bold mt-1 text-black">
+                    COMPROBANTE DE VENTA {order.is_offline_sale || order.delivery_type === 'POS_DESK' ? '(MOSTRADOR / POS)' : '(VITRINA DIGITAL)'}
+                  </p>
+                </div>
+
+                {/* Metadatos de la Venta */}
+                <div className="py-2 border-b border-dashed border-black text-[10px] space-y-0.5">
+                  <div className="flex justify-between">
+                    <span className="font-bold">Nº DE ORDEN:</span>
+                    <span className="font-bold">{order.order_number}</span>
+                  </div>
+                  {order.offline_ticket_ref && (
+                    <div className="flex justify-between">
+                      <span className="font-bold">TICKET POS:</span>
+                      <span className="font-bold">{order.offline_ticket_ref}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span>FECHA / HORA:</span>
+                    <span>{formatDateTime(order.created_at)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>CLIENTE:</span>
+                    <span className="font-bold">{order.customer_name}</span>
+                  </div>
+                  {order.customer_phone && order.customer_phone !== '0000000000' && (
+                    <div className="flex justify-between">
+                      <span>TELÉFONO:</span>
+                      <span>{order.customer_phone}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span>CANAL / ENTREGA:</span>
+                    <span>{order.delivery_type === 'POS_DESK' ? 'VENTA EN TIENDA / POS' : 'RETIRO EN TIENDA'}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>ESTADO:</span>
+                    <span className="font-bold uppercase">{order.status}</span>
+                  </div>
+                </div>
+
+                {/* Tabla de Productos */}
+                <div className="py-2 border-b border-black">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="border-b border-black text-[10px]">
+                        <th className="py-1">CANT</th>
+                        <th className="py-1">DESCRIPCIÓN</th>
+                        <th className="py-1 text-right">TOTAL</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-dotted divide-zinc-400">
+                      {items.map((it) => {
+                        const rate = parseFloat(order.exchange_rate_applied || '0');
+                        const totalUsd = parseFloat(it.total_price_usd);
+                        const totalBs = rate > 0 ? totalUsd * rate : 0;
+                        const unitPriceUsd = parseFloat(it.unit_price_usd);
+                        const unitPriceBs = rate > 0 ? unitPriceUsd * rate : 0;
+
+                        return (
+                          <tr key={it.id}>
+                            <td className="py-1.5 align-top font-bold">{Number(it.quantity).toFixed(0)}x</td>
+                            <td className="py-1.5 align-top">
+                              <div className="font-semibold text-black">{it.product_name}</div>
+                              <div className="text-[9px] text-zinc-600">
+                                @ ${unitPriceUsd.toFixed(2)} USD
+                                {rate > 0 && ` (Bs. ${unitPriceBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`}
+                              </div>
+                            </td>
+                            <td className="py-1.5 align-top text-right font-bold whitespace-nowrap">
+                              <div>${totalUsd.toFixed(2)}</div>
+                              {rate > 0 && (
+                                <div className="text-[9px] text-zinc-600 font-normal">
+                                  Bs. {totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Totales y Liquidación */}
+                <div className="py-2 border-b border-dashed border-black text-[11px] space-y-1">
+                  <div className="flex justify-between text-[10px]">
+                    <span>SUBTOTAL USD:</span>
+                    <span>${parseFloat(order.subtotal_usd || '0').toFixed(2)}</span>
+                  </div>
+                  {parseFloat(order.discount_usd || '0') > 0 && (
+                    <div className="flex justify-between text-[10px]">
+                      <span>DESCUENTO:</span>
+                      <span>-${parseFloat(order.discount_usd).toFixed(2)}</span>
+                    </div>
+                  )}
+                  {parseFloat(order.tax_usd || '0') > 0 && (
+                    <div className="flex justify-between text-[10px]">
+                      <span>IVA (16%):</span>
+                      <span>${parseFloat(order.tax_usd).toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between font-black text-sm pt-1 border-t border-black">
+                    <span>TOTAL A PAGAR:</span>
+                    <span>${parseFloat(order.total_usd).toFixed(2)} USD</span>
+                  </div>
+                  {((order.total_secondary && parseFloat(order.total_secondary) > 0) || (parseFloat(order.exchange_rate_applied || '0') > 0)) && (
+                    <div className="flex justify-between font-black text-sm text-black">
+                      <span>TOTAL EN BOLÍVARES:</span>
+                      <span>
+                        Bs. {(parseFloat(order.total_secondary || '0') > 0
+                          ? parseFloat(order.total_secondary || '0')
+                          : parseFloat(order.total_usd) * parseFloat(order.exchange_rate_applied || '0')
+                        ).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  )}
+                  {parseFloat(order.exchange_rate_applied || '0') > 0 && (
+                    <div className="text-right text-[9px] text-zinc-600">
+                      Tasa Oficial BCV: Bs. {parseFloat(order.exchange_rate_applied || '0').toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} / USD
+                    </div>
+                  )}
+                </div>
+
+                {/* Métodos de Pago Registrados */}
+                <div className="py-2 border-b border-black text-[10px] space-y-1">
+                  <p className="font-bold">MÉTODO DE PAGO:</p>
+                  {payments.length > 0 ? (
+                    payments.map((p) => (
+                      <div key={p.id} className="flex justify-between text-zinc-800">
+                        <span>{p.method} {p.reference_number ? `(Ref: ${p.reference_number})` : ''}:</span>
+                        <span className="font-bold">{p.currency} {parseFloat(p.amount).toFixed(2)} [{p.status}]</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="flex justify-between text-zinc-800">
+                      <span>EFECTIVO / CAJA POS:</span>
+                      <span className="font-bold">${parseFloat(order.total_usd).toFixed(2)} USD</span>
+                    </div>
+                  )}
+                  {primaryPayment?.proof_file_hash && (
+                    <p className="text-[8px] text-zinc-500 break-all pt-1">
+                      HUELLA SEGURIDAD SHA-256: {primaryPayment.proof_file_hash}
+                    </p>
+                  )}
+                </div>
+
+                {/* Pie de Ticket */}
+                <div className="pt-3 text-center text-[9px] text-zinc-700 space-y-0.5">
+                  <p className="font-bold">¡GRACIAS POR SU COMPRA!</p>
+                  <p>Conserve este comprobante para cualquier cambio o garantía.</p>
+                  <p className="font-mono text-[8px] text-zinc-500 mt-1">MarketOS Retail Core v4.1.2 · Verificado Inmutable</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer Actions */}
+            <div className="flex items-center justify-end gap-2 px-5 py-3.5 border-t border-zinc-800 bg-zinc-950/70 print:hidden">
+              <Button
+                variant="outline"
+                onClick={() => setShowTicketModal(false)}
+                className="bg-transparent border-zinc-700 text-zinc-300 hover:text-white"
+              >
+                Cerrar
+              </Button>
+              <Button
+                onClick={handlePrintTicket}
+                className="bg-[var(--tenant-primary)] hover:opacity-90 text-white font-bold gap-2"
+              >
+                <Printer className="w-4 h-4" />
+                <FileDown className="w-4 h-4" />
+                Imprimir / Guardar PDF
+              </Button>
+            </div>
+          </div>
         </div>
-        <div className="pt-2 text-right">
-          <p className="text-sm font-black">TOTAL USD: ${parseFloat(order.total_usd).toFixed(2)}</p>
-          {order.total_secondary && parseFloat(order.total_secondary) > 0 && (
-            <p className="text-xs font-bold font-mono">
-              TOTAL BS: Bs. {parseFloat(order.total_secondary).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </p>
-          )}
-          {parseFloat(order.exchange_rate_applied || '0') > 0 && (
-            <p className="text-[9px] text-zinc-600 font-mono">
-              Tasa BCV: Bs. {parseFloat(order.exchange_rate_applied || '0').toFixed(2)} / USD
-            </p>
-          )}
-        </div>
-        <div className="text-center pt-4 text-[9px] text-zinc-600">
-          <p>¡Gracias por su compra en {order.store_name || 'Shop Market C.A.'}!</p>
-          <p>MarketOS v4.0 · Retail Core</p>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

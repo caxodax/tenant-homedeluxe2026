@@ -7,6 +7,7 @@ import {
   ArrowLeft, MessageSquare, ShieldCheck,
   Clock, CreditCard, ExternalLink, AlertTriangle
 } from 'lucide-react';
+import { OrderItemsModal } from './OrderItemsModal';
 
 async function getOrderDetails(slug: string, orderId: string) {
   const tRes = await pool.query(
@@ -77,6 +78,11 @@ export default async function OrderSuccessPage({
 
   const { order, items, payment, settings } = data;
   const totalUsd = parseFloat(order.total_usd);
+  const rate = parseFloat(order.exchange_rate_applied || '0');
+  const secondaryTotal = order.total_secondary && parseFloat(order.total_secondary) > 0
+    ? parseFloat(order.total_secondary)
+    : rate > 0 ? totalUsd * rate : null;
+
   const isPendingVerification =
     order.status === 'PENDING_PAYMENT_VERIFICATION' ||
     payment?.payment_status === 'PENDING';
@@ -139,18 +145,35 @@ export default async function OrderSuccessPage({
           </p>
         </div>
 
-        {/* Resumen del Correlativo */}
-        <div className="p-4 rounded-2xl bg-slate-50 dark:bg-zinc-900/60 border border-slate-200/80 dark:border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-3 text-left">
-          <div>
-            <p className="text-xs uppercase tracking-wider text-slate-600 dark:text-zinc-400 font-bold">Número de Orden</p>
-            <p className="text-lg font-black font-mono text-[var(--tenant-primary)]">{order.order_number}</p>
+        {/* Resumen del Correlativo y Detalle Bimonetario */}
+        <div className="p-4 rounded-2xl bg-slate-50 dark:bg-zinc-900/60 border border-slate-200/80 dark:border-zinc-800 text-left space-y-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-wider text-slate-600 dark:text-zinc-400 font-bold">Número de Orden</p>
+              <p className="text-lg font-black font-mono text-[var(--tenant-primary)]">{order.order_number}</p>
+            </div>
+            <div className="sm:text-right">
+              <p className="text-xs uppercase tracking-wider text-slate-600 dark:text-zinc-400 font-bold">Monto Total</p>
+              <p className="text-lg font-black font-mono text-slate-950 dark:text-white">
+                ${totalUsd.toFixed(2)} USD
+              </p>
+              {secondaryTotal && (
+                <p className="text-xs font-mono font-bold text-slate-600 dark:text-zinc-400">
+                  Bs. {secondaryTotal.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  {rate > 0 && <span className="text-[10px] text-slate-500 font-normal"> (Tasa: {rate.toFixed(2)})</span>}
+                </p>
+              )}
+            </div>
           </div>
-          <div className="sm:text-right">
-            <p className="text-xs uppercase tracking-wider text-slate-600 dark:text-zinc-400 font-bold">Monto Total</p>
-            <p className="text-lg font-black font-mono text-slate-950 dark:text-white">
-              ${totalUsd.toFixed(2)} USD
-            </p>
-          </div>
+
+          {/* Modal Elegante para Evitar Scroll Infinito */}
+          <OrderItemsModal
+            orderNumber={order.order_number}
+            items={items}
+            totalUsd={totalUsd}
+            totalSecondary={secondaryTotal}
+            exchangeRate={rate}
+          />
         </div>
 
         {/* Estado de Pago y Comprobante */}
@@ -268,29 +291,6 @@ export default async function OrderSuccessPage({
             <ShieldCheck className="w-4 h-4" />
             <span>Indica tu número de orden <strong>{order.order_number}</strong> o tu nombre al llegar al mostrador.</span>
           </div>
-        </div>
-      </div>
-
-      {/* Desglose de Artículos */}
-      <div className="p-6 rounded-3xl bg-white dark:bg-[#121214] border border-slate-200/80 dark:border-zinc-800 space-y-4 shadow-xs">
-        <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-900 dark:text-white">
-          Artículos en esta Orden ({items.length})
-        </h2>
-
-        <div className="divide-y divide-slate-100 dark:divide-zinc-800/80 text-xs">
-          {items.map((item: { product_name: string; quantity: string; unit_price_usd: string; total_price_usd: string }, idx: number) => (
-            <div key={idx} className="py-2.5 first:pt-0 last:pb-0 flex justify-between items-center">
-              <div>
-                <p className="font-bold text-slate-900 dark:text-white">{item.product_name}</p>
-                <p className="text-[11px] font-mono text-slate-400">
-                  {parseFloat(item.quantity)} x ${parseFloat(item.unit_price_usd).toFixed(2)} USD
-                </p>
-              </div>
-              <span className="font-mono font-bold text-slate-900 dark:text-white">
-                ${parseFloat(item.total_price_usd).toFixed(2)}
-              </span>
-            </div>
-          ))}
         </div>
       </div>
 
