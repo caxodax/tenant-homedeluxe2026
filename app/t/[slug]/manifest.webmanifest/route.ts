@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCachedTenantShell } from '@/lib/tenant';
 
+function getIconType(url: string): string {
+  const clean = url.split('?')[0].toLowerCase();
+  if (clean.endsWith('.webp')) return 'image/webp';
+  if (clean.endsWith('.svg')) return 'image/svg+xml';
+  if (clean.endsWith('.jpg') || clean.endsWith('.jpeg')) return 'image/jpeg';
+  return 'image/png';
+}
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
@@ -22,56 +30,59 @@ export async function GET(
     const backgroundColor = shell.settings.secondary_color || '#09090b';
 
     const logoUrl = shell.settings.logo_url;
-    const icons = logoUrl
-      ? [
-          {
-            src: logoUrl,
-            sizes: '192x192',
-            type: 'image/png',
-            purpose: 'any',
-          },
-          {
-            src: logoUrl,
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any',
-          },
-          {
-            src: logoUrl,
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-        ]
-      : [
-          {
-            src: '/icons/icon-192.png',
-            sizes: '192x192',
-            type: 'image/png',
-            purpose: 'any',
-          },
-          {
-            src: '/icons/icon-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'any',
-          },
-          {
-            src: '/icons/icon-maskable-512.png',
-            sizes: '512x512',
-            type: 'image/png',
-            purpose: 'maskable',
-          },
-        ];
+    const logoMime = logoUrl ? getIconType(logoUrl) : 'image/png';
+
+    const icons = [
+      ...(logoUrl
+        ? [
+            {
+              src: logoUrl,
+              sizes: '192x192 512x512',
+              type: logoMime,
+              purpose: 'any',
+            },
+            {
+              src: logoUrl,
+              sizes: '512x512',
+              type: logoMime,
+              purpose: 'maskable',
+            },
+          ]
+        : []),
+      {
+        src: '/icons/icon-192.png',
+        sizes: '192x192',
+        type: 'image/png',
+        purpose: 'any',
+      },
+      {
+        src: '/icons/icon-512.png',
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'any',
+      },
+      {
+        src: '/icons/icon-maskable-512.png',
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'maskable',
+      },
+    ];
+
+    const startUrl = isPosEntry
+      ? `/t/${slug}/pos`
+      : shell.tenant.storefront_enabled === false
+      ? `/t/${slug}/login`
+      : `/t/${slug}`;
 
     const manifestPayload = {
       id: isPosEntry ? `/t/${slug}/pos` : `/t/${slug}`,
-      name: isPosEntry ? `${businessName} · Caja POS` : `${businessName}`,
+      name: isPosEntry ? `${businessName} · Caja POS` : businessName,
       short_name: isPosEntry ? `${shortName} POS` : shortName,
       description: isPosEntry
         ? `Terminal de Punto de Venta Offline-First para ${businessName}`
         : `Vitrina digital, pedidos y terminal POS de ${businessName}`,
-      start_url: isPosEntry ? `/t/${slug}/pos` : `/t/${slug}`,
+      start_url: startUrl,
       scope: `/t/${slug}`,
       display: 'standalone',
       orientation: 'any',
