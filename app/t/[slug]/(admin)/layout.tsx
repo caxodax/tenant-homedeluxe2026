@@ -132,7 +132,7 @@ export default async function TenantAdminLayout({
               className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-stone-800 dark:text-zinc-200 hover:text-stone-950 dark:hover:text-white hover:bg-stone-200/60 dark:hover:bg-zinc-800/60 transition-all font-bold"
             >
               <Monitor className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              <span>Abrir POS Mostrador</span>
+              <span>Abrir Caja</span>
             </Link>
           )}
           {tenant.storefront_enabled && (

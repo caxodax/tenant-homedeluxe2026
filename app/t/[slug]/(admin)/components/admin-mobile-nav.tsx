@@ -50,7 +50,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Dashboard', href: '', icon: LayoutDashboard, permission: 'dashboard', badgeColor: 'emerald' },
       { label: 'Pedidos', href: '/orders', icon: ShoppingCart, permission: 'orders', badgeColor: 'blue' },
-      { label: 'Punto de Venta', href: '/pos', icon: Monitor, permission: 'pos', badgeColor: 'amber' },
+      { label: 'Caja', href: '/pos', icon: Monitor, permission: 'pos', badgeColor: 'amber' },
     ],
   },
   {
@@ -214,7 +214,7 @@ export function AdminMobileNav({
                   className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition"
                 >
                   <Monitor className="w-4 h-4" />
-                  <span>Abrir POS Mostrador</span>
+                  <span>Abrir Caja</span>
                 </Link>
               )}
               {storefrontEnabled && (

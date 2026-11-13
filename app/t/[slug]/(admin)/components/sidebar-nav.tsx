@@ -35,7 +35,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Dashboard', href: '', icon: LayoutDashboard, permission: 'dashboard', badgeColor: 'emerald' },
       { label: 'Pedidos', href: '/orders', icon: ShoppingCart, permission: 'orders', badgeColor: 'blue' },
-      { label: 'Punto de Venta', href: '/pos', icon: Monitor, permission: 'pos', badgeColor: 'amber' },
+      { label: 'Caja', href: '/pos', icon: Monitor, permission: 'pos', badgeColor: 'amber' },
     ],
   },
   {

@@ -16,30 +16,28 @@ export const dynamic = 'force-dynamic';
 
 async function getTenantMetrics(schema: string) {
   return withTenantDb(schema, null, async (client) => {
-    const [todaySales, pendingOrders, lowStock, totalProducts, totalCustomers, settingsRes] = await Promise.all([
-      client.query(`
-        SELECT 
-          COALESCE(SUM(total_usd), 0) as total,
-          COALESCE(SUM(total_secondary), 0) as total_sec,
-          COUNT(*) as count
-        FROM orders 
-        WHERE status != 'CANCELLED' 
-          AND created_at >= CURRENT_DATE
-      `),
-      client.query(`
-        SELECT COUNT(*) as count 
-        FROM orders 
-        WHERE status IN ('CREATED', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP')
-      `),
-      client.query(`
-        SELECT COUNT(*) as count 
-        FROM products 
-        WHERE is_active = true AND current_stock <= min_stock_alert
-      `),
-      client.query(`SELECT COUNT(*) as count FROM products WHERE is_active = true`),
-      client.query(`SELECT COUNT(*) as count FROM customers`),
-      client.query(`SELECT primary_currency, secondary_currency, exchange_rate FROM settings WHERE key = 'general' LIMIT 1`),
-    ]);
+    const todaySales = await client.query(`
+      SELECT 
+        COALESCE(SUM(total_usd), 0) as total,
+        COALESCE(SUM(total_secondary), 0) as total_sec,
+        COUNT(*) as count
+      FROM orders 
+      WHERE status != 'CANCELLED' 
+        AND created_at >= CURRENT_DATE
+    `);
+    const pendingOrders = await client.query(`
+      SELECT COUNT(*) as count 
+      FROM orders 
+      WHERE status IN ('CREATED', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP')
+    `);
+    const lowStock = await client.query(`
+      SELECT COUNT(*) as count 
+      FROM products 
+      WHERE is_active = true AND current_stock <= min_stock_alert
+    `);
+    const totalProducts = await client.query(`SELECT COUNT(*) as count FROM products WHERE is_active = true`);
+    const totalCustomers = await client.query(`SELECT COUNT(*) as count FROM customers`);
+    const settingsRes = await client.query(`SELECT primary_currency, secondary_currency, exchange_rate FROM settings WHERE key = 'general' LIMIT 1`);
     
     const primaryCurrency = settingsRes.rows[0]?.primary_currency || 'USD';
     const secondaryCurrency = settingsRes.rows[0]?.secondary_currency || 'VES';
@@ -88,10 +86,7 @@ async function getSalesTrend(schema: string): Promise<TrendItem[]> {
 }
 
 function getGreeting(name: string) {
-  const hour = new Date().getHours();
-  if (hour < 12) return `Buenos días, ${name}`;
-  if (hour < 18) return `Buenas tardes, ${name}`;
-  return `Buenas noches, ${name}`;
+  return `Bienvenido, ${name}`;
 }
 
 export default async function TenantAdminDashboard({ params }: { params: Promise<{ slug: string }> }) {
@@ -211,10 +206,10 @@ export default async function TenantAdminDashboard({ params }: { params: Promise
                 indicatorColor="purple"
                 badgeColor="purple"
                 icon={<Monitor className="w-4 h-4" />}
-                title="Punto de Venta Mostrador (POS)"
+                title="Facturación Mostrador (Caja)"
                 description="Terminal de facturación rápida y registro de ventas offline-first"
                 meta="Caja 01"
-                actionLabel="Abrir POS →"
+                actionLabel="Abrir Caja →"
                 actionHref={`/t/${slug}/pos`}
               />
             </div>
@@ -295,17 +290,15 @@ function KpiCard({
 
 async function RecentOrdersCard({ schema, slug }: { schema: string; slug: string }) {
   const { orders, exchangeRate } = await withTenantDb(schema, null, async (client) => {
-    const [ordersRes, settingsRes] = await Promise.all([
-      client.query(`
-        SELECT order_number, customer_name, total_usd, total_secondary, exchange_rate_applied, status, created_at, id
-        FROM orders
-        ORDER BY created_at DESC
-        LIMIT 6
-      `),
-      client.query(`
-        SELECT primary_currency, secondary_currency, exchange_rate FROM settings WHERE key = 'general' LIMIT 1
-      `),
-    ]);
+    const ordersRes = await client.query(`
+      SELECT order_number, customer_name, total_usd, total_secondary, exchange_rate_applied, status, created_at, id
+      FROM orders
+      ORDER BY created_at DESC
+      LIMIT 6
+    `);
+    const settingsRes = await client.query(`
+      SELECT primary_currency, secondary_currency, exchange_rate FROM settings WHERE key = 'general' LIMIT 1
+    `);
     const settingsRow = settingsRes.rows[0];
     const rate = settingsRow ? parseFloat(settingsRow.exchange_rate || '0') : 0;
     return { orders: ordersRes.rows, exchangeRate: rate };
@@ -356,7 +349,7 @@ async function RecentOrdersCard({ schema, slug }: { schema: string; slug: string
               <ShoppingCart className="w-5 h-5" />
             </div>
             <p className="text-xs text-stone-500 dark:text-zinc-400 font-medium">Aún no hay transacciones registradas</p>
-            <p className="text-[11px] text-stone-400 dark:text-zinc-600 mt-0.5">Aparecerán aquí en cuanto comiences a cobrar en el POS</p>
+            <p className="text-[11px] text-stone-400 dark:text-zinc-600 mt-0.5">Aparecerán aquí en cuanto comiences a cobrar en Caja</p>
           </div>
         ) : (
           <div className="space-y-2">
