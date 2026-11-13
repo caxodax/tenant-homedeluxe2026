@@ -9,6 +9,11 @@ export interface PosBrandInfo {
   primary_color?: string | null;
   secondary_color?: string | null;
   accent_color?: string | null;
+  staff?: {
+    full_name: string;
+    role: string;
+    email?: string | null;
+  } | null;
 }
 
 const PosBrandContext = createContext<PosBrandInfo | null>(null);

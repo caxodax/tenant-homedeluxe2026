@@ -1,7 +1,6 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { getCachedStorefrontCatalog, getCachedTenantShell } from '@/lib/tenant';
 import { StorefrontCatalog } from './components/storefront-catalog';
-import { DisabledStorefrontNotice } from '@/components/storefront/disabled-storefront-notice';
 
 export const revalidate = 60;
 export const dynamicParams = true;
@@ -21,12 +20,7 @@ export default async function StorefrontPage({
   if (!shell) notFound();
 
   if (shell.tenant.storefront_enabled === false) {
-    return (
-      <DisabledStorefrontNotice
-        slug={slug}
-        businessName={shell.settings.business_name || shell.tenant.name}
-      />
-    );
+    redirect(`/t/${slug}/login`);
   }
 
   const catalog = await getCachedStorefrontCatalog(

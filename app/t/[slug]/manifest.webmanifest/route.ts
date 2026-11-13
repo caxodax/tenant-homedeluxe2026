@@ -21,9 +21,52 @@ export async function GET(
     const themeColor = shell.settings.primary_color || '#09090b';
     const backgroundColor = shell.settings.secondary_color || '#09090b';
 
+    const logoUrl = shell.settings.logo_url;
+    const icons = logoUrl
+      ? [
+          {
+            src: logoUrl,
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any',
+          },
+          {
+            src: logoUrl,
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any',
+          },
+          {
+            src: logoUrl,
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+        ]
+      : [
+          {
+            src: '/icons/icon-192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'any',
+          },
+          {
+            src: '/icons/icon-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'any',
+          },
+          {
+            src: '/icons/icon-maskable-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+        ];
+
     const manifestPayload = {
       id: isPosEntry ? `/t/${slug}/pos` : `/t/${slug}`,
-      name: isPosEntry ? `${businessName} · Caja POS` : `${businessName} · MarketOS`,
+      name: isPosEntry ? `${businessName} · Caja POS` : `${businessName}`,
       short_name: isPosEntry ? `${shortName} POS` : shortName,
       description: isPosEntry
         ? `Terminal de Punto de Venta Offline-First para ${businessName}`
@@ -35,26 +78,7 @@ export async function GET(
       theme_color: themeColor,
       background_color: backgroundColor,
       categories: ['shopping', 'business'],
-      icons: [
-        {
-          src: '/icons/icon-192.png',
-          sizes: '192x192',
-          type: 'image/png',
-          purpose: 'any',
-        },
-        {
-          src: '/icons/icon-512.png',
-          sizes: '512x512',
-          type: 'image/png',
-          purpose: 'any',
-        },
-        {
-          src: '/icons/icon-maskable-512.png',
-          sizes: '512x512',
-          type: 'image/png',
-          purpose: 'maskable',
-        },
-      ],
+      icons,
     };
 
     return new NextResponse(JSON.stringify(manifestPayload, null, 2), {

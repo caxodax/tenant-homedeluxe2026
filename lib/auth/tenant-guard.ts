@@ -180,33 +180,8 @@ async function resolveTenantContext(
     }
   }
 
-  // 3. En producción o tras cierre de sesión explícito, exigir login real
-  if (process.env.NODE_ENV === 'production' || loggedOutFlag) {
-    return { ok: false, reason: 'unauthenticated', tenant };
-  }
-
-  // 4. Fallback seguro de desarrollo si nunca se cerró sesión manualmente
-  const defaultStaffRes = await pool.query(
-    `SELECT id, role, full_name, email FROM "${tenant.db_schema_name}".staff_profiles
-     WHERE role = 'OWNER' AND is_active = true
-     ORDER BY created_at ASC LIMIT 1`
-  );
-  const demoStaff = defaultStaffRes.rows[0] || {
-    id: 'demo-owner',
-    role: 'OWNER',
-    full_name: 'Dueño (Modo Dev)',
-    email: 'owner@' + normalizedSlug + '.com',
-  };
-
-  return {
-    ok: true,
-    ctx: {
-      user: { id: demoStaff.id, email: demoStaff.email },
-      tenant,
-      staff: demoStaff,
-      isDevFallback: true,
-    },
-  };
+  // 3. Blindaje Ponytail Ultra: Sin sesión válida, denegar acceso sin excepciones en todo entorno
+  return { ok: false, reason: 'unauthenticated', tenant };
 }
 
 /**

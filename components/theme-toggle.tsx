@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from 'react';
 import { Sun, Moon } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 function subscribe(callback: () => void) {
   window.addEventListener('storage', callback);
@@ -13,19 +14,20 @@ function subscribe(callback: () => void) {
 }
 
 function getSnapshot() {
-  if (typeof document === 'undefined') return 'dark';
+  if (typeof document === 'undefined') return 'light';
   return document.documentElement.classList.contains('dark') ? 'dark' : 'light';
 }
 
 function getServerSnapshot() {
-  return 'dark';
+  return 'light';
 }
 
-export function ThemeToggle() {
+export function ThemeToggle({ className }: { className?: string }) {
   const theme = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
-  const toggleTheme = (newTheme: 'dark' | 'light') => {
-    if (newTheme === 'dark') {
+  const toggleTheme = () => {
+    const nextTheme = theme === 'dark' ? 'light' : 'dark';
+    if (nextTheme === 'dark') {
       document.documentElement.classList.add('dark');
       localStorage.setItem('marketos-theme', 'dark');
     } else {
@@ -36,34 +38,21 @@ export function ThemeToggle() {
   };
 
   return (
-    <div className="flex items-center p-1 bg-zinc-200/90 dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 rounded-full shadow-inner transition-colors">
-      <button
-        type="button"
-        onClick={() => toggleTheme('light')}
-        title="Cambiar a Modo Claro"
-        className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all cursor-pointer ${
-          theme === 'light'
-            ? 'bg-white text-amber-600 shadow-sm font-semibold'
-            : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
-        }`}
-      >
-        <Sun className="w-3.5 h-3.5 text-amber-500" />
-        <span className="hidden sm:inline">Claro</span>
-      </button>
-
-      <button
-        type="button"
-        onClick={() => toggleTheme('dark')}
-        title="Cambiar a Modo Oscuro"
-        className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all cursor-pointer ${
-          theme === 'dark'
-            ? 'bg-zinc-800 text-lime-400 shadow-sm font-semibold border border-zinc-700/60'
-            : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
-        }`}
-      >
-        <Moon className="w-3.5 h-3.5 text-lime-400" />
-        <span className="hidden sm:inline">Oscuro</span>
-      </button>
-    </div>
+    <button
+      type="button"
+      onClick={toggleTheme}
+      title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+      aria-label={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
+      className={cn(
+        "relative w-9 h-9 flex items-center justify-center rounded-xl bg-stone-100 hover:bg-stone-200/80 dark:bg-zinc-800/80 dark:hover:bg-zinc-700/80 border border-stone-200/80 dark:border-zinc-700/80 text-stone-700 dark:text-zinc-200 shadow-xs transition-all duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-stone-400/30",
+        className
+      )}
+    >
+      {theme === 'dark' ? (
+        <Sun className="w-4 h-4 text-amber-400 transition-transform duration-300 hover:rotate-45" />
+      ) : (
+        <Moon className="w-4 h-4 text-stone-700 transition-transform duration-300 hover:-rotate-12" />
+      )}
+    </button>
   );
 }

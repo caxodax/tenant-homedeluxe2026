@@ -5,6 +5,7 @@ import { ConnectivityIndicator } from '../components/connectivity-indicator';
 import { usePosBrand } from '../components/pos-brand-provider';
 import { startPosHeartbeat, stopPosHeartbeat, refreshPosPendingCount } from '@/lib/pos/heartbeat';
 import { ThemeToggle } from '@/components/theme-toggle';
+import { LogoutButton } from '@/components/auth/logout-button';
 import { TenantThemeInjector } from '@/components/tenant-theme-injector';
 import { enqueueOfflineSale, processSyncQueue } from '@/lib/pos/sync-queue';
 import { generateOfflineTicketRef } from '@/lib/pos/offline-numbering';
@@ -608,46 +609,69 @@ export default function PosPage({ params }: PosPageProps) {
         accentColor={settings.accent_color}
       />
 
-      {/* Header del POS con identidad de marca reforzada */}
+      {/* Header del POS con identidad de marca y navegación multi-rol */}
       <header
-        className="min-h-[72px] py-2 border-b border-slate-200 dark:border-zinc-800 px-4 sm:px-6 flex items-center justify-between bg-white dark:bg-zinc-900/95 backdrop-blur sticky top-0 z-20 transition-colors print:hidden shadow-xs"
+        className="min-h-[72px] py-2 border-b border-stone-200/80 dark:border-zinc-800 px-4 sm:px-6 flex items-center justify-between bg-white/95 dark:bg-[#141416]/95 backdrop-blur-md sticky top-0 z-20 transition-colors print:hidden shadow-xs"
         style={settings.primary_color ? { borderTop: `4px solid ${settings.primary_color}` } : undefined}
       >
-        <div className="flex items-center gap-3.5">
-          <Link 
-            href={`/t/${slug}/admin`} 
-            title="Volver al Panel Administrativo"
-            className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 flex items-center justify-center text-slate-800 dark:text-zinc-200 hover:text-slate-950 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-zinc-700 transition shrink-0"
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </Link>
+        <div className="flex items-center gap-3">
+          {/* Navegación según Rol: Cajero va a Pedidos/Clientes, Admin va al Dashboard */}
+          {brandContext?.staff?.role === 'CASHIER' ? (
+            <div className="flex items-center gap-1.5">
+              <Link 
+                href={`/t/${slug}/admin/orders`} 
+                title="Ver Pedidos"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200/80 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-stone-200 dark:border-zinc-700 text-stone-800 dark:text-zinc-200 text-xs font-bold transition shrink-0"
+              >
+                <ShoppingCart className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
+                <span className="hidden sm:inline">Pedidos</span>
+              </Link>
+              <Link 
+                href={`/t/${slug}/admin/customers`} 
+                title="Ver Clientes"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200/80 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-stone-200 dark:border-zinc-700 text-stone-800 dark:text-zinc-200 text-xs font-bold transition shrink-0"
+              >
+                <Search className="w-3.5 h-3.5 text-stone-500" />
+                <span className="hidden sm:inline">Clientes</span>
+              </Link>
+            </div>
+          ) : (
+            <Link 
+              href={`/t/${slug}/admin`} 
+              title="Volver al Panel Administrativo"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200/80 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-stone-200 dark:border-zinc-700 text-stone-800 dark:text-zinc-200 text-xs font-bold transition shrink-0"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Panel Admin</span>
+            </Link>
+          )}
 
           {settings.logo_url ? (
-            <div className="w-12 h-12 rounded-2xl bg-white dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 flex items-center justify-center overflow-hidden shrink-0 shadow-sm">
+            <div className="h-10 max-w-[120px] flex items-center overflow-hidden shrink-0">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={settings.logo_url}
                 alt={settings.business_name}
-                className="w-full h-full object-contain p-1"
+                className="max-h-10 max-w-full object-contain"
               />
             </div>
           ) : (
-            <div className="w-12 h-12 rounded-2xl tenant-secondary-surface border border-lime-500/40 flex items-center justify-center font-black text-base shadow-sm shrink-0">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 flex items-center justify-center font-bold text-sm shrink-0">
               {settings.business_name?.charAt(0).toUpperCase() || 'M'}
             </div>
           )}
 
           <div>
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-base sm:text-lg font-extrabold text-slate-950 dark:text-white tracking-tight leading-tight">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-sm sm:text-base font-extrabold text-stone-950 dark:text-white tracking-tight leading-tight">
                 {settings.business_name}
               </h1>
-              <span className="hidden sm:inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold tenant-secondary-badge border font-mono tracking-wide">
+              <span className="hidden sm:inline-flex items-center px-2 py-0.2 rounded text-[10px] font-bold font-mono tracking-wide bg-stone-100 dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 text-stone-700 dark:text-zinc-300">
                 POS · {slug}
               </span>
             </div>
-            <p className="text-xs font-medium text-slate-700 dark:text-zinc-300 mt-0.5">
-              Terminal <span className="font-mono font-bold text-slate-950 dark:text-white">POS-01</span> · Moneda <span className="font-mono font-bold text-lime-600 dark:text-lime-400">{baseCurrency} ({currencySymbol})</span>
+            <p className="text-[11px] font-medium text-stone-500 dark:text-zinc-400 mt-0.5">
+              Terminal <span className="font-mono font-bold text-stone-800 dark:text-zinc-200">POS-01</span> · Moneda <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">{baseCurrency} ({currencySymbol})</span>
             </p>
           </div>
         </div>
@@ -677,8 +701,27 @@ export default function PosPage({ params }: PosPageProps) {
               <span>Abrir Turno</span>
             </button>
           )}
+
           <ConnectivityIndicator />
-          <div className="h-5 w-px bg-slate-200 dark:bg-zinc-800 hidden sm:block" />
+
+          {/* Perfil del Staff y Botón de Salir */}
+          {brandContext?.staff && (
+            <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-stone-100 dark:bg-zinc-800/80 border border-stone-200 dark:border-zinc-700/80 text-xs">
+              <span className="font-mono font-bold uppercase text-[10px] text-stone-500 dark:text-zinc-400">
+                {brandContext.staff.role}:
+              </span>
+              <span className="font-bold text-stone-900 dark:text-zinc-200 truncate max-w-[110px]">
+                {brandContext.staff.full_name}
+              </span>
+            </div>
+          )}
+
+          <LogoutButton 
+            slug={slug} 
+            className="w-auto px-2.5 py-1.5 rounded-xl text-xs font-bold border border-rose-500/20 bg-rose-500/10 text-rose-700 dark:text-rose-400 hover:bg-rose-500/20 shadow-xs" 
+          />
+
+          <div className="h-5 w-px bg-stone-200 dark:bg-zinc-800 hidden sm:block" />
           <ThemeToggle />
         </div>
       </header>

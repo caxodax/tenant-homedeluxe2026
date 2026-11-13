@@ -22,8 +22,8 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f8fafc" },
-    { media: "(prefers-color-scheme: dark)", color: "#09090b" },
+    { media: "(prefers-color-scheme: light)", color: "#FAF8F5" },
+    { media: "(prefers-color-scheme: dark)", color: "#0D0D0E" },
   ],
 };
 
@@ -53,7 +53,7 @@ export default function RootLayout({
   return (
     <html
       lang="es"
-      className={`dark ${plusJakarta.variable} ${jetbrainsMono.variable}`}
+      className={`${plusJakarta.variable} ${jetbrainsMono.variable}`}
       suppressHydrationWarning
     >
       <head>
@@ -61,20 +61,24 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{
             __html: `
               try {
+                const isLoginPage = window.location.pathname.includes('/login');
                 const savedTheme = localStorage.getItem('marketos-theme');
-                if (savedTheme === 'light') {
+                if (isLoginPage) {
+                  document.documentElement.classList.remove('dark');
+                } else if (savedTheme === 'dark') {
+                  document.documentElement.classList.add('dark');
+                } else if (savedTheme === 'light') {
                   document.documentElement.classList.remove('dark');
                 } else {
-                  document.documentElement.classList.add('dark');
+                  // Por defecto en navegación general: claro
+                  document.documentElement.classList.remove('dark');
                 }
-              } catch (_) {
-                document.documentElement.classList.add('dark');
-              }
+              } catch (_) {}
             `,
           }}
         />
       </head>
-      <body className="bg-slate-50 dark:bg-[#0a0a0b] text-slate-900 dark:text-zinc-100 font-sans text-[15px] leading-relaxed antialiased min-h-screen transition-colors duration-200">
+      <body className="bg-[#FAF8F5] dark:bg-[#0D0D0E] text-stone-900 dark:text-zinc-100 font-sans text-[15px] leading-relaxed antialiased min-h-screen transition-colors duration-200">
         {children}
         <Toaster
           richColors

@@ -1,5 +1,5 @@
 import { getCachedTenantShell } from '@/lib/tenant';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import { StorefrontHeader } from './components/storefront-header';
 import { ContingencyBanner } from './components/contingency-banner';
@@ -14,13 +14,14 @@ export async function generateMetadata({
   const { slug } = await params;
   const data = await getCachedTenantShell(slug);
   const name = data?.settings?.business_name || data?.tenant?.name || 'MarketOS';
+  const logoUrl = data?.settings?.logo_url || null;
   return {
     title: `${name} · Vitrina Digital`,
     description: `Catálogo online y compras directas en ${name}`,
     manifest: `/t/${slug}/manifest.webmanifest`,
     icons: {
-      icon: '/icons/icon-192.png',
-      apple: '/icons/apple-touch-icon.png',
+      icon: logoUrl || '/icons/icon-192.png',
+      apple: logoUrl || '/icons/apple-touch-icon.png',
     },
     appleWebApp: {
       capable: true,
@@ -41,6 +42,9 @@ export default async function StorefrontLayout({
   const data = await getCachedTenantShell(slug);
 
   if (!data) notFound();
+  if (data.tenant.storefront_enabled === false) {
+    redirect(`/t/${slug}/login`);
+  }
 
   const { tenant, settings, inContingency } = data;
 

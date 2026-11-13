@@ -5,6 +5,10 @@
 @theme {
   --font-sans: var(--font-plus-jakarta), ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, SFMono-Regular, monospace;
+  --color-canvas: #FAF8F5;
+  --color-canvas-dark: #0D0D0E;
+  --color-surface: #FFFFFF;
+  --color-surface-dark: #141416;
 }
 
 @layer base {
@@ -12,5 +16,13 @@
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    background-color: var(--color-canvas);
+    color: #1c1917;
+  }
+
+  .dark body,
+  body:where(.dark *) {
+    background-color: var(--color-canvas-dark);
+    color: #f4f4f5;
   }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -23,6 +23,7 @@ import { LogoutButton } from '@/components/auth/logout-button';
 import { cn } from '@/lib/utils';
 import { hasPermission, type TenantPermission } from '@/lib/auth/rbac';
 import { usePendingOrdersBadge } from '@/components/admin/new-order-notification';
+import { IconBadge, type IconBadgeColor } from '@/components/ui/icon-badge';
 
 interface AdminMobileNavProps {
   slug: string;
@@ -32,20 +33,41 @@ interface AdminMobileNavProps {
   storefrontEnabled?: boolean;
 }
 
-const NAV_ITEMS: Array<{
-  label: string;
-  href: string;
-  icon: typeof LayoutDashboard;
-  permission: TenantPermission;
-}> = [
-  { label: 'Dashboard', href: '', icon: LayoutDashboard, permission: 'dashboard' },
-  { label: 'Pedidos', href: '/orders', icon: ShoppingCart, permission: 'orders' },
-  { label: 'Inventario', href: '/inventory', icon: Package, permission: 'inventory' },
-  { label: 'Punto de Venta (POS)', href: '/pos', icon: Monitor, permission: 'pos' },
-  { label: 'Clientes', href: '/customers', icon: Users, permission: 'customers' },
-  { label: 'Reportes', href: '/reports', icon: BarChart3, permission: 'reports' },
-  { label: 'Equipo & Roles', href: '/staff', icon: ShieldCheck, permission: 'staff' },
-  { label: 'Configuración & Branding', href: '/settings', icon: Settings, permission: 'settings' },
+interface NavSection {
+  title: string;
+  items: Array<{
+    label: string;
+    href: string;
+    icon: typeof LayoutDashboard;
+    permission: TenantPermission;
+    badgeColor: IconBadgeColor;
+  }>;
+}
+
+const NAV_SECTIONS: NavSection[] = [
+  {
+    title: 'OPERACIÓN',
+    items: [
+      { label: 'Dashboard', href: '', icon: LayoutDashboard, permission: 'dashboard', badgeColor: 'emerald' },
+      { label: 'Pedidos', href: '/orders', icon: ShoppingCart, permission: 'orders', badgeColor: 'blue' },
+      { label: 'Punto de Venta', href: '/pos', icon: Monitor, permission: 'pos', badgeColor: 'amber' },
+    ],
+  },
+  {
+    title: 'CATÁLOGO & CLIENTES',
+    items: [
+      { label: 'Inventario', href: '/inventory', icon: Package, permission: 'inventory', badgeColor: 'purple' },
+      { label: 'Clientes', href: '/customers', icon: Users, permission: 'customers', badgeColor: 'stone' },
+    ],
+  },
+  {
+    title: 'ADMINISTRACIÓN',
+    items: [
+      { label: 'Reportes', href: '/reports', icon: BarChart3, permission: 'reports', badgeColor: 'emerald' },
+      { label: 'Equipo & Roles', href: '/staff', icon: ShieldCheck, permission: 'staff', badgeColor: 'rose' },
+      { label: 'Configuración', href: '/settings', icon: Settings, permission: 'settings', badgeColor: 'stone' },
+    ],
+  },
 ];
 
 export function AdminMobileNav({
@@ -62,96 +84,134 @@ export function AdminMobileNav({
     pathname.endsWith('/') && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
   const basePath = `/t/${slug}/admin`;
 
-  const visibleItems = NAV_ITEMS.filter((item) => hasPermission(role, item.permission));
+  // Prevenir scroll en el fondo cuando el menú móvil está abierto
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
 
   return (
     <div className="md:hidden flex items-center gap-2">
       <ThemeToggle />
       <button
-        onClick={() => setIsOpen(!isOpen)}
-        className="p-2 rounded-xl bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 hover:text-slate-900 dark:hover:text-white transition cursor-pointer"
-        aria-label="Abrir Menú de Administración"
+        type="button"
+        onClick={() => setIsOpen(true)}
+        className="p-2 rounded-xl bg-stone-100 dark:bg-zinc-800 text-stone-700 dark:text-zinc-200 hover:text-stone-950 dark:hover:text-white transition cursor-pointer border border-stone-200/80 dark:border-zinc-700/80"
+        aria-label="Abrir Menú de Navegación"
       >
-        {isOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        <Menu className="w-5 h-5" />
       </button>
 
       {isOpen && (
-        <div className="fixed inset-0 top-16 z-50 bg-black/70 backdrop-blur-xs flex flex-col animate-in fade-in duration-150">
-          <div className="bg-white dark:bg-[#0f0f11] border-b border-slate-200 dark:border-zinc-800 p-5 space-y-5 shadow-2xl max-h-[85vh] overflow-y-auto">
-            {/* Cabecera del Comercio */}
-            <div className="flex items-center gap-3 pb-3 border-b border-slate-200/80 dark:border-zinc-800/80">
-              {logoUrl ? (
-                <div className="w-10 h-10 rounded-2xl bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={logoUrl} alt={storeName} className="w-full h-full object-contain p-1" />
-                </div>
-              ) : (
-                <div className="w-10 h-10 rounded-2xl bg-lime-500/10 border border-lime-500/30 flex items-center justify-center shrink-0">
-                  <Store className="w-5 h-5 text-lime-600 dark:text-lime-400" />
-                </div>
-              )}
-              <div className="min-w-0 flex-1">
-                <h2 className="font-extrabold text-sm text-slate-900 dark:text-white truncate">
-                  {storeName}
-                </h2>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <span className="text-[10px] font-mono uppercase font-black px-1.5 py-0.2 rounded bg-lime-500/10 text-lime-700 dark:text-lime-400 border border-lime-500/20">
-                    {role}
-                  </span>
-                  <span className="text-xs text-slate-400 dark:text-zinc-500 font-mono">
-                    /t/{slug}
+        <div className="fixed inset-0 z-50 flex">
+          {/* Backdrop con cierre al tocar */}
+          <div
+            className="fixed inset-0 bg-stone-950/60 backdrop-blur-xs transition-opacity"
+            onClick={() => setIsOpen(false)}
+          />
+
+          {/* Drawer Lateral Deslizante */}
+          <div className="relative ml-auto w-full max-w-xs sm:max-w-sm h-dvh bg-white dark:bg-[#141416] border-l border-stone-200 dark:border-zinc-800 flex flex-col shadow-2xl z-10">
+            {/* Header del Drawer */}
+            <div className="p-4 border-b border-stone-200/80 dark:border-zinc-800/80 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5 min-w-0">
+                {logoUrl ? (
+                  <div className="h-9 max-w-[120px] flex items-center shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={logoUrl} alt={storeName} className="max-h-9 max-w-full object-contain" />
+                  </div>
+                ) : (
+                  <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/50 flex items-center justify-center shrink-0">
+                    <Store className="w-4 h-4" />
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <h2 className="font-extrabold text-sm text-stone-950 dark:text-white truncate">
+                    {storeName}
+                  </h2>
+                  <span className="text-[10px] font-mono uppercase font-bold text-stone-700 dark:text-zinc-300">
+                    Rol: {role}
                   </span>
                 </div>
               </div>
+
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                className="p-1.5 rounded-lg text-stone-500 hover:text-stone-900 dark:text-zinc-400 dark:hover:text-white hover:bg-stone-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                aria-label="Cerrar menú"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            {/* Menú de Navegación */}
-            <nav className="space-y-1">
-              {visibleItems.map((item) => {
-                const itemPath = `${basePath}${item.href}`;
-                const isActive =
-                  item.href === '' ? cleanPath === basePath : cleanPath.startsWith(itemPath);
-                const Icon = item.icon;
+            {/* Lista de Navegación por Secciones */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {NAV_SECTIONS.map((section) => {
+                const visibleItems = section.items.filter((item) =>
+                  hasPermission(role, item.permission)
+                );
+                if (visibleItems.length === 0) return null;
 
                 return (
-                  <Link
-                    key={item.label}
-                    href={itemPath}
-                    onClick={() => setIsOpen(false)}
-                    className={cn(
-                      'flex items-center justify-between px-3.5 py-3 rounded-xl text-sm font-semibold transition-all',
-                      isActive
-                        ? 'bg-lime-500/15 text-lime-950 dark:text-lime-400 font-extrabold border border-lime-500/30'
-                        : 'text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800/60'
-                    )}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Icon
-                        className={cn(
-                          'w-4 h-4',
-                          isActive ? 'text-lime-600 dark:text-lime-400' : 'text-slate-400'
-                        )}
-                      />
-                      <span>{item.label}</span>
-                      {item.permission === 'orders' && pendingOrders > 0 && (
-                        <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-rose-600 text-white text-[10px] font-black leading-none">
-                          {pendingOrders > 99 ? '99+' : pendingOrders}
-                        </span>
-                      )}
+                  <div key={section.title} className="space-y-1">
+                    <h3 className="px-2 text-[10px] font-extrabold uppercase tracking-wider text-stone-700 dark:text-zinc-300">
+                      {section.title}
+                    </h3>
+                    <div className="space-y-0.5 pt-1">
+                      {visibleItems.map((item) => {
+                        const itemPath = `${basePath}${item.href}`;
+                        const isActive =
+                          item.href === '' ? cleanPath === basePath : cleanPath.startsWith(itemPath);
+                        const Icon = item.icon;
+                        const showPendingBadge = item.permission === 'orders' && pendingOrders > 0;
+
+                        return (
+                          <Link
+                            key={item.label}
+                            href={itemPath}
+                            onClick={() => setIsOpen(false)}
+                            className={cn(
+                              'flex items-center justify-between gap-2.5 px-3 py-2.5 rounded-xl text-xs font-semibold transition-all',
+                              isActive
+                                ? 'bg-stone-200/80 dark:bg-zinc-800 text-stone-950 dark:text-white font-bold shadow-xs'
+                                : 'text-stone-700 dark:text-zinc-300 hover:bg-stone-100 dark:hover:bg-zinc-800/60'
+                            )}
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <IconBadge color={isActive ? item.badgeColor : 'stone'} size="sm">
+                                <Icon className="w-3.5 h-3.5" />
+                              </IconBadge>
+                              <span className="truncate">{item.label}</span>
+                              {showPendingBadge && (
+                                <span className="inline-flex items-center justify-center min-w-[1.25rem] h-4.5 px-1.5 rounded-full bg-rose-600 text-white text-[10px] font-black leading-none">
+                                  {pendingOrders > 99 ? '99+' : pendingOrders}
+                                </span>
+                              )}
+                            </div>
+                            <ChevronRight className="w-3.5 h-3.5 opacity-40" />
+                          </Link>
+                        );
+                      })}
                     </div>
-                    <ChevronRight className="w-4 h-4 opacity-40" />
-                  </Link>
+                  </div>
                 );
               })}
-            </nav>
+            </div>
 
-            {/* Acciones Rápidas */}
-            <div className="pt-3 border-t border-slate-200/80 dark:border-zinc-800/80 space-y-2">
+            {/* Footer con Acciones Rápidas */}
+            <div className="p-4 border-t border-stone-200/80 dark:border-zinc-800/80 space-y-2 bg-stone-50/50 dark:bg-zinc-900/30">
               {hasPermission(role, 'pos') && (
                 <Link
                   href={`/t/${slug}/pos`}
                   onClick={() => setIsOpen(false)}
-                  className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xs shadow-xs transition"
+                  className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-xs transition"
                 >
                   <Monitor className="w-4 h-4" />
                   <span>Abrir POS Mostrador</span>
@@ -162,20 +222,19 @@ export function AdminMobileNav({
                   href={`/t/${slug}`}
                   target="_blank"
                   onClick={() => setIsOpen(false)}
-                  className="flex items-center justify-center gap-2 w-full py-2 rounded-xl bg-slate-100 dark:bg-zinc-800/80 hover:bg-slate-200 text-slate-800 dark:text-zinc-200 font-bold text-xs border border-slate-200 dark:border-zinc-700 transition"
+                  className="flex items-center justify-center gap-2 w-full py-2 rounded-xl bg-stone-100 hover:bg-stone-200 dark:bg-zinc-800/80 dark:hover:bg-zinc-700 text-stone-800 dark:text-zinc-200 font-bold text-xs border border-stone-200 dark:border-zinc-700 transition"
                 >
-                  <ExternalLink className="w-3.5 h-3.5 text-lime-600 dark:text-lime-400" />
+                  <ExternalLink className="w-3.5 h-3.5 text-stone-600 dark:text-zinc-400" />
                   <span>Ver vitrina digital ↗</span>
                 </Link>
               )}
               <LogoutButton
                 slug={slug}
                 onLoggedOut={() => setIsOpen(false)}
-                className="justify-center border border-rose-500/20"
+                className="justify-center border border-rose-500/20 w-full"
               />
             </div>
           </div>
-          <div className="flex-1" onClick={() => setIsOpen(false)} />
         </div>
       )}
     </div>

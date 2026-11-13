@@ -95,11 +95,11 @@ export function ProductCard({
     <>
       <div 
         onClick={() => setIsModalOpen(true)}
-        className="group rounded-2xl bg-white dark:bg-[#121214] border border-slate-200/90 dark:border-zinc-800 hover:border-lime-500/60 dark:hover:border-lime-500/50 p-4 flex flex-col justify-between transition-all duration-200 shadow-sm hover:shadow-md cursor-pointer"
+        className="group rounded-2xl bg-white dark:bg-[#141416] border border-stone-200/90 dark:border-zinc-800/80 p-4 sm:p-5 flex flex-col justify-between transition-all duration-300 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.07),0_1px_3px_rgba(0,0,0,0.03)] hover:shadow-[0_14px_30px_-6px_rgba(0,0,0,0.12)] hover:-translate-y-1 hover:border-stone-400/80 dark:hover:border-zinc-700 cursor-pointer"
       >
         <div>
-          {/* Imagen del producto */}
-          <div className="aspect-square w-full rounded-xl bg-slate-100 dark:bg-zinc-800/60 flex items-center justify-center mb-3.5 relative overflow-hidden group-hover:bg-slate-200/60 dark:group-hover:bg-zinc-800 transition-colors">
+          {/* Imagen del producto con contenedor de alto contraste */}
+          <div className="aspect-square w-full rounded-xl bg-stone-50 dark:bg-zinc-900/80 border border-stone-100 dark:border-zinc-800 flex items-center justify-center mb-3.5 relative overflow-hidden group-hover:bg-stone-100/70 dark:group-hover:bg-zinc-800 transition-colors">
             {product.image_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img

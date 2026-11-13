@@ -14,13 +14,14 @@ export async function generateMetadata({
   const { slug } = await params;
   const data = await getTenantPosLayoutData(slug);
   const name = data?.settings?.business_name || data?.tenant?.name || 'MarketOS';
+  const logoUrl = data?.settings?.logo_url || null;
   return {
     title: `${name} · POS Mostrador`,
     description: `Terminal de Punto de Venta Offline-First para ${name}`,
     manifest: `/t/${slug}/manifest.webmanifest?entry=pos`,
     icons: {
-      icon: '/icons/icon-192.png',
-      apple: '/icons/apple-touch-icon.png',
+      icon: logoUrl || '/icons/icon-192.png',
+      apple: logoUrl || '/icons/apple-touch-icon.png',
     },
     appleWebApp: {
       capable: true,
@@ -80,7 +81,7 @@ export default async function PosLayout({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  await requireTenantStaff(slug, 'pos');
+  const { staff } = await requireTenantStaff(slug, 'pos');
   const data = await getTenantPosLayoutData(slug);
 
   if (!data) notFound();
@@ -92,6 +93,11 @@ export default async function PosLayout({
     primary_color: data.settings?.primary_color || null,
     secondary_color: data.settings?.secondary_color || null,
     accent_color: data.settings?.accent_color || null,
+    staff: {
+      full_name: staff.full_name,
+      role: staff.role,
+      email: staff.email,
+    },
   };
 
   return (

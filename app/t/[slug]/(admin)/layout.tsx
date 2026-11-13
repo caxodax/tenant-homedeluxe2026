@@ -23,15 +23,17 @@ export async function generateMetadata({
     [slug]
   );
   let titleName = tRes.rows[0]?.name || 'MarketOS';
+  let logoUrl: string | null = null;
   if (tRes.rows[0]?.db_schema_name) {
     try {
       const biz = await withTenantDb(tRes.rows[0].db_schema_name, null, async (c) => {
-        const r = await c.query(`SELECT business_name FROM settings WHERE key = 'general' LIMIT 1`);
-        return r.rows[0]?.business_name || null;
+        const r = await c.query(`SELECT business_name, logo_url FROM settings WHERE key = 'general' LIMIT 1`);
+        return r.rows[0] || null;
       });
-      if (biz) titleName = biz;
+      if (biz?.business_name) titleName = biz.business_name;
+      if (biz?.logo_url) logoUrl = biz.logo_url;
     } catch {
-      // fallback to tenant.name
+      // fallback
     }
   }
   return {
@@ -39,8 +41,8 @@ export async function generateMetadata({
     description: `Panel administrativo multi-tenant para ${titleName}`,
     manifest: `/t/${slug}/manifest.webmanifest`,
     icons: {
-      icon: '/icons/icon-192.png',
-      apple: '/icons/apple-touch-icon.png',
+      icon: logoUrl || '/icons/icon-192.png',
+      apple: logoUrl || '/icons/apple-touch-icon.png',
     },
     appleWebApp: {
       capable: true,
@@ -81,31 +83,37 @@ export default async function TenantAdminLayout({
         secondaryColor={settings?.secondary_color}
         accentColor={settings?.accent_color}
       />
-      <div className="flex min-h-screen bg-slate-50 dark:bg-[#0a0a0b] text-slate-900 dark:text-zinc-100 font-sans transition-colors duration-200 overflow-x-clip">
-      {/* Sidebar Izquierdo Fijo con Tarjeta de Marca */}
-      <aside className="hidden md:flex w-68 border-r border-slate-200 dark:border-zinc-800/80 bg-white dark:bg-[#0f0f11] flex-col fixed h-screen z-20 transition-colors duration-200">
+      <div className="flex min-h-screen bg-[#FAF8F5] dark:bg-[#0D0D0E] text-stone-900 dark:text-zinc-100 font-sans transition-colors duration-200 overflow-x-clip">
+      {/* Sidebar Izquierdo Fijo con Metodología Visual Limpia */}
+      <aside className="hidden md:flex w-64 border-r border-stone-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#141416] flex-col fixed h-screen z-20 transition-colors duration-200">
         <div
-          className="p-5 tenant-secondary-surface border-b-[3px]"
-          style={{ borderBottomColor: primaryColor }}
+          className="p-4 border-b border-stone-200/80 dark:border-zinc-800/80"
+          style={{ borderTop: `3px solid ${primaryColor}` }}
         >
-          <div className="flex items-center gap-3.5">
+          <div className="flex items-center gap-3">
             {logoUrl ? (
-              <div className="w-14 h-14 rounded-2xl bg-white border border-white/20 flex items-center justify-center overflow-hidden shrink-0 shadow-md">
+              <div className="h-12 max-w-[140px] flex items-center shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={logoUrl} alt={storeName} className="w-full h-full object-contain p-1.5" />
+                <img
+                  src={logoUrl}
+                  alt={storeName}
+                  className="max-h-12 max-w-full object-contain drop-shadow-xs"
+                />
               </div>
             ) : (
-              <div className="w-14 h-14 rounded-2xl bg-lime-500/20 border border-lime-500/40 flex items-center justify-center shrink-0">
-                <Store className="w-7 h-7 text-lime-400" />
+              <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 flex items-center justify-center shrink-0">
+                <Store className="w-5 h-5" />
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <h1 className="font-extrabold text-base leading-tight truncate">{storeName}</h1>
-              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                <span className="inline-block px-2 py-0.5 rounded-md text-[11px] font-mono font-bold tracking-wide bg-lime-500 shadow-xs">
+              <h1 className="font-extrabold text-sm leading-tight text-stone-950 dark:text-white truncate">
+                {storeName}
+              </h1>
+              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wide bg-stone-100 dark:bg-zinc-800 text-stone-700 dark:text-zinc-300 border border-stone-200 dark:border-zinc-700">
                   {staff.role}
                 </span>
-                <span className="text-[11px] opacity-80 truncate max-w-[110px]">
+                <span className="text-[11px] text-stone-500 dark:text-zinc-400 font-medium truncate max-w-[100px]">
                   {staff.full_name}
                 </span>
               </div>
@@ -113,15 +121,15 @@ export default async function TenantAdminLayout({
           </div>
         </div>
         
-        {/* Navegación Reactiva con Active State y RBAC */}
+        {/* Navegación Reactiva con Secciones estructuradas (Opción A) */}
         <SidebarNav slug={slug} role={staff.role} />
         
         {/* Footer del Sidebar */}
-        <div className="p-4 border-t border-slate-200 dark:border-zinc-800/80 space-y-1.5">
+        <div className="p-3 border-t border-stone-200/80 dark:border-zinc-800/80 space-y-1 bg-stone-50/50 dark:bg-zinc-900/30">
           {hasPermission(staff.role, 'pos') && (
             <Link 
               href={`/t/${slug}/pos`}
-              className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm text-slate-800 dark:text-zinc-200 hover:text-slate-950 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-800/70 transition-all font-bold"
+              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-stone-800 dark:text-zinc-200 hover:text-stone-950 dark:hover:text-white hover:bg-stone-200/60 dark:hover:bg-zinc-800/60 transition-all font-bold"
             >
               <Monitor className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
               <span>Abrir POS Mostrador</span>
@@ -131,35 +139,35 @@ export default async function TenantAdminLayout({
             <Link 
               href={`/t/${slug}`} 
               target="_blank"
-              className="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm text-slate-700 dark:text-zinc-300 hover:text-slate-950 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-zinc-800/50 transition-all font-semibold"
+              className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-stone-700 dark:text-zinc-300 hover:text-stone-950 dark:hover:text-white hover:bg-stone-200/60 dark:hover:bg-zinc-800/40 transition-all font-semibold"
             >
-              <ExternalLink className="w-4 h-4 text-lime-600 dark:text-lime-400" />
+              <ExternalLink className="w-3.5 h-3.5 text-stone-500 dark:text-zinc-400" />
               <span>Ver vitrina digital ↗</span>
             </Link>
           )}
-          <LogoutButton slug={slug} />
+          <LogoutButton slug={slug} className="w-full text-xs" />
         </div>
       </aside>
       
-      {/* Contenido Principal (min-w-0 evita desbordamiento horizontal de tablas) */}
-      <div className="flex-1 md:ml-68 flex flex-col min-h-screen min-w-0">
+      {/* Contenido Principal */}
+      <div className="flex-1 md:ml-64 flex flex-col min-h-screen min-w-0">
         {/* Header superior */}
         <header
-          className="h-16 border-b border-slate-200 dark:border-zinc-800/80 bg-white/95 dark:bg-[#0f0f11]/95 backdrop-blur px-4 md:px-8 flex items-center justify-between gap-4 sticky top-0 z-10 transition-colors duration-200"
+          className="h-16 border-b border-stone-200/80 dark:border-zinc-800/80 bg-white/90 dark:bg-[#141416]/90 backdrop-blur-md px-4 md:px-8 flex items-center justify-between gap-4 sticky top-0 z-10 transition-colors duration-200"
           style={{ borderTop: `3px solid ${primaryColor}` }}
         >
           <div className="flex items-center gap-2.5 min-w-0">
             {logoUrl && (
-              <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 dark:border-zinc-700 flex items-center justify-center overflow-hidden shrink-0 md:hidden">
+              <div className="h-7 max-w-[100px] flex items-center shrink-0 md:hidden">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={logoUrl} alt={storeName} className="w-full h-full object-contain p-0.5" />
+                <img src={logoUrl} alt={storeName} className="max-h-7 max-w-full object-contain" />
               </div>
             )}
-            <span className="px-2.5 py-0.5 rounded-md text-xs uppercase tracking-wider tenant-secondary-badge border font-mono font-bold truncate">
+            <span className="px-2 py-0.5 rounded text-[11px] uppercase tracking-wider bg-stone-100 dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 text-stone-700 dark:text-zinc-300 font-mono font-bold truncate">
               {storeName}
             </span>
-            <span className="text-slate-400 dark:text-zinc-600 hidden sm:inline">/</span>
-            <span className="text-sm text-slate-800 dark:text-zinc-200 font-semibold hidden sm:inline truncate">
+            <span className="text-stone-300 dark:text-zinc-700 hidden sm:inline">/</span>
+            <span className="text-xs text-stone-600 dark:text-zinc-400 font-semibold hidden sm:inline truncate">
               Panel Administrativo
             </span>
           </div>
