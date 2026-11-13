@@ -33,6 +33,8 @@ interface OrderListItem {
   status: string;
   delivery_type: string;
   total_usd: string;
+  total_secondary?: string | null;
+  exchange_rate_applied?: string | null;
   is_offline_sale: boolean;
   offline_ticket_ref: string | null;
   created_at: string;
@@ -421,7 +423,7 @@ export default function AdminOrdersPage() {
                     <th className="py-3 px-4">Orden</th>
                     <th className="py-3 px-4">Cliente</th>
                     <th className="py-3 px-4">Canal / Pago</th>
-                    <th className="py-3 px-4 text-right">Total USD</th>
+                    <th className="py-3 px-4 text-right">Total</th>
                     <th className="py-3 px-4">Estado Pedido</th>
                     <th className="py-3 px-4">Fecha</th>
                     <th className="py-3 px-4 text-right">Acciones</th>
@@ -497,8 +499,15 @@ export default function AdminOrdersPage() {
                           )}
                         </td>
 
-                        <td className="py-3.5 px-4 text-right font-mono font-black text-slate-950 dark:text-white">
-                          ${parseFloat(order.total_usd).toFixed(2)}
+                        <td className="py-3.5 px-4 text-right">
+                          <div className="font-mono font-black text-slate-950 dark:text-white">
+                            ${parseFloat(order.total_usd).toFixed(2)}
+                          </div>
+                          {order.total_secondary && parseFloat(order.total_secondary) > 0 && (
+                            <div className="text-[11px] font-mono font-bold text-slate-500 dark:text-zinc-400">
+                              Bs. {parseFloat(order.total_secondary).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </div>
+                          )}
                         </td>
 
                         <td className="py-3.5 px-4">
@@ -565,6 +574,11 @@ export default function AdminOrdersPage() {
                         <p className="text-base font-mono font-black text-slate-950 dark:text-white">
                           ${parseFloat(order.total_usd).toFixed(2)} USD
                         </p>
+                        {order.total_secondary && parseFloat(order.total_secondary) > 0 && (
+                          <p className="text-xs font-mono font-bold text-slate-500 dark:text-zinc-400">
+                            Bs. {parseFloat(order.total_secondary).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
+                        )}
                         <p className="text-[11px] text-slate-600 dark:text-zinc-400">
                           {formatDate(order.created_at)}
                         </p>

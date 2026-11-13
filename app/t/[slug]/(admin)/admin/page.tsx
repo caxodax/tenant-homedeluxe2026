@@ -9,9 +9,12 @@ import { cn } from '@/lib/utils';
 
 async function getTenantMetrics(schema: string) {
   return withTenantDb(schema, null, async (client) => {
-    const [todaySales, pendingOrders, lowStock, totalProducts] = await Promise.all([
+    const [todaySales, pendingOrders, lowStock, totalProducts, settingsRes] = await Promise.all([
       client.query(`
-        SELECT COALESCE(SUM(total_usd), 0) as total, COUNT(*) as count
+        SELECT 
+          COALESCE(SUM(total_usd), 0) as total,
+          COALESCE(SUM(total_secondary), 0) as total_sec,
+          COUNT(*) as count
         FROM orders 
         WHERE status != 'CANCELLED' 
           AND created_at >= CURRENT_DATE
@@ -19,7 +22,7 @@ async function getTenantMetrics(schema: string) {
       client.query(`
         SELECT COUNT(*) as count 
         FROM orders 
-        WHERE status IN ('CREATED', 'CONFIRMED', 'PREPARING')
+        WHERE status IN ('CREATED', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP')
       `),
       client.query(`
         SELECT COUNT(*) as count 
@@ -27,10 +30,25 @@ async function getTenantMetrics(schema: string) {
         WHERE is_active = true AND current_stock <= min_stock_alert
       `),
       client.query(`SELECT COUNT(*) as count FROM products WHERE is_active = true`),
+      client.query(`SELECT primary_currency, secondary_currency, exchange_rate FROM settings WHERE key = 'general' LIMIT 1`),
     ]);
     
+    const primaryCurrency = settingsRes.rows[0]?.primary_currency || 'USD';
+    const secondaryCurrency = settingsRes.rows[0]?.secondary_currency || 'VES';
+    const exchangeRate = parseFloat(settingsRes.rows[0]?.exchange_rate || '1.0');
+    
+    const todayUsd = parseFloat(todaySales.rows[0]?.total || '0');
+    let todaySec = parseFloat(todaySales.rows[0]?.total_sec || '0');
+    if (todaySec <= 0 && todayUsd > 0 && exchangeRate > 1) {
+      todaySec = todayUsd * exchangeRate;
+    }
+
     return {
-      todaySales: parseFloat(todaySales.rows[0]?.total || '0'),
+      todaySales: todayUsd,
+      todaySecondary: todaySec,
+      primaryCurrency,
+      secondaryCurrency,
+      exchangeRate,
       todayOrders: parseInt(todaySales.rows[0]?.count || '0', 10),
       pendingOrders: parseInt(pendingOrders.rows[0]?.count || '0', 10),
       lowStock: parseInt(lowStock.rows[0]?.count || '0', 10),
@@ -99,7 +117,7 @@ export default async function TenantAdminDashboard({ params }: { params: Promise
         <KpiCard 
           label="Ventas Hoy" 
           value={`$${metrics.todaySales.toFixed(2)}`} 
-          sublabel={`${metrics.todayOrders} órdenes facturadas hoy`}
+          sublabel={`${metrics.todaySecondary > 0 ? `Bs. ${metrics.todaySecondary.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} · ` : ''}${metrics.todayOrders} órdenes facturadas hoy`}
           icon={DollarSign}
           trend="+0%"
           variant="lime"
@@ -137,11 +155,15 @@ export default async function TenantAdminDashboard({ params }: { params: Promise
             <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">Ingresos acumulados en USD (Últimos 7 días)</p>
           </div>
           <span className="text-xs font-mono text-slate-400 dark:text-zinc-500 bg-slate-100 dark:bg-zinc-900 px-2.5 py-1 rounded-lg">
-            Moneda: USD ($)
+            {metrics.exchangeRate > 1 ? `Tasa: Bs. ${metrics.exchangeRate.toFixed(2)}` : 'Moneda: USD ($)'}
           </span>
         </CardHeader>
         <CardContent className="pt-6">
-          <SalesChart data={trend} />
+          <SalesChart 
+            data={trend} 
+            exchangeRate={metrics.exchangeRate} 
+            secondaryCurrency={metrics.secondaryCurrency} 
+          />
         </CardContent>
       </Card>
       
@@ -201,7 +223,7 @@ function KpiCard({
 async function RecentOrdersCard({ schema }: { schema: string }) {
   const orders = await withTenantDb(schema, null, async (client) => {
     const res = await client.query(`
-      SELECT order_number, customer_name, total_usd, status, created_at
+      SELECT order_number, customer_name, total_usd, total_secondary, status, created_at
       FROM orders
       ORDER BY created_at DESC
       LIMIT 5
@@ -243,7 +265,16 @@ async function RecentOrdersCard({ schema }: { schema: string }) {
                   <p className="text-xs font-semibold text-slate-700 dark:text-zinc-300 mt-0.5">{order.customer_name || 'Cliente Mostrador'}</p>
                 </div>
                 <div className="flex items-center gap-4">
-                  <span className="text-sm font-bold text-slate-900 dark:text-white font-mono">${parseFloat(order.total_usd).toFixed(2)}</span>
+                  <div className="text-right">
+                    <span className="text-sm font-bold text-slate-900 dark:text-white font-mono block">
+                      ${parseFloat(order.total_usd).toFixed(2)}
+                    </span>
+                    {order.total_secondary && parseFloat(order.total_secondary) > 0 && (
+                      <span className="text-[11px] font-mono font-bold text-slate-500 dark:text-zinc-400 block">
+                        Bs. {parseFloat(order.total_secondary).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    )}
+                  </div>
                   <span className={`px-2.5 py-1 rounded-lg text-xs font-semibold border ${STATUS_STYLES[order.status] || 'bg-slate-500/10 text-slate-600 dark:text-zinc-400'}`}>
                     {order.status.replace('_', ' ')}
                   </span>
