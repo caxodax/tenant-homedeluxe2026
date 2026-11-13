@@ -23,6 +23,7 @@ const saleSchema = z.object({
   tax_usd: z.number().nonnegative().default(0),
   shipping_usd: z.number().nonnegative().default(0),
   total_usd: z.number().nonnegative(),
+  total_secondary: z.number().nonnegative().optional().nullable(),
   exchange_rate_applied: z.number().positive().default(1.0),
   offline_ticket_ref: z.string().min(1),
   is_offline_sale: z.literal(true),

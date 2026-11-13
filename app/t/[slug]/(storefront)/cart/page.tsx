@@ -23,6 +23,8 @@ export default async function CartPage({
       <CartView
         slug={slug}
         pickupAddress={shell.settings.address || 'Dirección física de mostrador'}
+        exchangeRate={shell.settings.exchange_rate}
+        primaryCurrency={shell.settings.primary_currency || 'USD'}
       />
     </div>
   );

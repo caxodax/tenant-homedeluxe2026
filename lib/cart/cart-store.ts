@@ -9,6 +9,7 @@ export interface CartItem {
   image_url?: string;
   quantity: number;
   max_stock: number;
+  is_tax_exempt?: boolean;
 }
 
 interface CartState {

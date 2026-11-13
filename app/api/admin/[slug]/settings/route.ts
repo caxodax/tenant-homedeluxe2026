@@ -23,6 +23,11 @@ const settingsUpdateSchema = z.object({
   contingency_offline_mode: z.string().optional(),
   offline_safety_buffer: z.number().min(0).optional(),
   social_media: z.record(z.string(), z.string()).optional(),
+  taxes: z.object({
+    tax_enabled: z.boolean(),
+    tax_rate: z.number().min(0).max(100),
+    prices_include_tax: z.boolean(),
+  }).optional(),
 });
 
 export async function GET(
@@ -50,14 +55,16 @@ export async function GET(
       return NextResponse.json({ error: 'Configuración no encontrada' }, { status: 404 });
     }
 
-    // Aplanar social_media desde el JSONB 'value' para el frontend
+    // Aplanar social_media y taxes desde el JSONB 'value' para el frontend
     const socialMedia = settings.value?.social_media || {};
+    const taxes = settings.value?.taxes || { tax_enabled: true, tax_rate: 16.0, prices_include_tax: false };
     const activePlugins = pluginsRes.rows.map((r: { plugin_id: string }) => r.plugin_id);
 
     return NextResponse.json({ 
       settings: {
         ...settings,
         social_media: socialMedia,
+        taxes,
       },
       active_plugins: activePlugins,
     });
@@ -93,19 +100,23 @@ export async function PATCH(
     const values: any[] = [];
     let paramIndex = 1;
 
+    // Agrupar campos JSONB para fusionar en una única asignación atómica sin colisiones SQL
+    const jsonPatch: Record<string, any> = {};
+    if (data.social_media !== undefined) jsonPatch.social_media = data.social_media;
+    if (data.taxes !== undefined) jsonPatch.taxes = data.taxes;
+
     for (const [key, value] of Object.entries(data)) {
-      if (value !== undefined) {
-        if (key === 'social_media') {
-          // Guardar dentro del campo JSONB 'value'
-          fields.push(`value = jsonb_set(COALESCE(value, '{}'::jsonb), '{social_media}', $${paramIndex}::jsonb)`);
-          values.push(JSON.stringify(value));
-          paramIndex++;
-        } else {
-          fields.push(`${key} = $${paramIndex}`);
-          values.push(value);
-          paramIndex++;
-        }
+      if (value !== undefined && key !== 'social_media' && key !== 'taxes') {
+        fields.push(`${key} = $${paramIndex}`);
+        values.push(value);
+        paramIndex++;
       }
+    }
+
+    if (Object.keys(jsonPatch).length > 0) {
+      fields.push(`value = COALESCE(value, '{}'::jsonb) || $${paramIndex}::jsonb`);
+      values.push(JSON.stringify(jsonPatch));
+      paramIndex++;
     }
 
     if (fields.length === 0) {
@@ -117,6 +128,30 @@ export async function PATCH(
         `UPDATE settings SET ${fields.join(', ')}, updated_at = now() WHERE key = 'general'`,
         values
       );
+
+      if (data.primary_currency) {
+        const hRes = await client.query(`
+          SELECT rate_ves_usd, rate_eur_usd FROM exchange_rate_history ORDER BY date_rate DESC LIMIT 1
+        `);
+        const latest = hRes.rows[0];
+        const newRate = data.primary_currency === 'EUR'
+          ? Number(latest?.rate_eur_usd || 1003.4947)
+          : Number(latest?.rate_ves_usd || 904.4485);
+
+        await client.query(`
+          UPDATE settings SET exchange_rate = $1 WHERE key = 'general'
+        `, [newRate]);
+
+        if (data.primary_currency === 'EUR') {
+          await client.query(`
+            INSERT INTO payment_methods (code, name, currency, is_active, plugin_id)
+            VALUES ('CASH_EUR', 'Efectivo Euros (€)', 'LOCAL', true, 'local_venezuela')
+            ON CONFLICT (code) DO UPDATE SET is_active = true, name = 'Efectivo Euros (€)';
+          `);
+        } else {
+          await client.query(`UPDATE payment_methods SET is_active = false WHERE code = 'CASH_EUR'`);
+        }
+      }
     });
 
     // Sincronizar en platform.tenants si aplica

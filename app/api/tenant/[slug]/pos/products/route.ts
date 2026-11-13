@@ -37,13 +37,15 @@ export async function GET(
             current_stock, 
             min_stock_alert, 
             category_id,
-            image_url
+            image_url,
+            is_tax_exempt
           FROM products
           WHERE is_active = true
           ORDER BY name ASC
         `),
         client.query(`
-          SELECT business_name, logo_url, primary_color, secondary_color, accent_color
+          SELECT business_name, logo_url, primary_color, secondary_color, accent_color,
+                 primary_currency, exchange_rate, secondary_currency, value
           FROM settings
           WHERE key = 'general'
           LIMIT 1
@@ -79,7 +81,14 @@ export async function GET(
       primary_color: data.settings?.primary_color || null,
       secondary_color: data.settings?.secondary_color || null,
       accent_color: data.settings?.accent_color || null,
-      currency: 'USD'
+      currency: data.settings?.primary_currency || 'USD',
+      exchange_rate: data.settings?.exchange_rate ? Number(data.settings.exchange_rate) : null,
+      secondary_currency: data.settings?.secondary_currency || 'VES',
+      tax_settings: data.settings?.value?.taxes || {
+        tax_enabled: true,
+        tax_rate: 16.0,
+        prices_include_tax: false,
+      },
     });
   } catch (error: unknown) {
     console.error('Error fetching POS products:', error);

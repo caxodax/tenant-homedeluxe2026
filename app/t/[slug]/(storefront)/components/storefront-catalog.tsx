@@ -16,6 +16,8 @@ interface StorefrontCatalogProps {
   businessName: string;
   logoUrl?: string | null;
   bannerUrl?: string | null;
+  exchangeRate?: number | null;
+  primaryCurrency?: string;
 }
 
 export function StorefrontCatalog({
@@ -24,6 +26,8 @@ export function StorefrontCatalog({
   businessName,
   logoUrl,
   bannerUrl,
+  exchangeRate,
+  primaryCurrency = 'USD',
 }: StorefrontCatalogProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -183,6 +187,8 @@ export function StorefrontCatalog({
                 key={product.id}
                 product={product}
                 priority={idx < 4}
+                exchangeRate={exchangeRate}
+                primaryCurrency={primaryCurrency}
               />
             ))}
           </div>

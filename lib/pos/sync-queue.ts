@@ -139,6 +139,7 @@ function serializeSaleForApi(sale: OfflineSale) {
     tax_usd: sale.tax_usd,
     shipping_usd: sale.shipping_usd,
     total_usd: sale.total_usd,
+    total_secondary: sale.total_secondary || null,
     exchange_rate_applied: sale.exchange_rate_applied,
     offline_ticket_ref: sale.offline_ticket_ref,
     is_offline_sale: true,

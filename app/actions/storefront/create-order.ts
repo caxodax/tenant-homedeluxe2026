@@ -79,25 +79,44 @@ export async function createStorefrontOrder(data: CheckoutFormData) {
     const activePlugins = pluginsRes.rows.map((r: { plugin_id: string }) => r.plugin_id);
 
     // 2. Validar sucursal y método de pago habilitado en el esquema del tenant
-    const { storeId, storeAddress, selectedMethod } = await withTenantDb(
+    const { storeId, storeAddress, selectedMethod, exchangeRate, isLocalVenezuela, igtfEnabled, taxSettings, exemptMap } = await withTenantDb(
       tenant.db_schema_name,
       null,
       async (client) => {
-        const [sRes, storeRes, methods] = await Promise.all([
-          client.query(`SELECT address FROM settings WHERE key = 'general' LIMIT 1`),
+        const productIds = items.map((i) => i.product_id);
+        const [sRes, storeRes, methods, pluginConfigRes, pRes] = await Promise.all([
+          client.query(`SELECT address, exchange_rate, secondary_currency, value FROM settings WHERE key = 'general' LIMIT 1`),
           client.query(`SELECT id FROM stores WHERE is_active = true LIMIT 1`),
           fetchTenantPaymentMethods(client, {
             activePlugins,
             onlyActive: true,
             channel: 'storefront',
           }),
+          pool.query(
+            `SELECT config FROM platform.tenant_plugins WHERE tenant_id = $1 AND plugin_id = 'local_venezuela' AND is_active = true`,
+            [tenant.id]
+          ),
+          client.query(`SELECT id, is_tax_exempt FROM products WHERE id = ANY($1)`, [productIds]),
         ]);
 
         const matched = methods.find((m) => m.code === payment_method) || null;
+        const rate = sRes.rows[0]?.exchange_rate ? Number(sRes.rows[0].exchange_rate) : 1.0;
+        const hasPlugin = activePlugins.includes('local_venezuela');
+        const igtf = Boolean(pluginConfigRes.rows[0]?.config?.igtf_enabled ?? true);
+        const taxes = sRes.rows[0]?.value?.taxes || {};
+        const exemptLookup = new Map<string, boolean>(
+          pRes.rows.map((r: { id: string; is_tax_exempt: boolean }) => [r.id, Boolean(r.is_tax_exempt)])
+        );
+
         return {
           storeId: storeRes.rows[0]?.id || null,
           storeAddress: sRes.rows[0]?.address || 'Sede Principal del Comercio',
           selectedMethod: matched,
+          exchangeRate: rate,
+          isLocalVenezuela: hasPlugin,
+          igtfEnabled: igtf,
+          taxSettings: taxes,
+          exemptMap: exemptLookup,
         };
       }
     );
@@ -124,9 +143,68 @@ export async function createStorefrontOrder(data: CheckoutFormData) {
       };
     }
 
-    // 3. Preparar payload para la RPC transaccional canónica (Core Agnóstico en USD)
-    const totalUsd = items.reduce((sum, item) => sum + item.unit_price_usd * item.quantity, 0);
-    const subtotalUsd = Number(totalUsd.toFixed(2));
+    // 3. Preparar payload para la RPC transaccional canónica bimonetaria
+    let subtotalExemptUsd = 0;
+    let subtotalTaxableUsd = 0;
+
+    for (const item of items) {
+      const isExempt = exemptMap.get(item.product_id) ?? false;
+      const lineTotal = item.unit_price_usd * item.quantity;
+      if (isExempt) {
+        subtotalExemptUsd += lineTotal;
+      } else {
+        subtotalTaxableUsd += lineTotal;
+      }
+    }
+
+    const subtotalUsd = Number((subtotalExemptUsd + subtotalTaxableUsd).toFixed(2));
+    const taxEnabled = taxSettings.tax_enabled ?? true;
+    const taxRate = typeof taxSettings.tax_rate === 'number' ? taxSettings.tax_rate : 16.0;
+    const pricesIncludeTax = taxSettings.prices_include_tax ?? false;
+    const activeTaxRate = taxRate / 100;
+
+    let vatUsd = 0.00;
+    if (taxEnabled && activeTaxRate > 0) {
+      if (pricesIncludeTax) {
+        vatUsd = Number((subtotalTaxableUsd - subtotalTaxableUsd / (1 + activeTaxRate)).toFixed(2));
+      } else {
+        vatUsd = Number((subtotalTaxableUsd * activeTaxRate).toFixed(2));
+      }
+    }
+
+    // Régimen IGTF 3% sobre pagos en divisas en efectivo (CASH_USD / CASH_EUR) - solo si modo fiscal activo
+    const isCashForeignCurrency = selectedMethod.code === 'CASH_USD' || selectedMethod.code === 'CASH_EUR';
+    let igtfUsd = 0.00;
+    if (taxEnabled && isLocalVenezuela && isCashForeignCurrency && igtfEnabled) {
+      const baseForIgtf = pricesIncludeTax ? subtotalUsd : Number((subtotalUsd + vatUsd).toFixed(2));
+      igtfUsd = Number((baseForIgtf * 0.03).toFixed(2));
+    }
+
+    const totalTaxUsd = Number((vatUsd + igtfUsd).toFixed(2));
+    const totalUsdFinal = !taxEnabled
+      ? Number(subtotalUsd.toFixed(2))
+      : pricesIncludeTax 
+        ? Number((subtotalUsd + igtfUsd).toFixed(2)) 
+        : Number((subtotalUsd + vatUsd + igtfUsd).toFixed(2));
+
+    let paymentCurrency = 'USD';
+    let paymentAmount = totalUsdFinal;
+
+    if (isLocalVenezuela && (selectedMethod.code === 'PAGO_MOVIL' || selectedMethod.code === 'CASH_LOCAL')) {
+      paymentCurrency = 'VES';
+      paymentAmount = Number((totalUsdFinal * exchangeRate).toFixed(2));
+    }
+
+    const totalSecondary = isLocalVenezuela && exchangeRate > 0 ? Number((totalUsdFinal * exchangeRate).toFixed(2)) : null;
+    const exchangeRateApplied = isLocalVenezuela && exchangeRate > 0 ? exchangeRate : 1.0;
+
+    const additiveTaxUsd = !taxEnabled ? 0.00 : pricesIncludeTax ? igtfUsd : totalTaxUsd;
+
+    const formattedNotes = [
+      customer_id_number && customer_id_number !== 'N/A' ? `[Doc: ${customer_id_number}]` : '',
+      pricesIncludeTax && vatUsd > 0 ? `[IVA inc: $${vatUsd.toFixed(2)}]` : '',
+      notes || 'Pedido desde Vitrina Digital',
+    ].filter(Boolean).join(' ');
 
     const orderPayload = {
       store_id: storeId,
@@ -137,13 +215,13 @@ export async function createStorefrontOrder(data: CheckoutFormData) {
       delivery_address: storeAddress,
       subtotal_usd: subtotalUsd,
       discount_usd: 0.00,
-      tax_usd: 0.00,
+      tax_usd: additiveTaxUsd,
       shipping_usd: 0.00,
-      total_usd: subtotalUsd,
-      total_secondary: null,
-      exchange_rate_applied: 1.0,
+      total_usd: totalUsdFinal,
+      total_secondary: totalSecondary,
+      exchange_rate_applied: exchangeRateApplied,
       is_offline_sale: false,
-      notes: notes || 'Pedido desde Vitrina Digital (Pick-up en USD)',
+      notes: formattedNotes,
       items: items.map((i) => ({
         product_id: i.product_id,
         product_name: i.product_name,
@@ -153,8 +231,8 @@ export async function createStorefrontOrder(data: CheckoutFormData) {
       })),
       payment: {
         method: selectedMethod.code,
-        amount: subtotalUsd,
-        currency: 'USD',
+        amount: paymentAmount,
+        currency: paymentCurrency,
         reference_number: payment_reference || undefined,
         proof_image_url: proof_image_url || undefined,
         proof_file_hash: proof_file_hash || undefined,

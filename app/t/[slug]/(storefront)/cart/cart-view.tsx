@@ -11,9 +11,11 @@ import {
 interface CartViewProps {
   slug: string;
   pickupAddress: string;
+  exchangeRate?: number | null;
+  primaryCurrency?: string;
 }
 
-export function CartView({ slug, pickupAddress }: CartViewProps) {
+export function CartView({ slug, pickupAddress, exchangeRate, primaryCurrency = 'USD' }: CartViewProps) {
   const hasMounted = useHasMounted();
   const items = useCart((state) => state.items);
   const totalItems = useCart((state) => state.getTotalItems());
@@ -21,6 +23,10 @@ export function CartView({ slug, pickupAddress }: CartViewProps) {
   const updateQuantity = useCart((state) => state.updateQuantity);
   const removeItem = useCart((state) => state.removeItem);
   const clearCart = useCart((state) => state.clearCart);
+
+  const effectiveRate = Number(exchangeRate || 0);
+  const totalVes = effectiveRate > 0 ? (totalPrice * effectiveRate).toFixed(2) : null;
+  const currencySymbol = primaryCurrency === 'EUR' ? '€' : '$';
 
   if (!hasMounted) {
     return (
@@ -111,7 +117,7 @@ export function CartView({ slug, pickupAddress }: CartViewProps) {
                       {item.product_name}
                     </h3>
                     <p className="text-xs font-mono text-slate-400 dark:text-zinc-500 mt-0.5">
-                      ${item.price_usd.toFixed(2)} USD c/u
+                      {currencySymbol}{item.price_usd.toFixed(2)} {primaryCurrency} c/u
                     </p>
                   </div>
                 </div>
@@ -140,8 +146,13 @@ export function CartView({ slug, pickupAddress }: CartViewProps) {
                   {/* Subtotal del Ítem */}
                   <div className="text-right min-w-[5rem]">
                     <p className="text-sm font-black font-mono text-slate-900 dark:text-white">
-                      ${subtotal.toFixed(2)}
+                      {currencySymbol}{subtotal.toFixed(2)}
                     </p>
+                    {effectiveRate > 0 && (
+                      <p className="text-[11px] font-mono font-bold text-lime-700 dark:text-lime-400">
+                        Bs. {(subtotal * effectiveRate).toFixed(2)}
+                      </p>
+                    )}
                     <button
                       onClick={() => removeItem(item.product_id)}
                       className="text-[11px] text-red-500 hover:text-red-700 dark:hover:text-red-400 mt-0.5 cursor-pointer"
@@ -165,18 +176,26 @@ export function CartView({ slug, pickupAddress }: CartViewProps) {
             <div className="space-y-2.5 text-xs">
               <div className="flex justify-between text-slate-500 dark:text-zinc-400">
                 <span>Subtotal ({totalItems} productos)</span>
-                <span className="font-mono font-medium">${totalPrice.toFixed(2)} USD</span>
+                <span className="font-mono font-medium">{currencySymbol}{totalPrice.toFixed(2)} {primaryCurrency}</span>
               </div>
               <div className="flex justify-between text-slate-500 dark:text-zinc-400">
                 <span>Retiro en Tienda (Pick-up)</span>
                 <span className="text-emerald-700 dark:text-emerald-400 font-bold">Gratis</span>
               </div>
               <div className="flex justify-between items-baseline pt-3 border-t border-slate-100 dark:border-zinc-800">
-                <span className="text-sm font-black text-slate-900 dark:text-white">Total USD</span>
+                <span className="text-sm font-black text-slate-900 dark:text-white">Total {primaryCurrency}</span>
                 <span className="text-2xl font-black font-mono text-lime-700 dark:text-lime-400">
-                  ${totalPrice.toFixed(2)}
+                  {currencySymbol}{totalPrice.toFixed(2)}
                 </span>
               </div>
+              {totalVes && (
+                <div className="flex justify-between items-baseline pt-1">
+                  <span className="text-xs font-bold text-slate-700 dark:text-zinc-300">Total Bolívares (BCV)</span>
+                  <span className="text-base font-extrabold font-mono text-slate-950 dark:text-white">
+                    Bs. {Number(totalVes).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              )}
             </div>
 
             {/* Banner Informativo de Retiro */}
