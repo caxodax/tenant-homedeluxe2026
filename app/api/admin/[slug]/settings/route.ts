@@ -129,27 +129,38 @@ export async function PATCH(
         values
       );
 
+      // Sincronización condicional con local_venezuela (solo si el plugin está activo en este comercio)
       if (data.primary_currency) {
-        const hRes = await client.query(`
-          SELECT rate_ves_usd, rate_eur_usd FROM exchange_rate_history ORDER BY date_rate DESC LIMIT 1
-        `);
-        const latest = hRes.rows[0];
-        const newRate = data.primary_currency === 'EUR'
-          ? Number(latest?.rate_eur_usd || 1003.4947)
-          : Number(latest?.rate_ves_usd || 904.4485);
+        try {
+          const pluginRes = await pool.query(
+            `SELECT 1 FROM platform.tenant_plugins WHERE tenant_id = $1 AND plugin_id = 'local_venezuela' AND is_active = true LIMIT 1`,
+            [tenant.id]
+          );
+          if ((pluginRes.rowCount || 0) > 0) {
+            const hRes = await client.query(`
+              SELECT rate_ves_usd, rate_eur_usd FROM exchange_rate_history ORDER BY date_rate DESC LIMIT 1
+            `);
+            const latest = hRes.rows[0];
+            const newRate = data.primary_currency === 'EUR'
+              ? Number(latest?.rate_eur_usd || 1003.4947)
+              : Number(latest?.rate_ves_usd || 904.4485);
 
-        await client.query(`
-          UPDATE settings SET exchange_rate = $1 WHERE key = 'general'
-        `, [newRate]);
+            await client.query(`
+              UPDATE settings SET exchange_rate = $1 WHERE key = 'general'
+            `, [newRate]);
 
-        if (data.primary_currency === 'EUR') {
-          await client.query(`
-            INSERT INTO payment_methods (code, name, currency, is_active, plugin_id)
-            VALUES ('CASH_EUR', 'Efectivo Euros (€)', 'LOCAL', true, 'local_venezuela')
-            ON CONFLICT (code) DO UPDATE SET is_active = true, name = 'Efectivo Euros (€)';
-          `);
-        } else {
-          await client.query(`UPDATE payment_methods SET is_active = false WHERE code = 'CASH_EUR'`);
+            if (data.primary_currency === 'EUR') {
+              await client.query(`
+                INSERT INTO payment_methods (code, name, currency, is_active, plugin_id)
+                VALUES ('CASH_EUR', 'Efectivo Euros (€)', 'LOCAL', true, 'local_venezuela')
+                ON CONFLICT (code) DO UPDATE SET is_active = true, name = 'Efectivo Euros (€)';
+              `);
+            } else {
+              await client.query(`UPDATE payment_methods SET is_active = false WHERE code = 'CASH_EUR'`);
+            }
+          }
+        } catch (pluginErr) {
+          console.warn('Advertencia ignorada: plugin local_venezuela no disponible o sin tabla de tasas:', pluginErr);
         }
       }
     });
