@@ -147,6 +147,12 @@ Plataforma SaaS Multi-Tenant de Comercio Universal (Minimarkets, Retail, Restaur
   - **Directorio Raíz & Manifiesto Configurable (`/`, `app/manifest.ts`)**: Si `NEXT_PUBLIC_DEFAULT_TENANT_SLUG` está vacío, `/` presenta el portal multi-tenant con los comercios activos y acceso al Super Admin; si está configurado, redirige automáticamente al comercio por defecto.
   - **RBAC SSR**: Layouts de guardia en `/admin/inventory`, `/admin/settings` y `/admin/orders` con botón de cierre de sesión.
   - **Desacoplamiento `/platform` (`marketos-template` puro)**: Eliminadas de `marketos-app/` las rutas `app/platform`, `app/api/platform` y `platform-guard.ts` (y extraídas las credenciales de despliegue del Control Plane fuera de `marketos-app/.env.local`), dejando únicamente el núcleo operativo por comercio listo para congelar el template.
+### ✅ FASE 12.8: Régimen Tributario Core & Localización Desacoplada
+- **Modo No Fiscal vs Modo Fiscal**: Selector visual en `/admin/settings` para alternar entre venta plana (sin impuestos, `tax_enabled = false`) y venta fiscal con cálculo de IVA paramétrico (`tax_rate`) y modalidad PVP Neto (`prices_include_tax`).
+- **Exención Tributaria por Producto (`is_tax_exempt`)**: Soporte en catálogo para ítems exentos (canasta básica) con desglose automático de Base Gravada y Base Exenta.
+- **Multimoneda Base Canónica**: Selector de fijación de precios en USD ($) o EUR (€) con ajuste dinámico de simbología en mostrador, vitrina y tickets, además del método de cobro `CASH_EUR`.
+- **Desacoplamiento Estricto Core vs Plugin**: El recargo de IGTF 3% del plugin `local_venezuela` se condiciona automáticamente: solo se aplica si el comercio activa el Modo Fiscal. En Modo No Fiscal, el plugin opera sin recargos.
+
 - **Optimización CPU / Caché (Vercel Fluid Ready)**:
   - **Next.js 16 `proxy.ts`**: Migración de `middleware.ts` a `proxy.ts` con exclusión explícita de activos estáticos, `/icons/*`, `/sw.js`, `.webmanifest` y rutas `/t/*` sin reescritura innecesaria.
   - **Singleton R2 & CDN Inmutable (`lib/r2.ts`, `/api/media/[...path]`)**: Reutilización de instancia `S3Client` entre invocaciones cálidas, soporte `304 Not Modified` (`ETag`) y cabeceras `s-maxage=31536000` / `CDN-Cache-Control` para servir imágenes desde el Edge CDN.
