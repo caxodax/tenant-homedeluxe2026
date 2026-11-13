@@ -1,13 +1,23 @@
 {
   "version": 1,
   "channels": {
-    "canary": { "auto_merge_on_green_ci": true },
-    "stable": { "auto_merge_on_green_ci": false }
+    "canary": {
+      "auto_merge_on_green_ci": true
+    },
+    "stable": {
+      "auto_merge_on_green_ci": false
+    }
   },
   "tenants": [
     {
       "repo": "tenant-shopmarket",
       "slug": "shopmarket",
+      "channel": "stable",
+      "enabled": true
+    },
+    {
+      "repo": "tenant-homedeluxe2026",
+      "slug": "homedeluxe2026",
       "channel": "stable",
       "enabled": true
     }
