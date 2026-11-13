@@ -89,7 +89,8 @@ Plataforma SaaS Multi-Tenant de Comercio Universal (Minimarkets, Retail, Restaur
 ### ✅ FASE 9: CRUDs Operativos del Core y Catálogo Avanzado
 - **9.1 — Presigned URLs para Cloudflare R2 (`/api/media/presign-upload`)**:
   - Generación de presigned PUT URLs seguras utilizando `@aws-sdk/s3-request-presigner` y `@aws-sdk/client-s3`.
-  - Soporte de subida directa desde el navegador (bypass del VPS) para paths: `products`, `categories`, `logos`, `banners`, `proofs`.
+  - Soporte de subida directa desde el navegador (bypass del VPS) para paths: `products`, `categories`, `logos`, `banners`, `proofs`, `branding`.
+  - Autenticación unificada de tenancy (`requireTenantStaffApi`): reconoce sesiones de Staff, Propietarios, Supabase Auth y tokens de Impersonación de Super Admin sin rechazos 401 en producción.
 - **9.2 — Componente `ImageUploader` con Drag & Drop (`components/admin/image-uploader.tsx`)**:
   - Implementado con `react-dropzone` y feedback visual en vivo (preview de imagen, loading spinner, eliminación con un clic).
   - Carga directa vía Presigned URL con fallback inteligente al endpoint de streaming `/api/media/upload`.
@@ -119,7 +120,7 @@ Plataforma SaaS Multi-Tenant de Comercio Universal (Minimarkets, Retail, Restaur
     - Normalización automática de `store_id` UUID y `customer_phone` en `/api/pos/sync` con rescate transparente de lotes offline pendientes y deducción inmediata en inventario + recarga en tiempo real de stock al cobrar.
     - Input numérico editable y validado (`PosQuantityInput`) en el Ticket Actual del POS.
     - Impresión de comprobantes (`@media print`) con ajuste multilínea (`break-words`) para mostrar nombres de productos largos completos sin truncar.
-  - **Moneda Secundaria Gated por Plugin**: La configuración consulta `platform.tenant_plugins` y restringe monedas secundarias (como `VES`) a comercios con plugins de localización activos, preservando el **Core Agnóstico en USD ($)**.
+  - **Moneda Secundaria Gated por Plugin y Desacoplamiento de Capas**: La configuración general en `/api/admin/[slug]/settings` opera de forma 100% agnóstica sin asumir tablas externas. Solo sincroniza con `exchange_rate_history` o habilita métodos locales (`CASH_EUR`) si el plugin `local_venezuela` está verificado como activo en `platform.tenant_plugins`, garantizando que cualquier comercio nuevo o internacional guarde su branding y configuración con cero fallos 500.
   - Campos dedicados de redes sociales persistidos en `settings.value.social_media` (Instagram, Facebook, TikTok, Twitter/X, YouTube).
   - Sincronización bidireccional automática con la tabla global `platform.tenants`.
 - **9.9 — API Route de Categorías (`/api/admin/[slug]/categories`)**:
