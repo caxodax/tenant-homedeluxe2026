@@ -90,23 +90,23 @@ export default async function TenantAdminLayout({
           className="p-4 border-b border-stone-200/80 dark:border-zinc-800/80"
           style={{ borderTop: `3px solid ${primaryColor}` }}
         >
-          <div className="flex items-center gap-3">
+          <Link href={`/t/${slug}/admin`} className="flex items-center gap-3 group">
             {logoUrl ? (
               <div className="h-12 max-w-[140px] flex items-center shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={logoUrl}
                   alt={storeName}
-                  className="max-h-12 max-w-full object-contain drop-shadow-xs"
+                  className="max-h-12 max-w-full object-contain drop-shadow-xs group-hover:opacity-80 transition-opacity"
                 />
               </div>
             ) : (
-              <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 flex items-center justify-center shrink-0">
+              <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60 flex items-center justify-center shrink-0 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-950/60 transition-colors">
                 <Store className="w-5 h-5" />
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <h1 className="font-extrabold text-sm leading-tight text-stone-950 dark:text-white truncate">
+              <h1 className="font-extrabold text-sm leading-tight text-stone-950 dark:text-white truncate group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
                 {storeName}
               </h1>
               <div className="flex items-center gap-1.5 mt-1 flex-wrap">
@@ -118,7 +118,7 @@ export default async function TenantAdminLayout({
                 </span>
               </div>
             </div>
-          </div>
+          </Link>
         </div>
         
         {/* Navegación Reactiva con Secciones estructuradas (Opción A) */}
@@ -158,10 +158,10 @@ export default async function TenantAdminLayout({
         >
           <div className="flex items-center gap-2.5 min-w-0">
             {logoUrl && (
-              <div className="h-7 max-w-[100px] flex items-center shrink-0 md:hidden">
+              <Link href={`/t/${slug}/admin`} className="h-7 max-w-[100px] flex items-center shrink-0 md:hidden hover:opacity-80 transition-opacity">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={logoUrl} alt={storeName} className="max-h-7 max-w-full object-contain" />
-              </div>
+              </Link>
             )}
             <span className="px-2 py-0.5 rounded text-[11px] uppercase tracking-wider bg-stone-100 dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 text-stone-700 dark:text-zinc-300 font-mono font-bold truncate">
               {storeName}

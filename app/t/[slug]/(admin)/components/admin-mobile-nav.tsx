@@ -120,26 +120,26 @@ export function AdminMobileNav({
           <div className="relative ml-auto w-full max-w-xs sm:max-w-sm h-dvh bg-white dark:bg-[#141416] border-l border-stone-200 dark:border-zinc-800 flex flex-col shadow-2xl z-10">
             {/* Header del Drawer */}
             <div className="p-4 border-b border-stone-200/80 dark:border-zinc-800/80 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5 min-w-0">
+              <Link href={`/t/${slug}/admin`} onClick={() => setIsOpen(false)} className="flex items-center gap-2.5 min-w-0 group">
                 {logoUrl ? (
                   <div className="h-9 max-w-[120px] flex items-center shrink-0">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={logoUrl} alt={storeName} className="max-h-9 max-w-full object-contain" />
+                    <img src={logoUrl} alt={storeName} className="max-h-9 max-w-full object-contain group-hover:opacity-80 transition-opacity" />
                   </div>
                 ) : (
-                  <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/50 flex items-center justify-center shrink-0">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/50 flex items-center justify-center shrink-0 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-950/60 transition-colors">
                     <Store className="w-4 h-4" />
                   </div>
                 )}
                 <div className="min-w-0">
-                  <h2 className="font-extrabold text-sm text-stone-950 dark:text-white truncate">
+                  <h2 className="font-extrabold text-sm text-stone-950 dark:text-white truncate group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
                     {storeName}
                   </h2>
                   <span className="text-[10px] font-mono uppercase font-bold text-stone-700 dark:text-zinc-300">
                     Rol: {role}
                   </span>
                 </div>
-              </div>
+              </Link>
 
               <button
                 type="button"
