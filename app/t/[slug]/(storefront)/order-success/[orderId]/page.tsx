@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import { OrderItemsModal } from './OrderItemsModal';
 
+export const dynamic = 'force-dynamic';
+
 async function getOrderDetails(slug: string, orderId: string) {
   const tRes = await pool.query(
     `SELECT db_schema_name, name FROM platform.tenants WHERE slug = $1 AND status IN ('active', 'trial')`,

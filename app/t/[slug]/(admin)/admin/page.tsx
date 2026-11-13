@@ -7,6 +7,8 @@ import {
 import { SalesChart, TrendItem } from './components/sales-chart';
 import { cn } from '@/lib/utils';
 
+export const dynamic = 'force-dynamic';
+
 async function getTenantMetrics(schema: string) {
   return withTenantDb(schema, null, async (client) => {
     const [todaySales, pendingOrders, lowStock, totalProducts, settingsRes] = await Promise.all([

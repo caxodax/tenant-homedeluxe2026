@@ -2,6 +2,8 @@ import { requireTenantStaff } from '@/lib/auth/tenant-guard';
 import { withTenantDb } from '@/lib/db';
 import { ReportsClientView, type ReportDataPayload } from './ReportsClientView';
 
+export const dynamic = 'force-dynamic';
+
 export default async function ReportsPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const { tenant } = await requireTenantStaff(slug, 'reports');
