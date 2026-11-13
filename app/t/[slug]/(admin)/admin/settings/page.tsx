@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import {
   Select,
   SelectContent,
@@ -32,11 +32,16 @@ import {
   Share2, 
   RefreshCw,
   Sparkles,
-  CreditCard
+  CreditCard,
+  Coins,
+  Receipt,
+  CheckCircle2,
+  Ban
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ImageUploader } from '@/components/admin/image-uploader';
 import { PaymentMethodsManager } from './payment-methods-manager';
+import { BcvRateTab } from './bcv-rate-tab';
 import { TENANT_DEFAULTS } from '@/lib/tenant/defaults';
 
 const settingsSchema = z.object({
@@ -62,6 +67,11 @@ const settingsSchema = z.object({
     twitter: z.string().optional(),
     youtube: z.string().optional(),
   }).optional(),
+  taxes: z.object({
+    tax_enabled: z.boolean(),
+    tax_rate: z.number().min(0).max(100),
+    prices_include_tax: z.boolean(),
+  }),
 });
 
 type SettingsForm = z.infer<typeof settingsSchema>;
@@ -76,6 +86,24 @@ const COLOR_PRESETS = [
   { name: 'Grafito Minimal', hex: '#27272a' },
 ];
 
+interface SettingsSection {
+  id: string;
+  label: string;
+  description: string;
+  icon: React.ElementType;
+  pluginId?: string;
+  badge?: string;
+}
+
+const SETTINGS_SECTIONS: SettingsSection[] = [
+  { id: 'general', label: 'General & Datos Básicos', description: 'Nombre comercial, dirección física y monedas canónicas', icon: Store },
+  { id: 'branding', label: 'Marca & Logo', description: 'Colores corporativos, logotipo y banner de tienda', icon: Palette },
+  { id: 'payments', label: 'Métodos de Pago', description: 'Pasarelas, cuentas y formas de cobro habilitadas', icon: CreditCard },
+  { id: 'bcv', label: 'Tasa & Moneda (BCV)', description: 'Sincronización cambiaria oficial, Pago Móvil e IGTF', icon: Coins, pluginId: 'local_venezuela', badge: 'Plugin VE' },
+  { id: 'contact', label: 'Contacto & Contingencia', description: 'WhatsApp de atención y modo offline de contingencia', icon: MessageCircle },
+  { id: 'social', label: 'Redes Sociales', description: 'Canales y enlaces directos a perfiles sociales', icon: Share2 },
+];
+
 export default function SettingsPage() {
   const params = useParams() as { slug: string };
   const router = useRouter();
@@ -84,6 +112,19 @@ export default function SettingsPage() {
   const [activePlugins, setActivePlugins] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState('general');
   const hasLocalizationPlugin = activePlugins.includes('local_venezuela');
+
+  const availableSections = SETTINGS_SECTIONS.filter(
+    (sec) => !sec.pluginId || activePlugins.includes(sec.pluginId)
+  );
+  const currentSection = availableSections.find((s) => s.id === activeTab) || availableSections[0] || SETTINGS_SECTIONS[0];
+  const CurrentIcon = currentSection.icon;
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const tab = new URLSearchParams(window.location.search).get('tab');
+      if (tab) setActiveTab(tab);
+    }
+  }, []);
 
   const form = useForm<SettingsForm>({
     resolver: zodResolver(settingsSchema),
@@ -109,6 +150,11 @@ export default function SettingsPage() {
         tiktok: '',
         twitter: '',
         youtube: '',
+      },
+      taxes: {
+        tax_enabled: true,
+        tax_rate: 16,
+        prices_include_tax: false,
       },
     },
   });
@@ -153,6 +199,11 @@ export default function SettingsPage() {
             tiktok: s.social_media?.tiktok || '',
             twitter: s.social_media?.twitter || '',
             youtube: s.social_media?.youtube || '',
+          },
+          taxes: {
+            tax_enabled: s.taxes?.tax_enabled ?? true,
+            tax_rate: typeof s.taxes?.tax_rate === 'number' ? s.taxes.tax_rate : 16,
+            prices_include_tax: s.taxes?.prices_include_tax ?? false,
           },
         });
       }
@@ -199,42 +250,70 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-6 max-w-4xl">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-slate-200/80 dark:border-zinc-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200/80 dark:border-zinc-800">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-950 dark:text-white tracking-tight">
             Configuración del Comercio
           </h1>
-          <p className="text-sm text-slate-700 dark:text-zinc-300 font-medium mt-1">
-            Personaliza la identidad visual, logo, paleta cromática, datos de contacto y contingencia
+          <p className="text-sm text-slate-600 dark:text-zinc-400 font-medium mt-1">
+            Personaliza la identidad visual, logo, métodos de pago y plugins del comercio
           </p>
+        </div>
+
+        {/* SELECTOR DE SECCIÓN ÚNICO (SIN DUPLICACIÓN NI TÍTULOS REDUNDANTES) */}
+        <div className="w-full sm:w-72 shrink-0">
+          <Select 
+            value={activeTab} 
+            onValueChange={(val) => {
+              setActiveTab(val);
+              if (typeof window !== 'undefined') {
+                const url = new URL(window.location.href);
+                url.searchParams.set('tab', val);
+                window.history.replaceState({}, '', url.toString());
+              }
+            }}
+          >
+            <SelectTrigger 
+              aria-label="Seleccionar sección de configuración"
+              className="w-full h-11 bg-white dark:bg-[#121214] border-slate-200 dark:border-zinc-800 font-bold text-slate-900 dark:text-white rounded-xl shadow-xs"
+            >
+              <div className="flex items-center gap-2 truncate">
+                <CurrentIcon className="w-4 h-4 text-red-600 dark:text-red-500 shrink-0" />
+                <span className="truncate">{currentSection?.label}</span>
+                {currentSection?.badge && (
+                  <span className="ml-1 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-lime-500/10 text-lime-600 dark:text-lime-400 border border-lime-500/20 shrink-0">
+                    {currentSection.badge}
+                  </span>
+                )}
+              </div>
+            </SelectTrigger>
+            <SelectContent className="bg-white dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 shadow-xl max-h-80">
+              {availableSections.map((sec) => {
+                const SecIcon = sec.icon;
+                return (
+                  <SelectItem key={sec.id} value={sec.id} className="font-semibold cursor-pointer py-2.5">
+                    <div className="flex items-center gap-2.5 w-full">
+                      <SecIcon className="w-4 h-4 text-slate-500 dark:text-zinc-400 shrink-0" />
+                      <div className="flex flex-col text-left">
+                        <span className="text-sm font-bold text-slate-900 dark:text-zinc-100">{sec.label}</span>
+                        <span className="text-[11px] font-normal text-slate-500 dark:text-zinc-400 line-clamp-1">{sec.description}</span>
+                      </div>
+                      {sec.badge && (
+                        <span className="ml-auto text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-lime-500/10 text-lime-600 dark:text-lime-400 border border-lime-500/20 shrink-0">
+                          {sec.badge}
+                        </span>
+                      )}
+                    </div>
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 p-1 rounded-2xl flex-wrap h-auto">
-            <TabsTrigger value="general" className="rounded-xl text-sm font-bold gap-1.5 cursor-pointer px-4 py-2">
-              <Store className="w-4 h-4" />
-              General
-            </TabsTrigger>
-            <TabsTrigger value="branding" className="rounded-xl text-sm font-bold gap-1.5 cursor-pointer px-4 py-2">
-              <Palette className="w-4 h-4" />
-              Marca & Logo
-            </TabsTrigger>
-            <TabsTrigger value="payments" className="rounded-xl text-sm font-bold gap-1.5 cursor-pointer px-4 py-2">
-              <CreditCard className="w-4 h-4" />
-              Métodos de Pago
-            </TabsTrigger>
-            <TabsTrigger value="contact" className="rounded-xl text-sm font-bold gap-1.5 cursor-pointer px-4 py-2">
-              <MessageCircle className="w-4 h-4" />
-              Contacto & Contingencia
-            </TabsTrigger>
-            <TabsTrigger value="social" className="rounded-xl text-sm font-bold gap-1.5 cursor-pointer px-4 py-2">
-              <Share2 className="w-4 h-4" />
-              Redes Sociales
-            </TabsTrigger>
-          </TabsList>
-
           {/* TAB 1: GENERAL */}
           <TabsContent value="general" className="space-y-4">
             <Card className="bg-white dark:bg-[#121214] border-slate-200 dark:border-zinc-800 shadow-xs">
@@ -288,16 +367,23 @@ export default function SettingsPage() {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                   <div className="space-y-1.5">
-                    <Label className="text-sm font-bold text-slate-800 dark:text-zinc-200">
-                      Moneda Base Canónica (Core Agnóstico)
+                    <Label htmlFor="primary_currency" className="text-sm font-bold text-slate-800 dark:text-zinc-200">
+                      Moneda Base Canónica (Precios de Productos)
                     </Label>
-                    <Input
-                      disabled
-                      value="USD ($) - Dólares Americanos"
-                      className="bg-slate-100 dark:bg-zinc-900/60 border-slate-300 dark:border-zinc-800 text-slate-900 dark:text-zinc-200 text-sm h-11 font-mono font-bold"
-                    />
+                    <Select
+                      value={form.watch('primary_currency') || 'USD'}
+                      onValueChange={(val) => form.setValue('primary_currency', val)}
+                    >
+                      <SelectTrigger className="bg-slate-50 dark:bg-zinc-900 border-slate-300 dark:border-zinc-800 text-slate-950 dark:text-white text-sm h-11 font-mono font-bold">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-white dark:bg-[#141416] border-slate-200 dark:border-zinc-800 text-sm">
+                        <SelectItem value="USD">USD ($) - Dólares Americanos</SelectItem>
+                        <SelectItem value="EUR">EUR (€) - Euros Unión Europea</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <p className="text-xs text-slate-700 dark:text-zinc-400">
-                      Estricto por Blueprint. El Core maestro opera en USD ($).
+                      Moneda principal en la que fijas los precios en inventario y catálogo.
                     </p>
                   </div>
 
@@ -336,6 +422,114 @@ export default function SettingsPage() {
                         : 'Requiere activar el plugin de localización/multimoneda para habilitar conversiones.'}
                     </p>
                   </div>
+                </div>
+
+                {/* POLÍTICA FISCAL Y DE IMPUESTOS (CORE) */}
+                <div className="pt-5 border-t border-slate-200 dark:border-zinc-800 space-y-4">
+                  <div>
+                    <h3 className="text-sm font-extrabold uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
+                      <Receipt className="w-4 h-4 text-red-600 dark:text-red-500" />
+                      Régimen Tributario del Comercio (Core)
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
+                      Define si el comercio opera con desglose fiscal (IVA) o en modalidad no fiscal (venta plana directa).
+                    </p>
+                  </div>
+
+                  {/* Selector de Modo Fiscal vs No Fiscal */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => form.setValue('taxes.tax_enabled', false, { shouldDirty: true })}
+                      className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                        !form.watch('taxes.tax_enabled')
+                          ? 'border-emerald-500 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100 ring-1 ring-emerald-500'
+                          : 'border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/50 text-slate-700 dark:text-zinc-300 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                          <Ban className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                          Modo No Fiscal (Sin Impuestos)
+                        </span>
+                        {!form.watch('taxes.tax_enabled') && (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-zinc-400 leading-snug">
+                        Precios planos. Sin desglose de IVA ni retención de IGTF en mostrador ni vitrina. Subtotal = Total.
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => form.setValue('taxes.tax_enabled', true, { shouldDirty: true })}
+                      className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                        form.watch('taxes.tax_enabled')
+                          ? 'border-red-500 bg-red-500/10 text-red-950 dark:text-red-100 ring-1 ring-red-500'
+                          : 'border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/50 text-slate-700 dark:text-zinc-300 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                          <Receipt className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
+                          Modo Fiscal (Con IVA / Alícuotas)
+                        </span>
+                        {form.watch('taxes.tax_enabled') && (
+                          <CheckCircle2 className="w-4 h-4 text-red-600 dark:text-red-400" />
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-zinc-400 leading-snug">
+                        Cálculo tributario con desglose de base gravada/exenta y recargos fiscales aplicables.
+                      </p>
+                    </button>
+                  </div>
+
+                  {/* Parámetros fiscales si Modo Fiscal está activo */}
+                  {form.watch('taxes.tax_enabled') ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800">
+                      <div className="space-y-1.5">
+                        <Label htmlFor="tax_rate" className="text-xs font-bold text-slate-800 dark:text-zinc-200">
+                          Alícuota General de Impuesto (%)
+                        </Label>
+                        <Input
+                          id="tax_rate"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="100"
+                          {...form.register('taxes.tax_rate', { valueAsNumber: true })}
+                          className="bg-white dark:bg-zinc-950 border-slate-300 dark:border-zinc-800 text-slate-950 dark:text-white text-sm font-mono font-bold h-10"
+                        />
+                        <p className="text-[11px] text-slate-500 dark:text-zinc-400">
+                          Porcentaje de IVA general (ej. 16.00% en Venezuela, 19.00% en Colombia).
+                        </p>
+                      </div>
+
+                      <div className="space-y-2 pt-2">
+                        <label className="flex items-center gap-2.5 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            {...form.register('taxes.prices_include_tax')}
+                            className="w-4 h-4 rounded text-red-600 cursor-pointer"
+                          />
+                          <div className="flex flex-col">
+                            <span className="text-xs font-bold text-slate-900 dark:text-white">
+                              Precios de catálogo ya incluyen impuesto (PVP neto)
+                            </span>
+                            <span className="text-[11px] text-slate-500 dark:text-zinc-400">
+                              Si está activo, el IVA se desglosa del precio sin aumentarlo al cliente.
+                            </span>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 text-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2 font-medium">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>Modo No Fiscal activo: El POS y la Vitrina operarán de forma plana sin IVA ni IGTF.</span>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -705,10 +899,16 @@ export default function SettingsPage() {
           <TabsContent value="payments" className="space-y-4">
             <PaymentMethodsManager slug={params.slug} />
           </TabsContent>
+          {/* TAB 6: TASA & MONEDA (BCV) */}
+          {hasLocalizationPlugin && (
+            <TabsContent value="bcv" className="space-y-4">
+              <BcvRateTab slug={params.slug} />
+            </TabsContent>
+          )}
         </Tabs>
 
         {/* Botón Guardar Flotante / Sticky (solo para pestañas del formulario general) */}
-        {activeTab !== 'payments' && (
+        {activeTab !== 'payments' && activeTab !== 'bcv' && (
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-zinc-800">
             <Button
               type="submit"

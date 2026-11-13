@@ -13,12 +13,25 @@ import {
 import Link from 'next/link';
 import type { TenantPaymentMethod } from '@/lib/payment-methods';
 import { uploadTenantMedia } from '@/lib/media-client';
+import {
+  VENEZUELAN_BANKS,
+  isValidCedulaOrRif,
+  isValidVenezuelanMobile,
+  formatBs,
+} from '@/lib/plugins/local-venezuela';
 
 interface CheckoutFormProps {
   slug: string;
   storeName: string;
   pickupAddress: string;
   paymentMethods: TenantPaymentMethod[];
+  exchangeRate?: number | null;
+  primaryCurrency?: string;
+  isLocalVenezuela?: boolean;
+  igtfEnabled?: boolean;
+  taxEnabled?: boolean;
+  taxRate?: number;
+  pricesIncludeTax?: boolean;
 }
 
 async function computeSha256Hex(file: File): Promise<string> {
@@ -34,10 +47,18 @@ export function CheckoutForm({
   storeName,
   pickupAddress,
   paymentMethods,
+  exchangeRate,
+  primaryCurrency = 'USD',
+  isLocalVenezuela,
+  igtfEnabled,
+  taxEnabled = true,
+  taxRate = 16,
+  pricesIncludeTax = false,
 }: CheckoutFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const currencySymbol = primaryCurrency === 'EUR' ? '€' : '$';
 
   const hasMounted = useHasMounted();
   const items = useCart((state) => state.items);
@@ -45,9 +66,10 @@ export function CheckoutForm({
   const totalPrice = useCart((state) => state.getTotalPrice());
   const clearCart = useCart((state) => state.clearCart);
 
-  // Datos del formulario (Core Agnóstico en USD)
+  // Datos del formulario
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [customerIdNumber, setCustomerIdNumber] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<string>(
     paymentMethods[0]?.code || 'CASH_USD'
   );
@@ -60,9 +82,45 @@ export function CheckoutForm({
   const [notes, setNotes] = useState('');
 
   const selectedMethodObj = paymentMethods.find((m) => m.code === paymentMethod) || paymentMethods[0];
+  const isPagoMovil = selectedMethodObj?.code === 'PAGO_MOVIL';
   const showProofSection = Boolean(
-    selectedMethodObj?.requires_reference || selectedMethodObj?.requires_proof
+    selectedMethodObj?.requires_reference || selectedMethodObj?.requires_proof || isPagoMovil
   );
+
+  // Cálculos de impuestos Core (IVA/Sales Tax) e IGTF 3% (Plugin VE)
+  const isTaxActive = Boolean(taxEnabled);
+  const activeTaxRate = Number(taxRate || 16) / 100;
+  const isTaxIncluded = Boolean(pricesIncludeTax);
+
+  // Separar base exenta y gravada según marca de cada ítem
+  const exemptSubtotal = items
+    .filter((i) => i.is_tax_exempt)
+    .reduce((sum, i) => sum + i.price_usd * i.quantity, 0);
+  const taxableSubtotal = items
+    .filter((i) => !i.is_tax_exempt)
+    .reduce((sum, i) => sum + i.price_usd * i.quantity, 0);
+
+  let vatAmountUsd = 0;
+  if (isTaxActive && activeTaxRate > 0) {
+    if (isTaxIncluded) {
+      vatAmountUsd = Number((taxableSubtotal - (taxableSubtotal / (1 + activeTaxRate))).toFixed(2));
+    } else {
+      vatAmountUsd = Number((taxableSubtotal * activeTaxRate).toFixed(2));
+    }
+  }
+
+  const effectiveRate = Number(exchangeRate || 0);
+  const isCashForeignCurrency = paymentMethod === 'CASH_USD' || paymentMethod === 'CASH_EUR';
+  const isIgtfApplicable = Boolean(isTaxActive && isLocalVenezuela && isCashForeignCurrency && igtfEnabled);
+  const baseForIgtf = isTaxIncluded ? totalPrice : Number((totalPrice + vatAmountUsd).toFixed(2));
+  const igtfAmountUsd = isIgtfApplicable ? Number((baseForIgtf * 0.03).toFixed(2)) : 0;
+
+  const finalTotalUsd = !isTaxActive
+    ? Number(totalPrice.toFixed(2))
+    : isTaxIncluded
+      ? Number((totalPrice + igtfAmountUsd).toFixed(2))
+      : Number((totalPrice + vatAmountUsd + igtfAmountUsd).toFixed(2));
+  const finalTotalVes = effectiveRate > 0 ? Number((finalTotalUsd * effectiveRate).toFixed(2)) : null;
 
   if (!hasMounted) {
     return (
@@ -144,9 +202,25 @@ export function CheckoutForm({
       return;
     }
 
-    if (selectedMethodObj?.requires_reference && paymentReference.trim().length < 4) {
-      setError(`Ingresa el número de referencia (mínimo 4 caracteres) para ${selectedMethodObj.name}.`);
+    if (isLocalVenezuela && !isValidCedulaOrRif(customerIdNumber)) {
+      setError('Por favor ingresa un documento de identidad válido (V, E, J o G seguido de su número).');
       return;
+    }
+
+    if (isPagoMovil) {
+      if (!bankSource) {
+        setError('Por favor selecciona tu banco emisor para el Pago Móvil.');
+        return;
+      }
+      if (paymentReference.trim().length < 4) {
+        setError('Ingresa los últimos dígitos del comprobante de Pago Móvil (mínimo 4 dígitos).');
+        return;
+      }
+    } else {
+      if (selectedMethodObj?.requires_reference && paymentReference.trim().length < 4) {
+        setError(`Ingresa el número de referencia (mínimo 4 caracteres) para ${selectedMethodObj.name}.`);
+        return;
+      }
     }
 
     if (selectedMethodObj?.requires_proof && !proofUrl) {
@@ -159,7 +233,7 @@ export function CheckoutForm({
         slug,
         customer_name: customerName,
         customer_phone: customerPhone,
-        customer_id_number: 'N/A',
+        customer_id_number: customerIdNumber.trim().toUpperCase() || 'N/A',
         payment_method: paymentMethod,
         payment_reference: paymentReference.trim() || undefined,
         bank_source: bankSource.trim() || undefined,
@@ -243,10 +317,27 @@ export function CheckoutForm({
                   required
                   value={customerPhone}
                   onChange={(e) => setCustomerPhone(e.target.value)}
-                  placeholder="+1 555 1234567"
+                  placeholder="04121234567"
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-300 dark:border-zinc-800 text-sm font-medium text-slate-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
                 />
                 <p className="text-xs text-slate-600 dark:text-zinc-400">Recibirás la confirmación de preparación de tu pedido.</p>
+              </div>
+
+              <div className="space-y-1.5 sm:col-span-2">
+                <label className="text-sm font-bold text-slate-800 dark:text-zinc-200">
+                  Cédula de Identidad o RIF {isLocalVenezuela ? '*' : '(Opcional)'}
+                </label>
+                <input
+                  type="text"
+                  required={Boolean(isLocalVenezuela)}
+                  value={customerIdNumber}
+                  onChange={(e) => setCustomerIdNumber(e.target.value)}
+                  placeholder="Ej. V-18765432 o J-50123456-7"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-300 dark:border-zinc-800 text-sm font-medium text-slate-950 dark:text-white uppercase focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
+                />
+                <p className="text-xs text-slate-600 dark:text-zinc-400">
+                  Identificación requerida para emisión de factura o comprobante comercial.
+                </p>
               </div>
             </div>
           </div>
@@ -334,6 +425,42 @@ export function CheckoutForm({
               })}
             </div>
 
+            {/* Monto destacado para Pago Móvil */}
+            {isPagoMovil && finalTotalVes && (
+              <div className="p-4 rounded-2xl bg-lime-500/10 border-2 border-lime-500/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-wider text-lime-700 dark:text-lime-400">
+                    Monto exacto a transferir en Pago Móvil:
+                  </span>
+                  <div className="text-2xl font-black font-mono text-slate-950 dark:text-white">
+                    Bs. {finalTotalVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                  {effectiveRate > 0 && (
+                    <p className="text-[11px] text-slate-600 dark:text-zinc-400 font-mono">
+                      Calculado a la Tasa Oficial BCV: Bs. {effectiveRate.toFixed(4)}
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleCopyValue('monto_ves', finalTotalVes.toFixed(2))}
+                  className="px-4 py-2 rounded-xl bg-lime-500 hover:bg-lime-400 text-slate-950 font-bold text-xs flex items-center justify-center gap-1.5 transition shadow-xs cursor-pointer shrink-0"
+                >
+                  {copiedKey === 'monto_ves' ? (
+                    <>
+                      <Check className="w-4 h-4" />
+                      <span>¡Monto Copiado!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-4 h-4" />
+                      <span>Copiar Monto Bs.</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+
             {/* Datos de la Empresa para realizar el pago */}
             {selectedMethodObj && (selectedMethodObj.details.length > 0 || selectedMethodObj.instructions) && (
               <div className="p-4 rounded-2xl tenant-secondary-surface border-l-4 border-lime-500 space-y-3">
@@ -408,15 +535,31 @@ export function CheckoutForm({
 
                   <div className="space-y-1.5">
                     <label className="text-sm font-bold text-slate-800 dark:text-zinc-200">
-                      Banco o Plataforma Emisora (Opcional)
+                      Banco Emisor (Tu Banco) {isPagoMovil ? '*' : '(Opcional)'}
                     </label>
-                    <input
-                      type="text"
-                      value={bankSource}
-                      onChange={(e) => setBankSource(e.target.value)}
-                      placeholder="Ej. Chase, Mercantil, Binance..."
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-zinc-950 border border-slate-300 dark:border-zinc-800 text-sm text-slate-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
-                    />
+                    {isPagoMovil ? (
+                      <select
+                        required
+                        value={bankSource}
+                        onChange={(e) => setBankSource(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-zinc-950 border border-slate-300 dark:border-zinc-800 text-sm font-medium text-slate-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
+                      >
+                        <option value="">-- Selecciona tu banco emisor --</option>
+                        {VENEZUELAN_BANKS.map((b) => (
+                          <option key={b.code} value={b.shortName}>
+                            {b.code} - {b.shortName}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input
+                        type="text"
+                        value={bankSource}
+                        onChange={(e) => setBankSource(e.target.value)}
+                        placeholder="Ej. Chase, Mercantil, Binance..."
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-zinc-950 border border-slate-300 dark:border-zinc-800 text-sm text-slate-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
+                      />
+                    )}
                   </div>
                 </div>
 
@@ -502,11 +645,11 @@ export function CheckoutForm({
                   <div className="min-w-0">
                     <p className="font-bold text-slate-950 dark:text-white truncate">{item.product_name}</p>
                     <p className="text-xs text-slate-700 dark:text-zinc-400 font-mono">
-                      {item.quantity} x ${item.price_usd.toFixed(2)} USD
+                      {item.quantity} x {currencySymbol}{item.price_usd.toFixed(2)} {primaryCurrency}
                     </p>
                   </div>
                   <p className="font-mono font-extrabold text-slate-950 dark:text-white shrink-0">
-                    ${(item.price_usd * item.quantity).toFixed(2)}
+                    {currencySymbol}{(item.price_usd * item.quantity).toFixed(2)}
                   </p>
                 </div>
               ))}
@@ -515,18 +658,55 @@ export function CheckoutForm({
             <div className="space-y-2 pt-3 border-t border-slate-200 dark:border-zinc-800 text-sm">
               <div className="flex justify-between text-slate-700 dark:text-zinc-300 font-medium">
                 <span>Subtotal ({totalItems} uds)</span>
-                <span className="font-mono font-bold">${totalPrice.toFixed(2)} USD</span>
+                <span className="font-mono font-bold">{currencySymbol}{totalPrice.toFixed(2)} {primaryCurrency}</span>
               </div>
+
+              {isTaxActive && taxableSubtotal > 0 && exemptSubtotal > 0 && (
+                <div className="space-y-1 text-xs text-slate-500 dark:text-zinc-400 pl-2 border-l-2 border-slate-200 dark:border-zinc-800">
+                  <div className="flex justify-between">
+                    <span>Base Gravada</span>
+                    <span className="font-mono">{currencySymbol}{taxableSubtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Base Exenta</span>
+                    <span className="font-mono">{currencySymbol}{exemptSubtotal.toFixed(2)}</span>
+                  </div>
+                </div>
+              )}
+
+              {isTaxActive && activeTaxRate > 0 && vatAmountUsd > 0 && (
+                <div className="flex justify-between text-slate-700 dark:text-zinc-300 font-medium text-xs">
+                  <span>IVA ({taxRate}%){isTaxIncluded ? ' (incluido en precio)' : ''}</span>
+                  <span className="font-mono font-bold">
+                    {isTaxIncluded ? '' : '+'}{currencySymbol}{vatAmountUsd.toFixed(2)} {primaryCurrency}
+                  </span>
+                </div>
+              )}
+
+              {isIgtfApplicable && (
+                <div className="flex justify-between text-amber-700 dark:text-amber-400 font-medium text-xs">
+                  <span>Recargo IGTF 3% (Divisas Efectivo)</span>
+                  <span className="font-mono font-bold">+{currencySymbol}{igtfAmountUsd.toFixed(2)} {primaryCurrency}</span>
+                </div>
+              )}
               <div className="flex justify-between text-slate-700 dark:text-zinc-300 font-medium">
                 <span>Retiro en Tienda</span>
                 <span className="text-emerald-700 dark:text-emerald-400 font-extrabold">Gratis</span>
               </div>
               <div className="flex justify-between items-baseline pt-2 border-t border-slate-200 dark:border-zinc-800">
-                <span className="text-base font-black text-slate-950 dark:text-white">Total USD</span>
+                <span className="text-base font-black text-slate-950 dark:text-white">Total {primaryCurrency}</span>
                 <span className="text-2xl font-black font-mono text-lime-700 dark:text-lime-400">
-                  ${totalPrice.toFixed(2)}
+                  {currencySymbol}{finalTotalUsd.toFixed(2)}
                 </span>
               </div>
+              {finalTotalVes && (
+                <div className="flex justify-between items-baseline pt-1">
+                  <span className="text-xs font-bold text-slate-700 dark:text-zinc-300">Total Bolívares (BCV)</span>
+                  <span className="text-base font-extrabold font-mono text-slate-950 dark:text-white">
+                    Bs. {finalTotalVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              )}
             </div>
 
             <button

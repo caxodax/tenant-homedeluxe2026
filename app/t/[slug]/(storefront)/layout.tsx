@@ -62,6 +62,8 @@ export default async function StorefrontLayout({
           whatsappNumber={settings.whatsapp_number}
           logoUrl={settings.logo_url}
           primaryColor={settings.primary_color}
+          exchangeRate={settings.exchange_rate}
+          primaryCurrency={settings.primary_currency || 'USD'}
         />
 
         {/* Contenido principal de la vitrina */}

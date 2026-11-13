@@ -27,16 +27,22 @@ interface Product {
   min_stock_alert: string;
   category_id: string;
   image_url?: string;
+  is_tax_exempt?: boolean;
 }
 
 interface PosSettings {
   business_name: string;
   primary_currency: string;
+  secondary_currency?: string | null;
+  exchange_rate?: number | null;
   store_id?: string | null;
   logo_url?: string | null;
   primary_color?: string | null;
   secondary_color?: string | null;
   accent_color?: string | null;
+  tax_enabled?: boolean;
+  tax_rate?: number;
+  prices_include_tax?: boolean;
 }
 
 interface TicketItem {
@@ -190,10 +196,16 @@ export default function PosPage({ params }: PosPageProps) {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<string>('CASH_USD');
   const [paymentRef, setPaymentRef] = useState('');
+  const [tenderCurrency, setTenderCurrency] = useState<'BASE' | 'VES'>('BASE');
+  const [tenderAmount, setTenderAmount] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const baseCurrency = settings.primary_currency || 'USD';
+  const currencySymbol = baseCurrency === 'EUR' ? '€' : '$';
+  const effectiveRate = Number(settings.exchange_rate || 0);
   const [completedSale, setCompletedSale] = useState<{
     ticketRef: string;
     totalUsd: number;
+    totalSecondary?: number;
     itemsCount: number;
     customerName: string;
     paymentMethod: string;
@@ -347,11 +359,16 @@ export default function PosPage({ params }: PosPageProps) {
         const nextSettings: PosSettings = {
           business_name: data.business_name || 'Mi Comercio',
           primary_currency: data.currency || 'USD',
+          secondary_currency: data.secondary_currency || 'VES',
+          exchange_rate: data.exchange_rate ? Number(data.exchange_rate) : null,
           store_id: data.store_id || null,
           logo_url: data.logo_url || null,
           primary_color: data.primary_color || null,
           secondary_color: data.secondary_color || null,
           accent_color: data.accent_color || null,
+          tax_enabled: data.tax_settings?.tax_enabled ?? true,
+          tax_rate: typeof data.tax_settings?.tax_rate === 'number' ? data.tax_settings.tax_rate : 16.0,
+          prices_include_tax: Boolean(data.tax_settings?.prices_include_tax),
         };
         setSettings(nextSettings);
         try {
@@ -388,12 +405,60 @@ export default function PosPage({ params }: PosPageProps) {
     );
   }, [products, searchQuery]);
 
-  // Cálculos del ticket en USD canónico
-  const totalUsd = useMemo(() => {
-    return ticket.reduce((sum, item) => {
-      return sum + parseFloat(item.product.price_usd) * item.quantity;
-    }, 0);
-  }, [ticket]);
+  // Cálculos tributarios canónicos (Core + Plugin)
+  const taxCalculations = useMemo(() => {
+    const isTaxActive = settings.tax_enabled ?? true;
+    const taxRatePercent = Number(settings.tax_rate ?? 16);
+    const taxRate = taxRatePercent / 100;
+    const pricesIncludeTax = Boolean(settings.prices_include_tax);
+
+    let subtotalExempt = 0;
+    let subtotalTaxable = 0;
+
+    for (const item of ticket) {
+      const line = parseFloat(item.product.price_usd) * item.quantity;
+      if (item.product.is_tax_exempt) {
+        subtotalExempt += line;
+      } else {
+        subtotalTaxable += line;
+      }
+    }
+
+    const subtotal = subtotalExempt + subtotalTaxable;
+    let vatAmount = 0;
+    if (isTaxActive && taxRate > 0) {
+      if (pricesIncludeTax) {
+        vatAmount = Number((subtotalTaxable - subtotalTaxable / (1 + taxRate)).toFixed(2));
+      } else {
+        vatAmount = Number((subtotalTaxable * taxRate).toFixed(2));
+      }
+    }
+
+    // IGTF 3% (Regla del Plugin local_venezuela sobre pagos en divisas en efectivo - solo si modo fiscal activo)
+    const isCashDivisas = paymentMethod === 'CASH_USD' || paymentMethod === 'CASH_EUR';
+    const baseForIgtf = pricesIncludeTax ? subtotal : subtotal + vatAmount;
+    const igtfAmount = (isTaxActive && isCashDivisas) ? Number((baseForIgtf * 0.03).toFixed(2)) : 0;
+
+    const finalTotal = !isTaxActive
+      ? Number(subtotal.toFixed(2))
+      : pricesIncludeTax
+        ? Number((subtotal + igtfAmount).toFixed(2))
+        : Number((subtotal + vatAmount + igtfAmount).toFixed(2));
+
+    return {
+      subtotalExempt: Number(subtotalExempt.toFixed(2)),
+      subtotalTaxable: Number(subtotalTaxable.toFixed(2)),
+      subtotal: Number(subtotal.toFixed(2)),
+      vatAmount: Number(vatAmount.toFixed(2)),
+      igtfAmount: Number(igtfAmount.toFixed(2)),
+      finalTotal,
+      taxRatePercent,
+      pricesIncludeTax,
+      isTaxActive,
+    };
+  }, [ticket, settings, paymentMethod]);
+
+  const totalUsd = taxCalculations.finalTotal;
 
   // Acciones sobre el ticket
   function addToTicket(product: Product) {
@@ -465,19 +530,22 @@ export default function PosPage({ params }: PosPageProps) {
           unit_price_usd: parseFloat(i.product.price_usd),
           total_price_usd: Number((parseFloat(i.product.price_usd) * i.quantity).toFixed(2)),
         })),
-        subtotal_usd: Number(totalUsd.toFixed(2)),
+        subtotal_usd: taxCalculations.subtotal,
         discount_usd: 0,
-        tax_usd: 0,
+        tax_usd: !taxCalculations.isTaxActive ? 0 : taxCalculations.pricesIncludeTax ? taxCalculations.igtfAmount : Number((taxCalculations.vatAmount + taxCalculations.igtfAmount).toFixed(2)),
         shipping_usd: 0,
         total_usd: Number(totalUsd.toFixed(2)),
-        exchange_rate_applied: 1.0,
+        total_secondary: effectiveRate > 0 ? Number((totalUsd * effectiveRate).toFixed(2)) : null,
+        exchange_rate_applied: effectiveRate > 0 ? effectiveRate : 1.0,
         payment: {
           method: paymentMethod,
-          amount: Number(totalUsd.toFixed(2)),
-          currency: 'USD',
+          amount: paymentMethod === 'PAGO_MOVIL' || paymentMethod === 'CASH_LOCAL'
+            ? Number((totalUsd * (effectiveRate > 0 ? effectiveRate : 1.0)).toFixed(2))
+            : Number(totalUsd.toFixed(2)),
+          currency: paymentMethod === 'PAGO_MOVIL' || paymentMethod === 'CASH_LOCAL' ? 'VES' : 'USD',
           reference_number: paymentRef || undefined,
         },
-        notes: `Cobrado en Mostrador POS-01 · ${settings.business_name} (USD)`,
+        notes: `Cobrado en Mostrador POS-01 · ${settings.business_name}${effectiveRate > 0 ? ` (Tasa: ${effectiveRate.toFixed(2)})` : ''}`,
       };
 
       // 1. Guardar localmente en Dexie IndexedDB
@@ -505,6 +573,7 @@ export default function PosPage({ params }: PosPageProps) {
       setCompletedSale({
         ticketRef,
         totalUsd,
+        totalSecondary: effectiveRate > 0 ? Number((totalUsd * effectiveRate).toFixed(2)) : undefined,
         itemsCount: ticket.reduce((s, i) => s + i.quantity, 0),
         customerName: customerName.trim() || 'Cliente Mostrador',
         paymentMethod,
@@ -518,10 +587,11 @@ export default function PosPage({ params }: PosPageProps) {
         syncStatus,
       });
 
-      // Limpiar ticket
+      // Limpiar ticket y estado de cobro
       setTicket([]);
       setIsCheckoutOpen(false);
       setPaymentRef('');
+      setTenderAmount('');
     } catch (err) {
       console.error('Error completing sale:', err);
       alert('Error al registrar la venta en la terminal');
@@ -577,7 +647,7 @@ export default function PosPage({ params }: PosPageProps) {
               </span>
             </div>
             <p className="text-xs font-medium text-slate-700 dark:text-zinc-300 mt-0.5">
-              Terminal <span className="font-mono font-bold text-slate-950 dark:text-white">POS-01</span> · Moneda <span className="font-mono font-bold text-lime-600 dark:text-lime-400">USD ($)</span>
+              Terminal <span className="font-mono font-bold text-slate-950 dark:text-white">POS-01</span> · Moneda <span className="font-mono font-bold text-lime-600 dark:text-lime-400">{baseCurrency} ({currencySymbol})</span>
             </p>
           </div>
         </div>
@@ -705,10 +775,17 @@ export default function PosPage({ params }: PosPageProps) {
                     </div>
 
                     <div className="mt-3 pt-2.5 border-t border-slate-200/70 dark:border-zinc-800/60 flex items-center justify-between">
-                      <p className="text-lg font-black font-mono text-slate-950 dark:text-white">
-                        ${price.toFixed(2)}
-                      </p>
-                      <div className="w-8 h-8 rounded-xl bg-lime-500/10 text-lime-700 dark:text-lime-400 flex items-center justify-center group-hover:bg-lime-500 group-hover:text-black transition-colors">
+                      <div>
+                        <p className="text-lg font-black font-mono text-slate-950 dark:text-white leading-none">
+                          {currencySymbol}{price.toFixed(2)}
+                        </p>
+                        {effectiveRate > 0 && (
+                          <p className="text-[11px] font-mono font-bold text-lime-700 dark:text-lime-400 mt-1">
+                            Bs. {(price * effectiveRate).toFixed(2)}
+                          </p>
+                        )}
+                      </div>
+                      <div className="w-8 h-8 rounded-xl bg-lime-500/10 text-lime-700 dark:text-lime-400 flex items-center justify-center group-hover:bg-lime-500 group-hover:text-black transition-colors shrink-0">
                         <Plus className="w-4 h-4" />
                       </div>
                     </div>
@@ -787,7 +864,7 @@ export default function PosPage({ params }: PosPageProps) {
                         {item.product.name}
                       </h4>
                       <p className="text-xs font-mono font-semibold text-slate-700 dark:text-zinc-300">
-                        ${unitPrice.toFixed(2)} c/u
+                        {currencySymbol}{unitPrice.toFixed(2)} c/u
                       </p>
                     </div>
 
@@ -818,7 +895,7 @@ export default function PosPage({ params }: PosPageProps) {
 
                     <div className="text-right min-w-[4.5rem] shrink-0">
                       <p className="text-sm font-black font-mono text-slate-950 dark:text-white">
-                        ${subtotal.toFixed(2)}
+                        {currencySymbol}{subtotal.toFixed(2)}
                       </p>
                       <button
                         type="button"
@@ -837,15 +914,62 @@ export default function PosPage({ params }: PosPageProps) {
 
           {/* Footer del Ticket y Botón de Cobro */}
           <div className="p-4 border-t border-slate-200 dark:border-zinc-800 bg-slate-50/80 dark:bg-zinc-900/40 space-y-3">
+            {ticket.length > 0 && (
+              <div className="space-y-1 text-xs border-b border-slate-200 dark:border-zinc-800 pb-2 text-slate-600 dark:text-zinc-400">
+                <div className="flex justify-between">
+                  <span>Subtotal</span>
+                  <span className="font-mono font-bold text-slate-900 dark:text-white">
+                    {currencySymbol}{taxCalculations.subtotal.toFixed(2)}
+                  </span>
+                </div>
+                {taxCalculations.isTaxActive && taxCalculations.subtotalExempt > 0 && taxCalculations.subtotalTaxable > 0 && (
+                  <>
+                    <div className="flex justify-between text-[11px] pl-2 text-slate-500">
+                      <span>• Base Gravada</span>
+                      <span className="font-mono">{currencySymbol}{taxCalculations.subtotalTaxable.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-[11px] pl-2 text-slate-500">
+                      <span>• Base Exenta</span>
+                      <span className="font-mono">{currencySymbol}{taxCalculations.subtotalExempt.toFixed(2)}</span>
+                    </div>
+                  </>
+                )}
+                {taxCalculations.isTaxActive && taxCalculations.vatAmount > 0 && (
+                  <div className="flex justify-between">
+                    <span>IVA ({taxCalculations.taxRatePercent}%){taxCalculations.pricesIncludeTax ? ' (inc.)' : ''}</span>
+                    <span className="font-mono font-bold text-slate-900 dark:text-white">
+                      {taxCalculations.pricesIncludeTax ? '' : '+'}{currencySymbol}{taxCalculations.vatAmount.toFixed(2)}
+                    </span>
+                  </div>
+                )}
+                {taxCalculations.igtfAmount > 0 && (
+                  <div className="flex justify-between text-amber-600 dark:text-amber-400 font-bold">
+                    <span>IGTF (3% Divisas)</span>
+                    <span className="font-mono">+{currencySymbol}{taxCalculations.igtfAmount.toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="space-y-1">
               <div className="flex justify-between items-baseline pt-1">
                 <span className="text-base font-extrabold text-slate-950 dark:text-white">
-                  Total a Cobrar (USD)
+                  Total a Cobrar ({baseCurrency})
                 </span>
                 <span className="text-2xl font-black font-mono text-lime-600 dark:text-lime-400">
-                  ${totalUsd.toFixed(2)}
+                  {currencySymbol}{totalUsd.toFixed(2)}
                 </span>
               </div>
+              {effectiveRate > 0 && (
+                <div className="flex justify-between items-baseline pt-0.5">
+                  <span className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                    Total Bolívares (BCV)
+                  </span>
+                  <span className="text-base font-extrabold font-mono text-slate-900 dark:text-white">
+                    Bs. {(totalUsd * effectiveRate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              )}
             </div>
 
             <button
@@ -854,7 +978,7 @@ export default function PosPage({ params }: PosPageProps) {
               className="w-full py-3.5 px-4 rounded-xl font-extrabold text-base bg-lime-500 hover:bg-lime-600 disabled:bg-slate-200 dark:disabled:bg-zinc-800 disabled:text-slate-500 dark:disabled:text-zinc-600 text-black shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
             >
               <CreditCard className="w-5 h-5" />
-              <span>Cobrar Ticket (${totalUsd.toFixed(2)})</span>
+              <span>Cobrar Ticket ({currencySymbol}{totalUsd.toFixed(2)})</span>
             </button>
 
             <div className="pt-2 text-center border-t border-slate-200/80 dark:border-zinc-800/60">
@@ -906,11 +1030,199 @@ export default function PosPage({ params }: PosPageProps) {
             {/* Totalizador en Modal con branding */}
             <div className="p-4 rounded-2xl bg-lime-500/10 border border-lime-500/20 text-center">
               <p className="text-xs font-bold uppercase tracking-wider text-lime-800 dark:text-lime-400">
-                Monto Total a Recibir (USD)
+                Monto Total a Recibir
               </p>
-              <p className="text-3xl font-black font-mono text-lime-800 dark:text-lime-300 mt-1">
-                ${totalUsd.toFixed(2)}
-              </p>
+              <div className="flex items-baseline justify-center gap-2 mt-1 flex-wrap">
+                <span className="text-3xl font-black font-mono text-lime-800 dark:text-lime-300">
+                  {currencySymbol}{totalUsd.toFixed(2)}
+                </span>
+                {effectiveRate > 0 && (
+                  <span className="text-lg font-bold font-mono text-emerald-700 dark:text-emerald-400">
+                    / Bs. {(totalUsd * effectiveRate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                )}
+              </div>
+              {effectiveRate > 0 && (
+                <p className="text-[11px] font-mono text-slate-500 dark:text-zinc-400 mt-1">
+                  Tasa oficial: Bs. {effectiveRate.toFixed(2)} / {baseCurrency}
+                </p>
+              )}
+            </div>
+
+            {/* Calculadora de Vuelto / Importe Recibido */}
+            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-800 dark:text-zinc-200">
+                  Calculadora de Vuelto
+                </label>
+                <div className="flex items-center rounded-lg p-0.5 bg-slate-200 dark:bg-zinc-800 text-[11px] font-bold">
+                  <button
+                    type="button"
+                    onClick={() => { setTenderCurrency('BASE'); setTenderAmount(''); }}
+                    className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
+                      tenderCurrency === 'BASE'
+                        ? 'bg-white dark:bg-zinc-700 text-slate-900 dark:text-white shadow-xs'
+                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    {baseCurrency} ({currencySymbol})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setTenderCurrency('VES'); setTenderAmount(''); }}
+                    className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
+                      tenderCurrency === 'VES'
+                        ? 'bg-white dark:bg-zinc-700 text-slate-900 dark:text-white shadow-xs'
+                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    VES (Bs.)
+                  </button>
+                </div>
+              </div>
+
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold font-mono text-slate-400">
+                  {tenderCurrency === 'BASE' ? currencySymbol : 'Bs.'}
+                </span>
+                <input
+                  type="number"
+                  step="any"
+                  value={tenderAmount}
+                  onChange={(e) => setTenderAmount(e.target.value)}
+                  placeholder={
+                    tenderCurrency === 'BASE'
+                      ? `Ej: ${Math.ceil(totalUsd)} o ${totalUsd.toFixed(2)}`
+                      : `Ej: ${(totalUsd * (effectiveRate || 1)).toFixed(2)}`
+                  }
+                  className="w-full pl-8 pr-3.5 py-2 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl text-sm font-mono font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
+                />
+              </div>
+
+              {/* Botones de sugerencia rápida */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setTenderAmount(
+                      tenderCurrency === 'BASE'
+                        ? totalUsd.toFixed(2)
+                        : (totalUsd * (effectiveRate || 1)).toFixed(2)
+                    )
+                  }
+                  className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-slate-200/80 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 hover:bg-slate-300 dark:hover:bg-zinc-700 cursor-pointer"
+                >
+                  Exacto
+                </button>
+                {tenderCurrency === 'BASE'
+                  ? [5, 10, 20, 50, 100]
+                      .filter((val) => val >= totalUsd)
+                      .slice(0, 3)
+                      .map((val) => (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => setTenderAmount(val.toString())}
+                          className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-slate-200/80 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 hover:bg-slate-300 dark:hover:bg-zinc-700 cursor-pointer"
+                        >
+                          {currencySymbol}{val}
+                        </button>
+                      ))
+                  : null}
+              </div>
+
+              {/* Resultado del Cambio / Faltante */}
+              {(() => {
+                const amountNum = parseFloat(tenderAmount) || 0;
+                if (amountNum <= 0) return null;
+
+                if (tenderCurrency === 'BASE') {
+                  const diff = amountNum - totalUsd;
+                  if (diff >= 0) {
+                    const diffVes = effectiveRate > 0 ? diff * effectiveRate : 0;
+                    return (
+                      <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 flex items-center justify-between text-xs">
+                        <span className="font-bold text-emerald-800 dark:text-emerald-300">
+                          Vuelto al cliente:
+                        </span>
+                        <div className="text-right font-mono">
+                          <p className="font-extrabold text-emerald-700 dark:text-emerald-400">
+                            {currencySymbol}{diff.toFixed(2)} {baseCurrency}
+                          </p>
+                          {diffVes > 0 && (
+                            <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-500">
+                              Bs. {diffVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  } else {
+                    const missingUsd = Math.abs(diff);
+                    const missingVes = effectiveRate > 0 ? missingUsd * effectiveRate : 0;
+                    return (
+                      <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 flex items-center justify-between text-xs">
+                        <span className="font-bold text-amber-800 dark:text-amber-300">
+                          Faltante por cobrar:
+                        </span>
+                        <div className="text-right font-mono">
+                          <p className="font-extrabold text-amber-700 dark:text-amber-400">
+                            {currencySymbol}{missingUsd.toFixed(2)} {baseCurrency}
+                          </p>
+                          {missingVes > 0 && (
+                            <p className="text-[11px] font-bold text-amber-600 dark:text-amber-500">
+                              Bs. {missingVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }
+                } else {
+                  const totalVes = totalUsd * (effectiveRate || 1);
+                  const diffVes = amountNum - totalVes;
+                  if (diffVes >= 0) {
+                    const diffUsd = effectiveRate > 0 ? diffVes / effectiveRate : 0;
+                    return (
+                      <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 flex items-center justify-between text-xs">
+                        <span className="font-bold text-emerald-800 dark:text-emerald-300">
+                          Vuelto al cliente:
+                        </span>
+                        <div className="text-right font-mono">
+                          <p className="font-extrabold text-emerald-700 dark:text-emerald-400">
+                            Bs. {diffVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
+                          {diffUsd > 0 && (
+                            <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-500">
+                              {currencySymbol}{diffUsd.toFixed(2)} {baseCurrency}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  } else {
+                    const missingVes = Math.abs(diffVes);
+                    const missingUsd = effectiveRate > 0 ? missingVes / effectiveRate : 0;
+                    return (
+                      <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 flex items-center justify-between text-xs">
+                        <span className="font-bold text-amber-800 dark:text-amber-300">
+                          Faltante por cobrar:
+                        </span>
+                        <div className="text-right font-mono">
+                          <p className="font-extrabold text-amber-700 dark:text-amber-400">
+                            Bs. {missingVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
+                          {missingUsd > 0 && (
+                            <p className="text-[11px] font-bold text-amber-600 dark:text-amber-500">
+                              {currencySymbol}{missingUsd.toFixed(2)} {baseCurrency}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }
+                }
+              })()}
             </div>
 
             {/* Datos del Cliente */}
@@ -1063,6 +1375,14 @@ export default function PosPage({ params }: PosPageProps) {
                   ${completedSale.totalUsd.toFixed(2)}
                 </span>
               </div>
+              {completedSale.totalSecondary != null && completedSale.totalSecondary > 0 && (
+                <div className="flex justify-between text-slate-600 dark:text-zinc-400 text-xs font-mono">
+                  <span>Equivalente Bs.:</span>
+                  <span className="font-bold text-slate-900 dark:text-white">
+                    Bs. {completedSale.totalSecondary.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              )}
               <div className="pt-1 flex justify-end">
                 {completedSale.syncStatus === 'synced' ? (
                   <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md">
@@ -1136,6 +1456,16 @@ export default function PosPage({ params }: PosPageProps) {
           </div>
           <div className="pt-2 text-right">
             <p className="text-sm font-black">TOTAL USD: ${completedSale.totalUsd.toFixed(2)}</p>
+            {completedSale.totalSecondary != null && completedSale.totalSecondary > 0 && (
+              <p className="text-xs font-bold font-mono">
+                TOTAL BS: Bs. {completedSale.totalSecondary.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+            )}
+            {effectiveRate > 0 && (
+              <p className="text-[9px] text-zinc-600 font-mono">
+                Tasa BCV: Bs. {effectiveRate.toFixed(2)} / USD
+              </p>
+            )}
           </div>
           <div className="text-center pt-4 text-[9px] text-zinc-600">
             <p>¡Gracias por su compra en {settings.business_name}!</p>

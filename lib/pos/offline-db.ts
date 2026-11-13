@@ -20,6 +20,7 @@ export interface OfflineSale {
   tax_usd: number;
   shipping_usd: number;
   total_usd: number;
+  total_secondary?: number | null;
   exchange_rate_applied: number;
   payment: {
     method: string;
@@ -59,6 +60,8 @@ export interface CachedPosCatalog {
   settings: {
     business_name: string;
     primary_currency: string;
+    secondary_currency?: string | null;
+    exchange_rate?: number | null;
     store_id?: string | null;
     logo_url?: string | null;
     primary_color?: string | null;

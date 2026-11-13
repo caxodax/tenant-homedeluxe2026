@@ -17,14 +17,19 @@ export interface StorefrontProduct {
   min_stock_alert: string;
   category_name?: string;
   image_url?: string;
+  is_tax_exempt?: boolean;
 }
 
 export function ProductCard({
   product,
   priority = false,
+  exchangeRate,
+  primaryCurrency = 'USD',
 }: {
   product: StorefrontProduct;
   priority?: boolean;
+  exchangeRate?: number | null;
+  primaryCurrency?: string;
 }) {
   const [isAdded, setIsAdded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -35,6 +40,9 @@ export function ProductCard({
   const stock = parseFloat(product.current_stock || '0');
   const isOutOfStock = stock <= 0;
   const isLowStock = stock <= 5 && stock > 0;
+  const effectiveRate = Number(exchangeRate || 0);
+  const priceBs = effectiveRate > 0 ? (price * effectiveRate).toFixed(2) : null;
+  const currencySymbol = primaryCurrency === 'EUR' ? '€' : '$';
 
   function handleQuickAdd(e: React.MouseEvent) {
     e.stopPropagation();
@@ -48,11 +56,12 @@ export function ProductCard({
       quantity: 1,
       max_stock: stock,
       image_url: product.image_url,
+      is_tax_exempt: Boolean(product.is_tax_exempt),
     });
 
     setIsAdded(true);
     toast.success(`${product.name} agregado`, {
-      description: `$${price.toFixed(2)} USD · Retiro en mostrador`,
+      description: `${currencySymbol}${price.toFixed(2)} ${primaryCurrency} · Retiro en mostrador`,
       duration: 2500,
     });
 
@@ -70,10 +79,11 @@ export function ProductCard({
       quantity: modalQuantity,
       max_stock: stock,
       image_url: product.image_url,
+      is_tax_exempt: Boolean(product.is_tax_exempt),
     });
 
     toast.success(`${modalQuantity}x ${product.name} agregados`, {
-      description: `Total: $${(price * modalQuantity).toFixed(2)} USD`,
+      description: `Total: ${currencySymbol}${(price * modalQuantity).toFixed(2)} ${primaryCurrency}`,
       duration: 2500,
     });
 
@@ -137,15 +147,21 @@ export function ProductCard({
           </h3>
         </div>
 
-        {/* Precios estrictamente en USD (Core Agnóstico) */}
+        {/* Precios: Base USD + Tasa Local VES si está configurada */}
         <div className="mt-4 pt-3 border-t border-slate-200 dark:border-zinc-800/70 flex items-center justify-between gap-2">
           <div>
             <p className="text-xl font-black font-mono text-slate-950 dark:text-white leading-none">
-              ${price.toFixed(2)}
+              {currencySymbol}{price.toFixed(2)}
             </p>
-            <p className="text-[11px] font-bold text-slate-700 dark:text-zinc-400 mt-1">
-              Precio Base USD
-            </p>
+            {priceBs ? (
+              <p className="text-xs font-mono font-bold text-lime-700 dark:text-lime-400 mt-1">
+                Bs. {Number(priceBs).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+            ) : (
+              <p className="text-[11px] font-bold text-slate-700 dark:text-zinc-400 mt-1">
+                Precio Base {primaryCurrency}
+              </p>
+            )}
           </div>
 
           <button
@@ -245,8 +261,13 @@ export function ProductCard({
                 <div>
                   <p className="text-xs font-bold text-slate-500 dark:text-zinc-400">Precio Unitario</p>
                   <p className="text-2xl font-black font-mono text-slate-900 dark:text-white">
-                    ${price.toFixed(2)} <span className="text-xs font-normal text-slate-400">USD</span>
+                    {currencySymbol}{price.toFixed(2)} <span className="text-xs font-normal text-slate-400">{primaryCurrency}</span>
                   </p>
+                  {priceBs && (
+                    <p className="text-xs font-mono font-bold text-lime-700 dark:text-lime-400">
+                      Bs. {Number(priceBs).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </p>
+                  )}
                 </div>
 
                 <div className="text-right">
@@ -291,7 +312,7 @@ export function ProductCard({
                   className="flex-1 py-3.5 px-5 rounded-xl bg-lime-500 hover:bg-lime-600 disabled:bg-slate-200 text-black font-black text-sm shadow-sm transition flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
                 >
                   <ShoppingBag className="w-4 h-4" />
-                  <span>Añadir al Carrito (${(price * modalQuantity).toFixed(2)})</span>
+                  <span>Añadir al Carrito ({currencySymbol}{(price * modalQuantity).toFixed(2)})</span>
                 </button>
               </div>
             </div>

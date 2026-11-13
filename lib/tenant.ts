@@ -29,6 +29,12 @@ export interface TenantShellSettings {
   primary_color: string;
   secondary_color: string;
   accent_color: string;
+  primary_currency?: string;
+  secondary_currency?: string;
+  exchange_rate?: number;
+  tax_enabled?: boolean;
+  tax_rate?: number;
+  prices_include_tax?: boolean;
 }
 
 export interface TenantShellData {
@@ -50,6 +56,7 @@ export interface StorefrontCatalogItem {
   min_stock_alert: string;
   category_name?: string;
   image_url?: string;
+  is_tax_exempt?: boolean;
 }
 
 export interface StorefrontCatalogCategory {
@@ -128,7 +135,8 @@ export const getCachedTenantShell = cache(
         const rawSettings = await withTenantDb(tenant.db_schema_name, null, async (client) => {
           const sRes = await client.query(`
             SELECT business_name, phone, whatsapp_number, address,
-                   logo_url, banner_url, primary_color, secondary_color, accent_color
+                   logo_url, banner_url, primary_color, secondary_color, accent_color,
+                   primary_currency, secondary_currency, exchange_rate, value
             FROM settings
             WHERE key = 'general'
             LIMIT 1
@@ -138,6 +146,7 @@ export const getCachedTenantShell = cache(
 
         const inContingency = isTenantInContingency(tenant);
         const bufferUnits = inContingency ? Number(tenant.safety_buffer_units ?? 2) : 0;
+        const taxes = rawSettings?.value?.taxes || {};
 
         return {
           tenant,
@@ -151,6 +160,12 @@ export const getCachedTenantShell = cache(
             primary_color: rawSettings?.primary_color || TENANT_DEFAULTS.PRIMARY_COLOR,
             secondary_color: rawSettings?.secondary_color || TENANT_DEFAULTS.SECONDARY_COLOR,
             accent_color: rawSettings?.accent_color || TENANT_DEFAULTS.ACCENT_COLOR,
+            primary_currency: rawSettings?.primary_currency || 'USD',
+            secondary_currency: rawSettings?.secondary_currency || 'VES',
+            exchange_rate: rawSettings?.exchange_rate ? Number(rawSettings.exchange_rate) : undefined,
+            tax_enabled: taxes.tax_enabled ?? true,
+            tax_rate: typeof taxes.tax_rate === 'number' ? taxes.tax_rate : 16.0,
+            prices_include_tax: taxes.prices_include_tax ?? false,
           },
           inContingency,
           bufferUnits,
@@ -192,6 +207,7 @@ export const getCachedStorefrontCatalog = cache(
                 p.current_stock,
                 p.min_stock_alert,
                 p.image_url,
+                p.is_tax_exempt,
                 c.name AS category_name
               FROM products p
               LEFT JOIN categories c ON p.category_id = c.id
@@ -226,6 +242,7 @@ export const getCachedStorefrontCatalog = cache(
             min_stock_alert: p.min_stock_alert,
             category_name: p.category_name || undefined,
             image_url: p.image_url || undefined,
+            is_tax_exempt: Boolean(p.is_tax_exempt),
           };
         });
 

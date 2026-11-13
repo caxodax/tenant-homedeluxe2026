@@ -12,6 +12,8 @@ interface StorefrontHeaderProps {
   whatsappNumber: string | null;
   logoUrl?: string | null;
   primaryColor?: string | null;
+  exchangeRate?: number | null;
+  primaryCurrency?: string;
 }
 
 export function StorefrontHeader({
@@ -20,6 +22,8 @@ export function StorefrontHeader({
   whatsappNumber,
   logoUrl,
   primaryColor,
+  exchangeRate,
+  primaryCurrency = 'USD',
 }: StorefrontHeaderProps) {
   const hasMounted = useHasMounted();
   const rawTotalItems = useCart((state) => state.getTotalItems());
@@ -27,6 +31,9 @@ export function StorefrontHeader({
 
   const totalItems = hasMounted ? rawTotalItems : 0;
   const totalPrice = hasMounted ? rawTotalPrice : 0;
+  const effectiveRate = Number(exchangeRate || 0);
+  const totalBs = effectiveRate > 0 ? (totalPrice * effectiveRate).toFixed(2) : null;
+  const currencySymbol = primaryCurrency === 'EUR' ? '€' : '$';
 
   return (
     <header
@@ -61,6 +68,16 @@ export function StorefrontHeader({
 
         {/* Acciones y Carrito */}
         <div className="flex items-center gap-2 sm:gap-3">
+          {effectiveRate > 0 && (
+            <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-zinc-800/80 border border-slate-200/80 dark:border-zinc-700/80 text-xs font-mono font-bold text-slate-800 dark:text-zinc-200">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>BCV ({primaryCurrency === 'EUR' ? 'EUR' : 'USD'}):</span>
+              <span className="text-lime-700 dark:text-lime-400">
+                Bs. {effectiveRate.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+          )}
+
           {whatsappNumber && (
             <a
               href={`https://wa.me/${whatsappNumber.replace(/[^0-9]/g, '')}`}
@@ -88,9 +105,16 @@ export function StorefrontHeader({
                 </span>
               )}
             </div>
-            <span className="font-mono hidden sm:inline">
-              ${totalPrice.toFixed(2)}
-            </span>
+            <div className="flex flex-col text-left font-mono">
+              <span className="hidden sm:inline leading-none">
+                {currencySymbol}{totalPrice.toFixed(2)}
+              </span>
+              {totalBs && (
+                <span className="hidden sm:inline text-[9px] font-semibold text-slate-900 leading-tight">
+                  Bs. {totalBs}
+                </span>
+              )}
+            </div>
           </Link>
         </div>
       </div>
