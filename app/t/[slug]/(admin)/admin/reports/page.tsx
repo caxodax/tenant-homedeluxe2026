@@ -95,12 +95,12 @@ export default async function ReportsPage({ params }: { params: Promise<{ slug: 
         WHERE o.status != 'CANCELLED' AND p.cost_price IS NOT NULL AND p.cost_price > 0
       `),
       client.query(`
-        SELECT value FROM settings WHERE key = 'currency' LIMIT 1
+        SELECT primary_currency, secondary_currency, exchange_rate FROM settings WHERE key = 'general' LIMIT 1
       `),
     ]);
 
-    const currencyVal = settingsRes.rows[0]?.value;
-    const rate = currencyVal ? parseFloat(currencyVal.exchange_rate || '0') : 0;
+    const settingsRow = settingsRes.rows[0];
+    const rate = settingsRow ? parseFloat(settingsRow.exchange_rate || '0') : 0;
 
     const summary = summaryRes.rows[0];
     const margin = marginRes.rows[0];

@@ -232,11 +232,11 @@ async function RecentOrdersCard({ schema }: { schema: string }) {
         LIMIT 5
       `),
       client.query(`
-        SELECT value FROM settings WHERE key = 'currency' LIMIT 1
+        SELECT primary_currency, secondary_currency, exchange_rate FROM settings WHERE key = 'general' LIMIT 1
       `),
     ]);
-    const currencyVal = settingsRes.rows[0]?.value;
-    const rate = currencyVal ? parseFloat(currencyVal.exchange_rate || '0') : 0;
+    const settingsRow = settingsRes.rows[0];
+    const rate = settingsRow ? parseFloat(settingsRow.exchange_rate || '0') : 0;
     return { orders: ordersRes.rows, exchangeRate: rate };
   });
   

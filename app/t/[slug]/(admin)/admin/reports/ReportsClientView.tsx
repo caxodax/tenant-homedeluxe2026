@@ -76,7 +76,7 @@ export function ReportsClientView({ data }: { data: ReportDataPayload }) {
         </div>
 
         {/* Currency Switcher */}
-        <div className="flex items-center gap-2 self-start sm:self-auto bg-slate-100 dark:bg-zinc-900 p-1.5 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-xs">
+        <div className="flex items-center gap-1.5 self-start sm:self-auto bg-slate-100 dark:bg-zinc-900 p-1.5 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-xs">
           <span className="text-xs font-bold text-slate-500 dark:text-zinc-400 pl-2 pr-1 flex items-center gap-1">
             <ArrowUpDown className="w-3.5 h-3.5" />
             Moneda:
@@ -84,9 +84,9 @@ export function ReportsClientView({ data }: { data: ReportDataPayload }) {
           <button
             type="button"
             onClick={() => setCurrency('USD')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
               currency === 'USD'
-                ? 'bg-white dark:bg-zinc-800 text-slate-950 dark:text-white shadow-xs border border-slate-200 dark:border-zinc-700'
+                ? 'bg-white dark:bg-zinc-800 text-[var(--tenant-primary)] shadow-sm border border-slate-300 dark:border-zinc-700'
                 : 'text-slate-600 dark:text-zinc-400 hover:text-slate-950 dark:hover:text-white'
             }`}
           >
@@ -95,11 +95,9 @@ export function ReportsClientView({ data }: { data: ReportDataPayload }) {
           <button
             type="button"
             onClick={() => setCurrency('VES')}
-            disabled={data.exchangeRate <= 0}
-            title={data.exchangeRate <= 0 ? 'Configure una tasa de cambio en Configuración' : `Tasa activa: Bs. ${rate.toFixed(2)}`}
-            className={`px-3 py-1.5 rounded-xl text-xs font-black transition-all ${
+            className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
               currency === 'VES'
-                ? 'bg-white dark:bg-zinc-800 text-slate-950 dark:text-white shadow-xs border border-slate-200 dark:border-zinc-700'
+                ? 'bg-white dark:bg-zinc-800 text-emerald-600 dark:text-emerald-400 shadow-sm border border-slate-300 dark:border-zinc-700'
                 : 'text-slate-600 dark:text-zinc-400 hover:text-slate-950 dark:hover:text-white'
             }`}
           >
