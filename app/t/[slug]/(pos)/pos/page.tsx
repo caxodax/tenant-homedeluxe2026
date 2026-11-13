@@ -539,10 +539,10 @@ export default function PosPage({ params }: PosPageProps) {
         exchange_rate_applied: effectiveRate > 0 ? effectiveRate : 1.0,
         payment: {
           method: paymentMethod,
-          amount: paymentMethod === 'PAGO_MOVIL' || paymentMethod === 'CASH_LOCAL'
+          amount: (paymentMethod === 'PAGO_MOVIL' || paymentMethod === 'CASH_LOCAL' || ((paymentMethod === 'BANK_TRANSFER' || paymentMethod === 'CARD') && effectiveRate > 1))
             ? Number((totalUsd * (effectiveRate > 0 ? effectiveRate : 1.0)).toFixed(2))
             : Number(totalUsd.toFixed(2)),
-          currency: paymentMethod === 'PAGO_MOVIL' || paymentMethod === 'CASH_LOCAL' ? 'VES' : 'USD',
+          currency: (paymentMethod === 'PAGO_MOVIL' || paymentMethod === 'CASH_LOCAL' || ((paymentMethod === 'BANK_TRANSFER' || paymentMethod === 'CARD') && effectiveRate > 1)) ? 'VES' : 'USD',
           reference_number: paymentRef || undefined,
         },
         notes: `Cobrado en Mostrador POS-01 · ${settings.business_name}${effectiveRate > 0 ? ` (Tasa: ${effectiveRate.toFixed(2)})` : ''}`,

@@ -47,6 +47,8 @@ export async function GET(
           o.status,
           o.delivery_type,
           o.total_usd,
+          o.total_secondary,
+          o.exchange_rate_applied,
           o.is_offline_sale,
           o.offline_ticket_ref,
           o.created_at,

@@ -25,6 +25,7 @@ import {
   Check,
   AlertTriangle,
   RefreshCw,
+  Printer,
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -46,6 +47,8 @@ interface OrderDetail {
   tax_usd: string;
   shipping_usd: string;
   total_usd: string;
+  total_secondary?: string | null;
+  exchange_rate_applied?: string | null;
   is_offline_sale: boolean;
   offline_ticket_ref: string | null;
   notes: string | null;
@@ -419,7 +422,7 @@ export default function AdminOrderDetailPage() {
     : null;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 print:hidden">
       {/* Top Breadcrumb & Header */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div className="space-y-1.5">
@@ -464,6 +467,14 @@ export default function AdminOrderDetailPage() {
           >
             <RefreshCw className="w-4 h-4 mr-2" />
             Refrescar
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => window.print()}
+            className="bg-white dark:bg-zinc-900 border-slate-300 dark:border-zinc-700 text-slate-900 dark:text-white font-semibold"
+          >
+            <Printer className="w-4 h-4 mr-2" />
+            Reimprimir Ticket POS
           </Button>
           <Link
             href={`/t/${slug}/order-success/${order.id}`}
@@ -563,9 +574,19 @@ export default function AdminOrderDetailPage() {
                 <span className="text-base font-black text-slate-950 dark:text-white">
                   Total Pedido
                 </span>
-                <span className="text-xl font-black font-mono text-[var(--tenant-primary)]">
-                  ${parseFloat(order.total_usd).toFixed(2)} USD
-                </span>
+                <div className="text-right">
+                  <span className="text-xl font-black font-mono text-[var(--tenant-primary)]">
+                    ${parseFloat(order.total_usd).toFixed(2)} USD
+                  </span>
+                  {order.total_secondary && parseFloat(order.total_secondary) > 0 && (
+                    <p className="text-xs font-mono font-bold text-slate-600 dark:text-zinc-400 mt-0.5">
+                      Bs. {parseFloat(order.total_secondary).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {parseFloat(order.exchange_rate_applied || '0') > 0 && (
+                        <span className="text-[11px] font-normal text-slate-500"> (Tasa: {parseFloat(order.exchange_rate_applied || '0').toFixed(2)})</span>
+                      )}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -607,8 +628,15 @@ export default function AdminOrderDetailPage() {
                           {pay.method}
                         </span>
                         <span className="font-mono text-sm font-bold text-[var(--tenant-primary)]">
-                          ${parseFloat(pay.amount).toFixed(2)} {pay.currency}
+                          {pay.currency === 'VES'
+                            ? `Bs. ${parseFloat(pay.amount).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                            : `$${parseFloat(pay.amount).toFixed(2)} ${pay.currency}`}
                         </span>
+                        {pay.currency === 'USD' && order.total_secondary && parseFloat(order.total_secondary) > 0 && (
+                          <span className="text-xs font-mono font-medium text-slate-500 dark:text-zinc-400">
+                            (Bs. {parseFloat(order.total_secondary).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                          </span>
+                        )}
                       </div>
 
                       {pay.status === 'VERIFIED' ? (
@@ -719,7 +747,7 @@ export default function AdminOrderDetailPage() {
                         </Button>
                       )}
 
-                      {pay.status !== 'REJECTED' && (
+                      {pay.status === 'PENDING' && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -982,7 +1010,7 @@ export default function AdminOrderDetailPage() {
         </div>
 
         {/* Right Sidebar */}
-        <div className="space-y-6">
+        <div className="space-y-6 print:hidden">
           {/* Status Workflow Control */}
           <div className="bg-white dark:bg-[#121214] border border-slate-200 dark:border-zinc-800 rounded-2xl p-5 space-y-3.5 shadow-sm">
             <h2 className="text-base font-extrabold text-slate-950 dark:text-white">
@@ -1143,6 +1171,52 @@ export default function AdminOrderDetailPage() {
           </div>
         </div>
       )}
+
+      {/* Ticket Térmico Imprimible (58mm/80mm, solo visible al imprimir) */}
+      <div className="hidden print:block fixed inset-0 bg-white text-black p-4 font-mono text-xs z-[9999]">
+        <div className="text-center pb-2 border-b border-black">
+          <h2 className="text-sm font-bold uppercase">{order.store_name || 'Shop Market C.A.'}</h2>
+          <p className="text-[10px]">Comprobante de Venta · Mostrador POS</p>
+          <p className="text-[10px] mt-0.5">{formatDateTime(order.created_at)}</p>
+        </div>
+        <div className="py-2 border-b border-dashed border-black text-[10px] space-y-0.5">
+          <p><strong>Orden:</strong> {order.order_number}</p>
+          {order.offline_ticket_ref && <p><strong>Ticket POS:</strong> {order.offline_ticket_ref}</p>}
+          <p><strong>Cliente:</strong> {order.customer_name}</p>
+          {primaryPayment && (
+            <p><strong>Pago:</strong> {primaryPayment.method} {primaryPayment.reference_number ? `(Ref: ${primaryPayment.reference_number})` : ''}</p>
+          )}
+        </div>
+        <div className="py-2 border-b border-black space-y-1.5">
+          {items.map((it) => (
+            <div key={it.id} className="flex justify-between items-start gap-3 text-[11px] leading-snug">
+              <span className="flex-1 break-words whitespace-normal font-medium">
+                {it.quantity}x {it.product_name}
+              </span>
+              <span className="shrink-0 font-bold tabular-nums">
+                ${parseFloat(it.total_price_usd).toFixed(2)}
+              </span>
+            </div>
+          ))}
+        </div>
+        <div className="pt-2 text-right">
+          <p className="text-sm font-black">TOTAL USD: ${parseFloat(order.total_usd).toFixed(2)}</p>
+          {order.total_secondary && parseFloat(order.total_secondary) > 0 && (
+            <p className="text-xs font-bold font-mono">
+              TOTAL BS: Bs. {parseFloat(order.total_secondary).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </p>
+          )}
+          {parseFloat(order.exchange_rate_applied || '0') > 0 && (
+            <p className="text-[9px] text-zinc-600 font-mono">
+              Tasa BCV: Bs. {parseFloat(order.exchange_rate_applied || '0').toFixed(2)} / USD
+            </p>
+          )}
+        </div>
+        <div className="text-center pt-4 text-[9px] text-zinc-600">
+          <p>¡Gracias por su compra en {order.store_name || 'Shop Market C.A.'}!</p>
+          <p>MarketOS v4.0 · Retail Core</p>
+        </div>
+      </div>
     </div>
   );
 }
