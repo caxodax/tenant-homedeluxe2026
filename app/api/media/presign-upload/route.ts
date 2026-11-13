@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { createClient } from '@/lib/supabase/server';
+import { requireTenantStaffApi, TenantAuthError } from '@/lib/auth/tenant-guard';
 import { getR2Client, R2_BUCKET_NAME } from '@/lib/r2';
 import { z } from 'zod';
 
@@ -16,14 +16,6 @@ const presignSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    // En producción se requiere usuario autenticado; en dev se permite testing fluido
-    if (!user && process.env.NODE_ENV === 'production') {
-      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
-    }
-    
     const body = await request.json();
     const parsed = presignSchema.safeParse(body);
     
@@ -35,6 +27,18 @@ export async function POST(request: NextRequest) {
     }
     
     const { tenant_slug, filename, content_type, path } = parsed.data;
+
+    // Validación unificada de sesión (Staff, Owner, Super Admin o Supabase Auth)
+    if (process.env.NODE_ENV === 'production') {
+      try {
+        await requireTenantStaffApi(tenant_slug);
+      } catch (authError) {
+        if (authError instanceof TenantAuthError) {
+          return NextResponse.json({ error: authError.message }, { status: authError.statusCode });
+        }
+        return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+      }
+    }
     
     // Sanitizar filename
     const sanitized = filename
