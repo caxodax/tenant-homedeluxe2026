@@ -81,6 +81,7 @@ export async function POST(
     const baseSlug = slugify(name) || 'categoria';
     const sortOrder = typeof body.sort_order === 'number' ? body.sort_order : 0;
     const imageUrl = body.image_url || null;
+    const isActive = body.is_active !== undefined ? Boolean(body.is_active) : true;
 
     const newCategory = await withTenantDb(tenant.db_schema_name, null, async (client) => {
       // Garantizar slug único
@@ -98,9 +99,9 @@ export async function POST(
 
       const res = await client.query(
         `INSERT INTO categories (name, slug, sort_order, image_url, is_active)
-         VALUES ($1, $2, $3, $4, true)
+         VALUES ($1, $2, $3, $4, $5)
          RETURNING id, name, slug, sort_order, image_url, is_active, created_at`,
-        [name, finalSlug, sortOrder, imageUrl]
+        [name, finalSlug, sortOrder, imageUrl, isActive]
       );
       return res.rows[0];
     });

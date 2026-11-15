@@ -102,9 +102,10 @@ export async function DELETE(
     const { tenant } = await requireTenantStaffApi(slug, 'inventory');
 
     const result = await withTenantDb(tenant.db_schema_name, null, async (client) => {
-      // Soft-delete: se marca is_active = false para preservar integridad referencial de pedidos/productos
+      // Eliminar categoría de la tabla. Las referencias en products(category_id)
+      // tienen ON DELETE SET NULL, garantizando que ningún producto sea eliminado.
       const res = await client.query(
-        `UPDATE categories SET is_active = false, updated_at = now() WHERE id = $1 RETURNING id, name`,
+        `DELETE FROM categories WHERE id = $1 RETURNING id, name`,
         [catId]
       );
       return res.rows[0];
