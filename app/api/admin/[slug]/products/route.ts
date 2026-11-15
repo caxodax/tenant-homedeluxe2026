@@ -31,20 +31,50 @@ export async function GET(
     const { slug } = await params;
     const { tenant } = await requireTenantStaffApi(slug, 'inventory');
     const schema = tenant.db_schema_name;
+    const { searchParams } = new URL(request.url);
+    const deletedOnly = searchParams.get('deleted_only') === 'true';
+    const includeDeleted = searchParams.get('include_deleted') === 'true';
 
-    const res = await withTenantDb(schema, null, async (client) => {
-      return client.query(
+    const { products, settings, plan } = await withTenantDb(schema, null, async (client) => {
+      let whereClause = 'p.deleted_at IS NULL';
+      if (deletedOnly) {
+        whereClause = 'p.deleted_at IS NOT NULL';
+      } else if (includeDeleted) {
+        whereClause = '1=1';
+      }
+
+      const res = await client.query(
         `SELECT p.id, p.name, p.slug, p.sku, p.barcode, p.price_usd, 
                 p.cost_price, p.current_stock, p.min_stock_alert, p.is_active, 
-                p.image_url, p.is_tax_exempt, p.track_inventory,
+                p.deleted_at, p.image_url, p.is_tax_exempt, p.track_inventory,
                 c.name as category_name, c.id as category_id
          FROM products p
          LEFT JOIN categories c ON c.id = p.category_id
+         WHERE ${whereClause}
          ORDER BY p.name ASC`
       );
+
+      const settingsRes = await client.query(
+        `SELECT value FROM settings WHERE key = 'general' LIMIT 1`
+      );
+
+      // Obtener plan del tenant para mostrar límites de catálogo
+      const tenantRes = await client.query(
+        `SELECT t.plan_id, sp.name as plan_name, sp.max_products 
+         FROM platform.tenants t
+         LEFT JOIN platform.subscription_plans sp ON sp.id = t.plan_id
+         WHERE t.slug = $1 LIMIT 1`,
+        [slug]
+      );
+
+      return {
+        products: res.rows,
+        settings: settingsRes.rows[0]?.value || {},
+        plan: tenantRes.rows[0] || { plan_name: 'PRO COMERCIAL', max_products: 300 },
+      };
     });
 
-    return NextResponse.json({ products: res.rows });
+    return NextResponse.json({ products, settings, plan });
   } catch (error) {
     if (error instanceof TenantAuthError) {
       return NextResponse.json({ error: error.message }, { status: error.statusCode });

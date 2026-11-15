@@ -40,7 +40,7 @@ export async function GET(
             image_url,
             is_tax_exempt
           FROM products
-          WHERE is_active = true
+          WHERE is_active = true AND deleted_at IS NULL
           ORDER BY name ASC
         `),
         client.query(`
@@ -53,7 +53,7 @@ export async function GET(
         client.query(`
           SELECT id
           FROM stores
-          WHERE is_active = true
+          WHERE is_active = true AND deleted_at IS NULL
           ORDER BY created_at ASC
           LIMIT 1
         `),

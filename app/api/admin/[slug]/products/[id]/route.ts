@@ -69,6 +69,21 @@ export async function PATCH(
     const { tenant } = await requireTenantStaffApi(slug, 'inventory');
     const schema = tenant.db_schema_name;
     const body = await request.json();
+
+    // Soporte para restaurar producto archivado (soft-deleted)
+    if (body.restore === true) {
+      await withTenantDb(schema, null, async (client) => {
+        await client.query(
+          `UPDATE products 
+           SET deleted_at = NULL, is_active = true, updated_at = now() 
+           WHERE id = $1`,
+          [id]
+        );
+      });
+      invalidateTenantCache(slug, 'catalog');
+      return NextResponse.json({ success: true, restored: true });
+    }
+
     const parsed = updateProductSchema.safeParse(body);
 
     if (!parsed.success) {
@@ -143,16 +158,26 @@ export async function DELETE(
     const { tenant } = await requireTenantStaffApi(slug, 'inventory');
     const schema = tenant.db_schema_name;
 
-    // Eliminación lógica canónica para Blast Radius = 0
-    await withTenantDb(schema, null, async (client) => {
-      await client.query(
-        `UPDATE products SET is_active = false, updated_at = now() WHERE id = $1`,
+    // Eliminación lógica canónica (Soft-Delete)
+    // Marca deleted_at = now() y desactiva el producto sin eliminar registros físicos,
+    // preservando la integridad referencial de order_items e historial de inventario.
+    const result = await withTenantDb(schema, null, async (client) => {
+      const res = await client.query(
+        `UPDATE products 
+         SET deleted_at = now(), is_active = false, updated_at = now() 
+         WHERE id = $1 AND deleted_at IS NULL 
+         RETURNING id, name, deleted_at`,
         [id]
       );
+      return res.rows[0];
     });
 
+    if (!result) {
+      return NextResponse.json({ error: 'Producto no encontrado o ya archivado' }, { status: 404 });
+    }
+
     invalidateTenantCache(slug, 'catalog');
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, softDeleted: true, deletedProduct: result });
   } catch (error) {
     if (error instanceof TenantAuthError) {
       return NextResponse.json({ error: error.message }, { status: error.statusCode });
