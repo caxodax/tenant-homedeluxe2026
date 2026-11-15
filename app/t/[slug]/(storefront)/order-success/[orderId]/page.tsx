@@ -35,7 +35,7 @@ async function getOrderDetails(slug: string, orderId: string) {
         WHERE order_id = $1
       `, [orderId]),
       client.query(`
-        SELECT business_name, whatsapp_number, address, phone
+        SELECT business_name, whatsapp_number, address, phone, exchange_rate
         FROM settings 
         WHERE key = 'general' 
         LIMIT 1
@@ -80,7 +80,9 @@ export default async function OrderSuccessPage({
 
   const { order, items, payment, settings } = data;
   const totalUsd = parseFloat(order.total_usd);
-  const rate = parseFloat(order.exchange_rate_applied || '0');
+  const rawRate = parseFloat(order.exchange_rate_applied || '0');
+  const storeRate = parseFloat(settings.exchange_rate || '0');
+  const rate = rawRate > 1.01 ? rawRate : (storeRate > 1.01 ? storeRate : 0);
   const secondaryTotal = order.total_secondary && parseFloat(order.total_secondary) > 0
     ? parseFloat(order.total_secondary)
     : rate > 0 ? totalUsd * rate : null;

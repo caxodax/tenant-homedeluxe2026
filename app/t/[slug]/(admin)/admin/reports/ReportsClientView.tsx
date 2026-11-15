@@ -68,11 +68,13 @@ export interface ReportDataPayload {
   businessName: string;
 }
 
+export type CurrencyMode = 'USD' | 'VES' | 'BOTH';
+
 export function ReportsClientView({ data }: { data: ReportDataPayload }) {
   const router = useRouter();
   const pathname = usePathname();
 
-  const [currency, setCurrency] = useState<'USD' | 'VES'>('USD');
+  const [currency, setCurrency] = useState<CurrencyMode>('USD');
   const [selectedPreset, setSelectedPreset] = useState<string>(data.activePreset || '7d');
   const [customFrom, setCustomFrom] = useState<string>(data.activeFrom || '');
   const [customTo, setCustomTo] = useState<string>(data.activeTo || '');
@@ -80,13 +82,19 @@ export function ReportsClientView({ data }: { data: ReportDataPayload }) {
 
   const rate = data.exchangeRate > 0 ? data.exchangeRate : 1;
   const isBs = currency === 'VES' && data.exchangeRate > 0;
+  const isBoth = currency === 'BOTH' && data.exchangeRate > 0;
+
+  const getAmounts = (amountUsd: number, explicitVes?: number) => {
+    const amountBs = explicitVes !== undefined && explicitVes > 0 ? explicitVes : amountUsd * rate;
+    const usd = `$${amountUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
+    const bs = `Bs. ${amountBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return { usd, bs, amountBs };
+  };
 
   const formatMoney = (amountUsd: number, explicitVes?: number) => {
-    if (isBs) {
-      const amountBs = explicitVes !== undefined && explicitVes > 0 ? explicitVes : amountUsd * rate;
-      return `Bs. ${amountBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    }
-    return `$${amountUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
+    const { usd, bs } = getAmounts(amountUsd, explicitVes);
+    if (currency === 'VES') return bs;
+    return usd;
   };
 
   const trendData: TrendItem[] = data.trend.map((t) => ({
@@ -237,6 +245,17 @@ export function ReportsClientView({ data }: { data: ReportDataPayload }) {
               >
                 Bs. (BCV)
               </button>
+              <button
+                type="button"
+                onClick={() => setCurrency('BOTH')}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  currency === 'BOTH'
+                    ? 'bg-white dark:bg-zinc-800 text-indigo-700 dark:text-indigo-400 shadow-xs'
+                    : 'text-slate-600 dark:text-zinc-400 hover:text-slate-950 dark:hover:text-white'
+                }`}
+              >
+                Ambas
+              </button>
             </div>
 
             {/* Botón Exportar CSV */}
@@ -288,7 +307,7 @@ export function ReportsClientView({ data }: { data: ReportDataPayload }) {
           <span>
             Período actual: <strong className="text-slate-900 dark:text-white">{data.rangeLabel}</strong> ({data.exportOrders.length} transacciones registradas)
           </span>
-          {isBs && (
+          {(isBs || isBoth) && (
             <span className="font-mono font-semibold text-emerald-700 dark:text-emerald-400">
               Tasa BCV: Bs. {rate.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}
             </span>
@@ -307,6 +326,11 @@ export function ReportsClientView({ data }: { data: ReportDataPayload }) {
             <p className="text-lg sm:text-2xl font-black font-mono text-slate-950 dark:text-white mt-1 sm:mt-2 truncate">
               {formatMoney(data.summary.total_revenue_usd)}
             </p>
+            {isBoth && (
+              <p className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 truncate">
+                {getAmounts(data.summary.total_revenue_usd).bs}
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -331,6 +355,11 @@ export function ReportsClientView({ data }: { data: ReportDataPayload }) {
             <p className="text-lg sm:text-2xl font-black font-mono text-slate-950 dark:text-white mt-1 sm:mt-2 truncate">
               {formatMoney(data.summary.avg_ticket_usd)}
             </p>
+            {isBoth && (
+              <p className="text-xs font-mono font-bold text-slate-500 dark:text-zinc-400 mt-0.5 truncate">
+                {getAmounts(data.summary.avg_ticket_usd).bs}
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -356,7 +385,7 @@ export function ReportsClientView({ data }: { data: ReportDataPayload }) {
         </CardHeader>
         <CardContent>
           <SalesChart 
-            data={data.trend} 
+            data={isBs ? trendData : data.trend} 
             exchangeRate={data.exchangeRate} 
             secondaryCurrency="VES"
           />
@@ -391,9 +420,16 @@ export function ReportsClientView({ data }: { data: ReportDataPayload }) {
                       {c.orders_count} órdenes procesadas
                     </p>
                   </div>
-                  <p className="text-sm font-black font-mono text-slate-900 dark:text-white">
-                    {formatMoney(c.total_usd)}
-                  </p>
+                  <div className="text-right shrink-0">
+                    <p className="text-sm font-black font-mono text-slate-900 dark:text-white">
+                      {formatMoney(c.total_usd)}
+                    </p>
+                    {isBoth && (
+                      <p className="text-xs font-mono font-bold text-slate-500 dark:text-zinc-400">
+                        {getAmounts(c.total_usd).bs}
+                      </p>
+                    )}
+                  </div>
                 </div>
               ))
             )}
@@ -428,13 +464,19 @@ export function ReportsClientView({ data }: { data: ReportDataPayload }) {
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-sm font-black font-mono text-slate-900 dark:text-white">
-                      {formatMoney(m.total_usd, m.total_ves)}
+                      {currency === 'VES' 
+                        ? getAmounts(m.total_usd, m.total_ves).bs 
+                        : getAmounts(m.total_usd, m.total_ves).usd}
                     </p>
-                    {isBs && m.total_usd > 0 && (
+                    {isBoth ? (
+                      <p className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                        {getAmounts(m.total_usd, m.total_ves).bs}
+                      </p>
+                    ) : isBs && m.total_usd > 0 ? (
                       <p className="text-[11px] font-mono text-slate-500">
                         ${m.total_usd.toFixed(2)} USD eq.
                       </p>
-                    )}
+                    ) : null}
                   </div>
                 </div>
               ))

@@ -60,7 +60,7 @@ async function loadFullOrderDetail(schema: string, orderId: string) {
     if ((orderRes.rowCount || 0) === 0) return null;
     const order = orderRes.rows[0];
 
-    const [itemsRes, paymentsRes, auditRes, movementsRes] = await Promise.all([
+    const [itemsRes, paymentsRes, auditRes, movementsRes, settingsRes] = await Promise.all([
       client.query(
         `SELECT oi.*, p.sku, p.image_url
          FROM order_items oi
@@ -92,7 +92,23 @@ async function loadFullOrderDetail(schema: string, orderId: string) {
          ORDER BY im.created_at DESC`,
         [order.order_number]
       ),
+      client.query(
+        `SELECT primary_currency, secondary_currency, exchange_rate, business_name, address, phone, whatsapp_number
+         FROM settings WHERE key = 'general' LIMIT 1`
+      ),
     ]);
+
+    const settings = settingsRes.rows[0] || null;
+    const storeRate = parseFloat(settings?.exchange_rate || '0');
+    const appliedRate = parseFloat(order.exchange_rate_applied || '0');
+    const effectiveRate = appliedRate > 1.01 ? appliedRate : (storeRate > 1.01 ? storeRate : null);
+
+    if (effectiveRate && (!order.exchange_rate_applied || parseFloat(order.exchange_rate_applied) <= 1.01)) {
+      order.exchange_rate_applied = effectiveRate.toString();
+    }
+    if (effectiveRate && (!order.total_secondary || parseFloat(order.total_secondary) <= 0)) {
+      order.total_secondary = (parseFloat(order.total_usd) * effectiveRate).toFixed(2);
+    }
 
     return {
       order,
@@ -100,6 +116,7 @@ async function loadFullOrderDetail(schema: string, orderId: string) {
       payments: paymentsRes.rows,
       audit_logs: auditRes.rows,
       inventory_movements: movementsRes.rows,
+      settings,
     };
   });
 }

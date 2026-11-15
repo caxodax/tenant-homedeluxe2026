@@ -387,8 +387,9 @@ async function RecentOrdersCard({ schema, slug }: { schema: string; slug: string
                       </span>
                       {(() => {
                         const sec = parseFloat(order.total_secondary || '0');
-                        const rate = parseFloat(order.exchange_rate_applied || '0') || exchangeRate;
-                        const displayBs = sec > 0 ? sec : rate > 0 ? parseFloat(order.total_usd) * rate : 0;
+                        const rawRate = parseFloat(order.exchange_rate_applied || '0');
+                        const rate = rawRate > 1.01 ? rawRate : exchangeRate;
+                        const displayBs = sec > 0 ? sec : (rate > 1.01 ? parseFloat(order.total_usd) * rate : 0);
                         if (displayBs > 0) {
                           return (
                             <span className="text-[10px] font-mono font-bold text-stone-500 dark:text-zinc-400 block">

@@ -232,59 +232,101 @@ export default function AdminOrderDetailPage() {
   const handlePrintTicket = () => {
     const ticketElem = document.getElementById('pos-thermal-ticket-content');
     if (!ticketElem) return;
-    const printWindow = window.open('', '_blank', 'width=450,height=700');
-    if (printWindow) {
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>Ticket_${order?.order_number || 'POS'}</title>
-            <style>
-              @page { size: 80mm auto; margin: 3mm; }
-              body {
-                font-family: 'Courier New', Courier, monospace, system-ui;
-                font-size: 11px;
-                color: #000;
-                background: #fff;
-                margin: 0;
-                padding: 4px 8px;
-                line-height: 1.35;
-              }
-              .text-center { text-align: center; }
-              .text-right { text-align: right; }
-              .text-left { text-align: left; }
-              .font-bold { font-weight: bold; }
-              .uppercase { text-transform: uppercase; }
-              .border-b { border-bottom: 1px solid #000; }
-              .border-dashed { border-bottom: 1px dashed #000; }
-              .py-1 { padding-top: 4px; padding-bottom: 4px; }
-              .py-2 { padding-top: 8px; padding-bottom: 8px; }
-              .my-1 { margin-top: 4px; margin-bottom: 4px; }
-              .flex { display: flex; justify-content: space-between; }
-              table { width: 100%; border-collapse: collapse; margin-top: 6px; }
-              th { border-bottom: 1px solid #000; text-align: left; font-size: 10px; padding: 2px 0; }
-              td { padding: 3px 0; vertical-align: top; }
-              @media print {
-                body { margin: 0; padding: 0; }
-              }
-            </style>
-          </head>
-          <body>
-            ${ticketElem.innerHTML}
-            <script>
-              window.onload = function() {
-                window.focus();
-                window.print();
-                setTimeout(function() { window.close(); }, 1500);
-              };
-            </script>
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
-    } else {
-      window.print();
+
+    // Usar iframe oculto para impresión nativa sin bloqueo de popups por el navegador
+    let printFrame = document.getElementById('pos-print-iframe') as HTMLIFrameElement | null;
+    if (!printFrame) {
+      printFrame = document.createElement('iframe');
+      printFrame.id = 'pos-print-iframe';
+      printFrame.style.position = 'fixed';
+      printFrame.style.right = '0';
+      printFrame.style.bottom = '0';
+      printFrame.style.width = '0';
+      printFrame.style.height = '0';
+      printFrame.style.border = '0';
+      document.body.appendChild(printFrame);
     }
+
+    const doc = printFrame.contentWindow?.document;
+    if (!doc) {
+      window.print();
+      return;
+    }
+
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Ticket_${order?.order_number || 'POS'}</title>
+          <style>
+            @page {
+              size: 80mm auto;
+              margin: 2mm;
+            }
+            * {
+              box-sizing: border-box;
+              -webkit-print-color-adjust: exact;
+              print-color-adjust: exact;
+            }
+            body {
+              font-family: 'Courier New', Courier, monospace, system-ui;
+              font-size: 11px;
+              color: #000;
+              background: #fff;
+              margin: 0;
+              padding: 4px;
+              line-height: 1.35;
+              width: 100%;
+              max-width: 78mm;
+            }
+            .text-center { text-align: center; }
+            .text-right { text-align: right; }
+            .text-left { text-align: left; }
+            .font-bold { font-weight: bold; }
+            .font-black { font-weight: 900; }
+            .uppercase { text-transform: uppercase; }
+            .border-b { border-bottom: 1px solid #000; }
+            .border-t { border-top: 1px solid #000; }
+            .border-dashed { border-bottom: 1px dashed #000; }
+            .py-1 { padding-top: 3px; padding-bottom: 3px; }
+            .py-1\\.5 { padding-top: 4px; padding-bottom: 4px; }
+            .py-2 { padding-top: 6px; padding-bottom: 6px; }
+            .pb-2\\.5 { padding-bottom: 8px; }
+            .pt-1 { padding-top: 3px; }
+            .pt-3 { padding-top: 8px; }
+            .my-1 { margin-top: 3px; margin-bottom: 3px; }
+            .mt-1 { margin-top: 3px; }
+            .space-y-0\\.5 > * + * { margin-top: 2px; }
+            .space-y-1 > * + * { margin-top: 4px; }
+            .flex { display: flex; justify-content: space-between; }
+            .justify-between { justify-content: space-between; }
+            table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+            th { border-bottom: 1px solid #000; text-align: left; font-size: 10px; padding: 2px 0; }
+            td { padding: 3px 0; vertical-align: top; }
+            .whitespace-nowrap { white-space: nowrap; }
+            .break-all { word-break: break-all; }
+            @media print {
+              body { margin: 0; padding: 2mm; width: 100%; }
+            }
+          </style>
+        </head>
+        <body>
+          ${ticketElem.innerHTML}
+        </body>
+      </html>
+    `);
+    doc.close();
+
+    setTimeout(() => {
+      try {
+        printFrame?.contentWindow?.focus();
+        printFrame?.contentWindow?.print();
+      } catch (e) {
+        console.error('Error invocando iframe print:', e);
+        window.print();
+      }
+    }, 250);
   };
 
   const applyPayload = useCallback((data: {
