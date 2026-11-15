@@ -71,11 +71,16 @@ export default function InventoryPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [exchangeRate, setExchangeRate] = useState<number>(0);
+  const [primaryCurrency, setPrimaryCurrency] = useState<string>('USD');
   const [secondaryCurrency, setSecondaryCurrency] = useState<string>('VES');
   const [planInfo, setPlanInfo] = useState<TenantPlanInfo>({
     plan_name: 'PRO COMERCIAL',
     max_products: 300,
   });
+
+  // Paginación
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const pageSize = 15;
 
   // Filtros reactivos y vista
   const [searchQuery, setSearchQuery] = useState('');
@@ -89,7 +94,9 @@ export default function InventoryPage() {
   const [formName, setFormName] = useState('');
   const [formCategoryId, setFormCategoryId] = useState('');
   const [formPriceUsd, setFormPriceUsd] = useState('');
-  const [formCurrentStock, setFormCurrentStock] = useState('10');
+  const [formCostPrice, setFormCostPrice] = useState('');
+  const [formCurrentStock, setFormCurrentStock] = useState('20');
+  const [formMinStockAlert, setFormMinStockAlert] = useState('5');
   const [formSku, setFormSku] = useState('');
   const [formBarcode, setFormBarcode] = useState('');
   const [formDescription, setFormDescription] = useState('');
@@ -130,6 +137,9 @@ export default function InventoryPage() {
 
       setProducts(data.products || []);
 
+      if (data.settings?.primary_currency) {
+        setPrimaryCurrency(data.settings.primary_currency);
+      }
       if (data.settings?.exchange_rate) {
         setExchangeRate(Number(data.settings.exchange_rate) || 0);
       }
@@ -190,6 +200,20 @@ export default function InventoryPage() {
       return nameMatch || skuMatch || barcodeMatch;
     });
   }, [currentTabProducts, selectedCategory, searchQuery]);
+
+  // Paginación reactiva
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / pageSize));
+  const paginatedProducts = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredProducts.slice(start, start + pageSize);
+  }, [filteredProducts, currentPage, pageSize]);
+
+  // Reset de página al cambiar filtros
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedCategory, activeTab]);
+
+  const currencySymbol = primaryCurrency === 'EUR' ? '€' : '$';
 
   // Capacidad de catálogo
   const catalogCount = activeProducts.length;
@@ -392,7 +416,9 @@ export default function InventoryPage() {
     setFormName('');
     setFormCategoryId('');
     setFormPriceUsd('');
+    setFormCostPrice('');
     setFormCurrentStock('20');
+    setFormMinStockAlert('5');
     setFormSku(`SKU-${Math.floor(100 + Math.random() * 900)}`);
     setFormBarcode('');
     setFormDescription('');
@@ -407,7 +433,9 @@ export default function InventoryPage() {
     setFormCategoryId(prod.category_id || '');
     const priceNum = typeof prod.price_usd === 'number' ? prod.price_usd : parseFloat(prod.price_usd || '0');
     setFormPriceUsd(priceNum.toFixed(2));
+    setFormCostPrice(prod.cost_price ? String(prod.cost_price) : '');
     setFormCurrentStock(String(prod.current_stock ?? 0));
+    setFormMinStockAlert(String(prod.min_stock_alert ?? 5));
     setFormSku(prod.sku || '');
     setFormBarcode(prod.barcode || '');
     setFormDescription(prod.description || '');
@@ -455,11 +483,16 @@ export default function InventoryPage() {
 
     try {
       setIsSavingProduct(true);
+      const cost = formCostPrice ? parseFloat(formCostPrice.replace(',', '.')) : null;
+      const minStock = parseFloat(formMinStockAlert) || 5;
+
       const payload = {
         name: trimmedName,
         category_id: formCategoryId || null,
         price_usd: price,
+        cost_price: isNaN(cost as number) ? null : cost,
         current_stock: stock,
+        min_stock_alert: minStock,
         sku: formSku.trim() || null,
         barcode: formBarcode.trim() || null,
         description: formDescription.trim() || null,
@@ -899,9 +932,154 @@ export default function InventoryPage() {
       </div>
 
       {/* ========================================================================= */}
-      {/* VISTA 1: LISTADO EN TABLA (MODO EXACTO A LA REFERENCIA)                  */}
+      {/* VISTA MÓVIL: TARJETAS COMPACTAS SIN SCROLL HORIZONTAL (md:hidden)        */}
       {/* ========================================================================= */}
-      {viewMode === 'list' && (
+      <div className="md:hidden space-y-3">
+        {paginatedProducts.length === 0 ? (
+          <div className="py-12 text-center text-stone-500 dark:text-zinc-400 bg-white dark:bg-[#121214] rounded-2xl border border-stone-200/80 dark:border-zinc-800 p-6">
+            <Package className="w-8 h-8 text-stone-300 dark:text-zinc-600 mx-auto mb-2" />
+            <p className="font-bold text-sm text-stone-700 dark:text-zinc-300">
+              {searchQuery ? 'Sin productos coincidentes con la búsqueda' : 'No hay productos en esta sección'}
+            </p>
+          </div>
+        ) : (
+          paginatedProducts.map((prod) => {
+            const priceNum = typeof prod.price_usd === 'number' ? prod.price_usd : parseFloat(prod.price_usd || '0');
+            const priceVes = exchangeRate > 0 ? priceNum * exchangeRate : 0;
+            const stockNum = Number(prod.current_stock || 0);
+            const isArchived = !!prod.deleted_at;
+
+            return (
+              <div
+                key={prod.id}
+                className={cn(
+                  'p-4 rounded-2xl bg-white dark:bg-[#121214] border border-stone-200/80 dark:border-zinc-800/80 shadow-xs space-y-3',
+                  isArchived && 'opacity-70 bg-rose-50/10'
+                )}
+              >
+                <div className="flex items-start gap-3">
+                  <div className="w-14 h-14 rounded-xl bg-stone-100 dark:bg-zinc-800/60 border border-stone-200 dark:border-zinc-700/60 flex items-center justify-center shrink-0 overflow-hidden">
+                    {prod.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={prod.image_url} alt={prod.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <ImageIcon className="w-5 h-5 text-stone-400 dark:text-zinc-500" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex items-center justify-between gap-1.5">
+                      <p className={cn(
+                        'font-bold text-sm leading-tight truncate',
+                        isArchived ? 'line-through text-stone-500' : 'text-stone-950 dark:text-white'
+                      )}>
+                        {prod.name}
+                      </p>
+                      <span className={cn(
+                        'px-2 py-0.5 rounded-full text-[10px] font-black uppercase shrink-0',
+                        isArchived
+                          ? 'bg-rose-500/15 text-rose-700 dark:text-rose-400'
+                          : prod.is_active
+                          ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400'
+                          : 'bg-stone-500/15 text-stone-700 dark:text-zinc-400'
+                      )}>
+                        {isArchived ? 'ARCHIVADO' : prod.is_active ? 'ACTIVO' : 'INACTIVO'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-wrap text-[11px] font-mono text-stone-500 dark:text-zinc-400">
+                      {prod.category_name && (
+                        <span className="text-rose-600 dark:text-rose-400 font-bold">
+                          🏷️ {prod.category_name}
+                        </span>
+                      )}
+                      {prod.sku && <span>SKU: {prod.sku}</span>}
+                    </div>
+
+                    <p className="text-sm font-black font-mono text-stone-950 dark:text-white">
+                      {currencySymbol}{priceNum.toFixed(2)}{' '}
+                      {priceVes > 0 && (
+                        <span className="text-xs font-bold text-stone-500 dark:text-zinc-400 font-mono">
+                          (Bs. {priceVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Controles Inferiores Móviles */}
+                <div className="flex items-center justify-between pt-2 border-t border-stone-100 dark:border-zinc-800/80 gap-2">
+                  <div className="flex items-center gap-1 font-mono">
+                    <button
+                      type="button"
+                      onClick={() => handleQuickStockChange(prod, -1)}
+                      disabled={isArchived || stockNum <= 0}
+                      className="w-8 h-8 rounded-lg border border-stone-200 dark:border-zinc-800 bg-stone-50 dark:bg-zinc-800 text-stone-700 dark:text-zinc-200 font-bold text-sm flex items-center justify-center disabled:opacity-30 cursor-pointer"
+                    >
+                      -
+                    </button>
+                    <span className={cn(
+                      'w-10 text-center font-extrabold text-sm',
+                      stockNum === 0 ? 'text-rose-600' : stockNum <= prod.min_stock_alert ? 'text-amber-600' : 'text-stone-900 dark:text-white'
+                    )}>
+                      {stockNum}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleQuickStockChange(prod, 1)}
+                      disabled={isArchived}
+                      className="w-8 h-8 rounded-lg border border-stone-200 dark:border-zinc-800 bg-stone-50 dark:bg-zinc-800 text-stone-700 dark:text-zinc-200 font-bold text-sm flex items-center justify-center disabled:opacity-30 cursor-pointer"
+                    >
+                      +
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    {isArchived ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleRestoreProduct(prod)}
+                        className="h-8 px-2.5 rounded-lg text-xs font-bold text-emerald-600"
+                      >
+                        Restaurar
+                      </Button>
+                    ) : (
+                      <>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openEditModal(prod)}
+                          className="h-8 px-2.5 rounded-lg text-xs font-bold cursor-pointer"
+                        >
+                          <Edit2 className="w-3.5 h-3.5 mr-1 text-stone-500" />
+                          Editar
+                        </Button>
+                        <button
+                          type="button"
+                          onClick={() => setDeletingProduct(prod)}
+                          className="w-8 h-8 rounded-lg border border-stone-200 dark:border-zinc-800 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-stone-400 hover:text-rose-600 flex items-center justify-center cursor-pointer"
+                          title="Mover a papelera"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* ========================================================================= */}
+      {/* VISTAS ESCRITORIO (hidden md:block)                                      */}
+      {/* ========================================================================= */}
+      <div className="hidden md:block space-y-4">
+        {/* VISTA 1: LISTADO EN TABLA (MODO EXACTO A LA REFERENCIA)                  */}
+        {viewMode === 'list' && (
         <Card className="border-stone-200/80 dark:border-zinc-800/80 overflow-hidden shadow-xs">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
@@ -910,8 +1088,8 @@ export default function InventoryPage() {
                   <th className="py-3.5 px-4 w-14">Foto</th>
                   <th className="py-3.5 px-4">Producto & Códigos</th>
                   <th className="py-3.5 px-4">Categoría</th>
-                  <th className="py-3.5 px-4">Precio (USD)</th>
-                  <th className="py-3.5 px-4">Precio VES</th>
+                  <th className="py-3.5 px-4">Precio ({primaryCurrency})</th>
+                  <th className="py-3.5 px-4">Precio BS</th>
                   <th className="py-3.5 px-4 text-center">Stock / Control</th>
                   <th className="py-3.5 px-4 text-center">Estado</th>
                   <th className="py-3.5 px-4 text-right">Acción</th>
@@ -933,7 +1111,7 @@ export default function InventoryPage() {
                     </td>
                   </tr>
                 ) : (
-                  filteredProducts.map((prod) => {
+                  paginatedProducts.map((prod) => {
                     const priceNum = typeof prod.price_usd === 'number' ? prod.price_usd : parseFloat(prod.price_usd || '0');
                     const priceVes = exchangeRate > 0 ? priceNum * exchangeRate : 0;
                     const stockNum = Number(prod.current_stock || 0);
@@ -993,12 +1171,12 @@ export default function InventoryPage() {
                           </span>
                         </td>
 
-                        {/* PRECIO USD */}
+                        {/* PRECIO MONEDA BASE */}
                         <td className="py-3 px-4 font-mono font-black text-sm text-stone-900 dark:text-white">
-                          ${priceNum.toFixed(2)}
+                          {currencySymbol}{priceNum.toFixed(2)}
                         </td>
 
-                        {/* PRECIO VES */}
+                        {/* PRECIO BS */}
                         <td className="py-3 px-4 font-mono text-xs font-bold text-stone-700 dark:text-zinc-300">
                           {priceVes > 0 ? (
                             <>
@@ -1134,7 +1312,7 @@ export default function InventoryPage() {
       {/* ========================================================================= */}
       {viewMode === 'grid' && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredProducts.map((prod) => {
+          {paginatedProducts.map((prod) => {
             const priceNum = typeof prod.price_usd === 'number' ? prod.price_usd : parseFloat(prod.price_usd || '0');
             const priceVes = exchangeRate > 0 ? priceNum * exchangeRate : 0;
             const stockNum = Number(prod.current_stock || 0);
@@ -1189,7 +1367,7 @@ export default function InventoryPage() {
                   <div className="pt-2 border-t border-stone-100 dark:border-zinc-800 flex items-baseline justify-between">
                     <div>
                       <div className="text-base font-black font-mono text-stone-900 dark:text-white">
-                        ${priceNum.toFixed(2)}
+                        {currencySymbol}{priceNum.toFixed(2)}
                       </div>
                       {priceVes > 0 && (
                         <div className="text-[11px] font-bold font-mono text-stone-500">
@@ -1258,6 +1436,47 @@ export default function InventoryPage() {
               </Card>
             );
           })}
+        </div>
+      )}
+      </div>
+
+      {/* ========================================================================= */}
+      {/* PAGINACIÓN COMPARTIDA (MÓVIL Y ESCRITORIO)                               */}
+      {/* ========================================================================= */}
+      {filteredProducts.length > pageSize && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-stone-200/80 dark:border-zinc-800 text-xs">
+          <p className="text-stone-500 dark:text-zinc-400 font-medium text-center sm:text-left">
+            Mostrando <strong className="text-stone-900 dark:text-white font-mono">{(currentPage - 1) * pageSize + 1}</strong> a{' '}
+            <strong className="text-stone-900 dark:text-white font-mono">
+              {Math.min(currentPage * pageSize, filteredProducts.length)}
+            </strong>{' '}
+            de <strong className="text-stone-900 dark:text-white font-mono">{filteredProducts.length}</strong> productos
+          </p>
+          <div className="flex items-center gap-1.5">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage <= 1}
+              className="h-8 px-3 rounded-lg text-xs font-bold cursor-pointer disabled:opacity-40"
+            >
+              Anterior
+            </Button>
+            <span className="px-2.5 py-1 font-mono font-bold text-stone-700 dark:text-zinc-300">
+              Página {currentPage} de {totalPages}
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage >= totalPages}
+              className="h-8 px-3 rounded-lg text-xs font-bold cursor-pointer disabled:opacity-40"
+            >
+              Siguiente
+            </Button>
+          </div>
         </div>
       )}
 
@@ -1389,13 +1608,15 @@ export default function InventoryPage() {
                   />
                 </div>
 
-                {/* Precio USD */}
+                {/* Precio de Venta */}
                 <div>
                   <label className="text-xs font-bold text-stone-700 dark:text-zinc-300 block mb-1">
-                    Precio USD ($) *
+                    Precio {primaryCurrency} ({currencySymbol}) *
                   </label>
                   <div className="relative">
-                    <DollarSign className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <span className="text-xs font-bold text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 font-mono">
+                      {currencySymbol}
+                    </span>
                     <Input
                       required
                       type="number"
@@ -1404,7 +1625,52 @@ export default function InventoryPage() {
                       value={formPriceUsd}
                       onChange={(e) => setFormPriceUsd(e.target.value)}
                       placeholder="1.25"
-                      className="pl-9 h-10 text-xs sm:text-sm rounded-xl font-mono font-bold"
+                      className="pl-8 h-10 text-xs sm:text-sm rounded-xl font-mono font-bold"
+                      disabled={isSavingProduct}
+                    />
+                  </div>
+                </div>
+
+                {/* Costo del Producto (con cálculo dinámico de ganancia) */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-bold text-stone-700 dark:text-zinc-300">
+                      Costo {primaryCurrency} (opcional)
+                    </label>
+                    {(() => {
+                      const cp = parseFloat(formPriceUsd.replace(',', '.')) || 0;
+                      const cc = parseFloat(formCostPrice.replace(',', '.')) || 0;
+                      if (cc > 0 && cp > 0) {
+                        const prof = cp - cc;
+                        const pct = ((prof / cc) * 100).toFixed(1);
+                        return (
+                          <span
+                            className={cn(
+                              'text-[10px] font-mono font-bold px-1.5 py-0.5 rounded',
+                              prof >= 0
+                                ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60'
+                                : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border border-rose-200/60'
+                            )}
+                          >
+                            Margen: {prof >= 0 ? `+${pct}%` : `${pct}%`} ({currencySymbol}{prof.toFixed(2)})
+                          </span>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
+                  <div className="relative">
+                    <span className="text-xs font-bold text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 font-mono">
+                      {currencySymbol}
+                    </span>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formCostPrice}
+                      onChange={(e) => setFormCostPrice(e.target.value)}
+                      placeholder="0.85"
+                      className="pl-8 h-10 text-xs sm:text-sm rounded-xl font-mono font-medium"
                       disabled={isSavingProduct}
                     />
                   </div>
@@ -1424,6 +1690,25 @@ export default function InventoryPage() {
                       value={formCurrentStock}
                       onChange={(e) => setFormCurrentStock(e.target.value)}
                       placeholder="20"
+                      className="pl-9 h-10 text-xs sm:text-sm rounded-xl font-mono"
+                      disabled={isSavingProduct}
+                    />
+                  </div>
+                </div>
+
+                {/* Stock Mínimo (Alerta) */}
+                <div>
+                  <label className="text-xs font-bold text-stone-700 dark:text-zinc-300 block mb-1">
+                    Stock Mínimo (Alerta)
+                  </label>
+                  <div className="relative">
+                    <AlertTriangle className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <Input
+                      type="number"
+                      min="0"
+                      value={formMinStockAlert}
+                      onChange={(e) => setFormMinStockAlert(e.target.value)}
+                      placeholder="5"
                       className="pl-9 h-10 text-xs sm:text-sm rounded-xl font-mono"
                       disabled={isSavingProduct}
                     />

@@ -44,7 +44,7 @@ export async function GET(
       }
 
       const res = await client.query(
-        `SELECT p.id, p.name, p.slug, p.sku, p.barcode, p.price_usd, 
+        `SELECT p.id, p.name, p.slug, p.description, p.sku, p.barcode, p.price_usd, 
                 p.cost_price, p.current_stock, p.min_stock_alert, p.is_active, 
                 p.deleted_at, p.image_url, p.is_tax_exempt, p.track_inventory,
                 c.name as category_name, c.id as category_id
@@ -55,7 +55,7 @@ export async function GET(
       );
 
       const settingsRes = await client.query(
-        `SELECT value FROM settings WHERE key = 'general' LIMIT 1`
+        `SELECT primary_currency, secondary_currency, exchange_rate, business_name FROM settings WHERE key = 'general' LIMIT 1`
       );
 
       // Obtener plan del tenant para mostrar límites de catálogo
@@ -69,7 +69,7 @@ export async function GET(
 
       return {
         products: res.rows,
-        settings: settingsRes.rows[0]?.value || {},
+        settings: settingsRes.rows[0] || { primary_currency: 'USD', secondary_currency: 'VES', exchange_rate: 1 },
         plan: tenantRes.rows[0] || { plan_name: 'PRO COMERCIAL', max_products: 300 },
       };
     });
