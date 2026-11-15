@@ -14,7 +14,9 @@ import {
   X,
   AlertTriangle,
   ArrowUpDown,
-  Sparkles,
+  RotateCcw,
+  Archive,
+  CheckCircle2,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -30,6 +32,7 @@ export interface CategoryData {
   slug: string;
   sort_order: number;
   is_active: boolean;
+  deleted_at?: string | null;
   product_count: number;
   created_at: string;
 }
@@ -42,6 +45,7 @@ interface CategoriesClientViewProps {
 export function CategoriesClientView({ slug, initialCategories }: CategoriesClientViewProps) {
   const [categories, setCategories] = useState<CategoryData[]>(initialCategories);
   const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<'active' | 'archived'>('active');
 
   // Quick inline creation
   const [quickName, setQuickName] = useState('');
@@ -61,22 +65,29 @@ export function CategoriesClientView({ slug, initialCategories }: CategoriesClie
   const [editIsActive, setEditIsActive] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
 
-  // Modal Eliminar
+  // Modal Eliminar Lógico (Archivar en Papelera)
   const [deletingCategory, setDeletingCategory] = useState<CategoryData | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Loading individual para toggle de estado
+  // Loading individual para acciones (toggle o restaurar)
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
-  // Filtrado reactivo
-  const filtered = categories.filter((c) => {
+  // Categorías activas (no eliminadas) y archivadas (eliminadas lógicamente)
+  const activeCategories = categories.filter((c) => !c.deleted_at);
+  const archivedCategories = categories.filter((c) => !!c.deleted_at);
+
+  // Lista visible según la pestaña activa
+  const currentList = activeTab === 'active' ? activeCategories : archivedCategories;
+
+  // Filtrado reactivo en la pestaña actual
+  const filtered = currentList.filter((c) => {
     const q = search.toLowerCase().trim();
     if (!q) return true;
     return c.name.toLowerCase().includes(q) || c.slug.toLowerCase().includes(q);
   });
 
-  const activeCount = categories.filter((c) => c.is_active).length;
-  const totalProducts = categories.reduce((acc, c) => acc + (c.product_count || 0), 0);
+  const activeCount = activeCategories.filter((c) => c.is_active).length;
+  const totalProducts = activeCategories.reduce((acc, c) => acc + (c.product_count || 0), 0);
 
   // 1. Crear categoría rápida (inline)
   async function handleQuickCreate(e: React.FormEvent) {
@@ -92,7 +103,7 @@ export function CategoriesClientView({ slug, initialCategories }: CategoriesClie
       const res = await fetch(`/api/admin/${slug}/categories`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: trimmed, sort_order: categories.length }),
+        body: JSON.stringify({ name: trimmed, sort_order: activeCategories.length }),
       });
       const data = await res.json();
 
@@ -106,11 +117,13 @@ export function CategoriesClientView({ slug, initialCategories }: CategoriesClie
           ...prev,
           {
             ...data.category,
+            deleted_at: null,
             product_count: 0,
           },
         ].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name))
       );
       setQuickName('');
+      setActiveTab('active');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al crear categoría';
       toast.error(msg);
@@ -151,6 +164,7 @@ export function CategoriesClientView({ slug, initialCategories }: CategoriesClie
           ...prev,
           {
             ...data.category,
+            deleted_at: null,
             product_count: 0,
           },
         ].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name))
@@ -160,6 +174,7 @@ export function CategoriesClientView({ slug, initialCategories }: CategoriesClie
       setNewModalName('');
       setNewModalSortOrder(0);
       setNewModalIsActive(true);
+      setActiveTab('active');
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Error al crear categoría';
       toast.error(msg);
@@ -228,7 +243,7 @@ export function CategoriesClientView({ slug, initialCategories }: CategoriesClie
     }
   }
 
-  // 5. Alternar estado activo / inactivo
+  // 5. Alternar estado operativo activo / inactivo
   async function handleToggleActive(cat: CategoryData) {
     const nextState = !cat.is_active;
     setActionLoadingId(cat.id);
@@ -245,7 +260,7 @@ export function CategoriesClientView({ slug, initialCategories }: CategoriesClie
         throw new Error(data.error || 'Error al cambiar estado');
       }
 
-      toast.success(`Categoría ${nextState ? 'activada' : 'desactivada'}`);
+      toast.success(`Categoría ${nextState ? 'activada en vitrina y POS' : 'pausada / desactivada'}`);
       setCategories((prev) =>
         prev.map((c) => (c.id === cat.id ? { ...c, is_active: nextState } : c))
       );
@@ -257,7 +272,7 @@ export function CategoriesClientView({ slug, initialCategories }: CategoriesClie
     }
   }
 
-  // 6. Eliminar categoría permanentemente
+  // 6. Eliminación lógica canónica (Soft-delete -> deleted_at = now())
   async function handleConfirmDelete() {
     if (!deletingCategory) return;
 
@@ -269,17 +284,48 @@ export function CategoriesClientView({ slug, initialCategories }: CategoriesClie
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || 'Error al eliminar categoría');
+        throw new Error(data.error || 'Error al archivar categoría');
       }
 
-      toast.success(`Categoría "${deletingCategory.name}" eliminada`);
-      setCategories((prev) => prev.filter((c) => c.id !== deletingCategory.id));
+      toast.success(`Categoría "${deletingCategory.name}" movida a la papelera`);
+      const nowIso = new Date().toISOString();
+      setCategories((prev) =>
+        prev.map((c) => (c.id === deletingCategory.id ? { ...c, deleted_at: nowIso, is_active: false } : c))
+      );
       setDeletingCategory(null);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Error al eliminar categoría';
+      const msg = err instanceof Error ? err.message : 'Error al archivar categoría';
       toast.error(msg);
     } finally {
       setIsDeleting(false);
+    }
+  }
+
+  // 7. Restaurar categoría archivada
+  async function handleRestoreCategory(cat: CategoryData) {
+    setActionLoadingId(cat.id);
+
+    try {
+      const res = await fetch(`/api/admin/${slug}/categories/${cat.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ restore: true }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Error al restaurar categoría');
+      }
+
+      toast.success(`Categoría "${cat.name}" restaurada con éxito`);
+      setCategories((prev) =>
+        prev.map((c) => (c.id === cat.id ? { ...c, deleted_at: null, is_active: true } : c))
+      );
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Error al restaurar categoría';
+      toast.error(msg);
+    } finally {
+      setActionLoadingId(null);
     }
   }
 
@@ -318,7 +364,7 @@ export function CategoriesClientView({ slug, initialCategories }: CategoriesClie
             type="button"
             onClick={() => {
               setNewModalName('');
-              setNewModalSortOrder(categories.length);
+              setNewModalSortOrder(activeCategories.length);
               setNewModalIsActive(true);
               setIsCreateModalOpen(true);
             }}
@@ -330,71 +376,128 @@ export function CategoriesClientView({ slug, initialCategories }: CategoriesClie
         </div>
       </div>
 
-      {/* Formulario Rápido de Creación */}
-      <Card className="border-emerald-200/60 dark:border-emerald-900/40 bg-gradient-to-r from-emerald-50/40 via-white to-white dark:from-emerald-950/20 dark:via-zinc-900 dark:to-zinc-900">
-        <CardContent className="p-4 sm:p-5">
-          <form onSubmit={handleQuickCreate} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <div className="relative flex-1">
-              <Tag className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-              <Input
-                type="text"
-                value={quickName}
-                onChange={(e) => setQuickName(e.target.value)}
-                placeholder="Creación rápida: escribe el nombre (ej: Bebidas, Víveres, Panadería...)"
-                className="pl-9.5 h-11 text-xs sm:text-sm rounded-xl font-medium bg-white dark:bg-zinc-900 border-stone-200 dark:border-zinc-800 focus-visible:ring-emerald-500"
+      {/* Formulario Rápido de Creación (Solo en vista activa) */}
+      {activeTab === 'active' && (
+        <Card className="border-emerald-200/60 dark:border-emerald-900/40 bg-gradient-to-r from-emerald-50/40 via-white to-white dark:from-emerald-950/20 dark:via-zinc-900 dark:to-zinc-900">
+          <CardContent className="p-4 sm:p-5">
+            <form onSubmit={handleQuickCreate} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <div className="relative flex-1">
+                <Tag className="w-4 h-4 text-stone-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Input
+                  type="text"
+                  value={quickName}
+                  onChange={(e) => setQuickName(e.target.value)}
+                  placeholder="Creación rápida: escribe el nombre (ej: Bebidas, Víveres, Panadería...)"
+                  className="pl-9.5 h-11 text-xs sm:text-sm rounded-xl font-medium bg-white dark:bg-zinc-900 border-stone-200 dark:border-zinc-800 focus-visible:ring-emerald-500"
+                  disabled={isQuickCreating}
+                />
+              </div>
+              <Button
+                type="submit"
                 disabled={isQuickCreating}
-              />
-            </div>
-            <Button
-              type="submit"
-              disabled={isQuickCreating}
-              className="h-11 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shrink-0 shadow-xs transition cursor-pointer"
-            >
-              {isQuickCreating ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
-                  Creando...
-                </>
-              ) : (
-                <>
-                  <Plus className="w-4 h-4 mr-1.5" />
-                  Crear Rápido
-                </>
-              )}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+                className="h-11 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shrink-0 shadow-xs transition cursor-pointer"
+              >
+                {isQuickCreating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
+                    Creando...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4 mr-1.5" />
+                    Crear Rápido
+                  </>
+                )}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
-      {/* Barra de Filtro / Búsqueda */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
-          <Input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar categoría por nombre o slug..."
-            className="pl-9 h-10 text-xs rounded-xl bg-white dark:bg-zinc-900 border-stone-200 dark:border-zinc-800"
-          />
-        </div>
-        {search && (
-          <Button
+      {/* Selector de Pestañas: Catálogo Activo vs Papelera / Archivadas */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2 border-b sm:border-b-0 border-stone-200 dark:border-zinc-800 pb-2 sm:pb-0">
+          <button
             type="button"
-            variant="ghost"
-            onClick={() => setSearch('')}
-            className="h-10 text-xs px-3 text-stone-500 hover:text-stone-900 dark:hover:text-white"
+            onClick={() => setActiveTab('active')}
+            className={cn(
+              'px-4 py-2 text-xs font-bold rounded-xl transition flex items-center gap-2 cursor-pointer',
+              activeTab === 'active'
+                ? 'bg-stone-900 text-white dark:bg-white dark:text-stone-900 shadow-sm'
+                : 'text-stone-600 dark:text-zinc-400 hover:bg-stone-100 dark:hover:bg-zinc-800'
+            )}
           >
-            Limpiar filtro
-          </Button>
-        )}
+            <span>Catálogo Activo</span>
+            <Badge
+              variant="neutral"
+              className={cn(
+                'text-[10px] px-1.5 py-0.2',
+                activeTab === 'active'
+                  ? 'bg-stone-800 text-white dark:bg-stone-100 dark:text-stone-900'
+                  : 'bg-stone-200 dark:bg-zinc-800'
+              )}
+            >
+              {activeCategories.length}
+            </Badge>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab('archived')}
+            className={cn(
+              'px-4 py-2 text-xs font-bold rounded-xl transition flex items-center gap-2 cursor-pointer',
+              activeTab === 'archived'
+                ? 'bg-stone-900 text-white dark:bg-white dark:text-stone-900 shadow-sm'
+                : 'text-stone-600 dark:text-zinc-400 hover:bg-stone-100 dark:hover:bg-zinc-800'
+            )}
+          >
+            <Archive className="w-3.5 h-3.5" />
+            <span>Papelera / Archivadas</span>
+            {archivedCategories.length > 0 && (
+              <Badge
+                variant="outline"
+                className={cn(
+                  'text-[10px] px-1.5 py-0.2 border-amber-300 dark:border-amber-800 text-amber-600 bg-amber-50 dark:bg-amber-950/30'
+                )}
+              >
+                {archivedCategories.length}
+              </Badge>
+            )}
+          </button>
+        </div>
+
+        {/* Barra de Búsqueda */}
+        <div className="flex items-center gap-2">
+          <div className="relative w-full sm:w-64">
+            <Search className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <Input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar categoría..."
+              className="pl-9 h-9.5 text-xs rounded-xl bg-white dark:bg-zinc-900 border-stone-200 dark:border-zinc-800"
+            />
+          </div>
+          {search && (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setSearch('')}
+              className="h-9.5 text-xs px-2.5 text-stone-500 hover:text-stone-900 dark:hover:text-white"
+            >
+              Limpiar
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Lista de Categorías */}
       <Card>
         <CardHeader className="py-4 px-5 border-b border-stone-200/80 dark:border-zinc-800/80 flex flex-row items-center justify-between">
           <CardTitle className="text-sm font-bold text-stone-800 dark:text-zinc-200">
-            Listado de Categorías ({filtered.length})
+            {activeTab === 'active'
+              ? `Listado del Catálogo (${filtered.length})`
+              : `Categorías Archivadas / Papelera (${filtered.length})`}
           </CardTitle>
           <Link
             href={`/t/${slug}/admin/inventory`}
@@ -408,28 +511,37 @@ export function CategoriesClientView({ slug, initialCategories }: CategoriesClie
           {filtered.length === 0 ? (
             <div className="py-12 px-4 text-center">
               <div className="w-12 h-12 rounded-2xl bg-stone-100 dark:bg-zinc-800 text-stone-400 flex items-center justify-center mx-auto mb-3">
-                <Tag className="w-6 h-6" />
+                {activeTab === 'active' ? <Tag className="w-6 h-6" /> : <Archive className="w-6 h-6" />}
               </div>
               <h3 className="text-sm font-bold text-stone-800 dark:text-zinc-200">
-                {search ? 'Sin resultados para la búsqueda' : 'Aún no tienes categorías'}
+                {search
+                  ? 'Sin resultados para la búsqueda'
+                  : activeTab === 'active'
+                  ? 'Aún no tienes categorías'
+                  : 'La papelera está vacía'}
               </h3>
               <p className="text-xs text-stone-500 dark:text-zinc-400 mt-1 max-w-sm mx-auto">
                 {search
                   ? 'Prueba con otro término o limpia el buscador.'
-                  : 'Crea tu primera categoría con el botón "+ Nueva Categoría" o con el campo rápido de arriba.'}
+                  : activeTab === 'active'
+                  ? 'Crea tu primera categoría con el botón "+ Nueva Categoría" o con el campo rápido de arriba.'
+                  : 'Las categorías que elimines lógicamente aparecerán aquí para auditoría y restauración.'}
               </p>
             </div>
           ) : (
             <div className="divide-y divide-stone-200/80 dark:divide-zinc-800/80">
               {filtered.map((cat) => {
                 const isLoadingAction = actionLoadingId === cat.id;
+                const isArchived = !!cat.deleted_at;
 
                 return (
                   <div
                     key={cat.id}
                     className={cn(
                       'p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-colors',
-                      !cat.is_active
+                      isArchived
+                        ? 'bg-rose-50/20 dark:bg-rose-950/10'
+                        : !cat.is_active
                         ? 'bg-stone-50/60 dark:bg-zinc-900/30 opacity-75'
                         : 'hover:bg-stone-50/50 dark:hover:bg-zinc-900/40'
                     )}
@@ -438,23 +550,38 @@ export function CategoriesClientView({ slug, initialCategories }: CategoriesClie
                     <div className="flex-1 min-w-0">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-bold text-sm text-stone-900 dark:text-white">
+                          <span
+                            className={cn(
+                              'font-bold text-sm',
+                              isArchived
+                                ? 'text-stone-500 dark:text-zinc-400 line-through'
+                                : 'text-stone-900 dark:text-white'
+                            )}
+                          >
                             {cat.name}
                           </span>
                           <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-stone-100 dark:bg-zinc-800 text-stone-600 dark:text-zinc-400 border border-stone-200 dark:border-zinc-700">
                             /{cat.slug}
                           </span>
-                          {cat.sort_order !== undefined && (
+                          {cat.sort_order !== undefined && !isArchived && (
                             <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/40 font-mono">
                               #{cat.sort_order}
                             </span>
                           )}
-                          {!cat.is_active ? (
+
+                          {isArchived ? (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] text-rose-600 border-rose-300 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/30"
+                            >
+                              En Papelera (Archivada)
+                            </Badge>
+                          ) : !cat.is_active ? (
                             <Badge
                               variant="outline"
                               className="text-[10px] text-amber-600 border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30"
                             >
-                              Inactiva
+                              Pausada
                             </Badge>
                           ) : (
                             <Badge
@@ -465,62 +592,90 @@ export function CategoriesClientView({ slug, initialCategories }: CategoriesClie
                             </Badge>
                           )}
                         </div>
+
                         <div className="flex items-center gap-3 text-[11px] text-stone-400 dark:text-zinc-500">
                           <span className="flex items-center gap-1">
                             <Package className="w-3 h-3" />
                             {cat.product_count} {cat.product_count === 1 ? 'producto vinculado' : 'productos vinculados'}
                           </span>
+                          {isArchived && cat.deleted_at && (
+                            <span className="text-stone-400 dark:text-zinc-500 italic">
+                              Archivada el {new Date(cat.deleted_at).toLocaleDateString()}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
 
                     {/* Acciones */}
                     <div className="flex items-center gap-1.5 self-end sm:self-center shrink-0 flex-wrap">
-                      {/* Editar */}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleOpenEdit(cat)}
-                        className="h-8 px-2.5 text-xs text-stone-700 dark:text-zinc-300 hover:bg-stone-200/60 dark:hover:bg-zinc-800 rounded-lg font-medium cursor-pointer"
-                        title="Editar nombre, orden y estado"
-                      >
-                        <Edit2 className="w-3.5 h-3.5 mr-1 text-stone-500" />
-                        Editar
-                      </Button>
+                      {isArchived ? (
+                        /* Botón Restaurar desde papelera */
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={isLoadingAction}
+                          onClick={() => handleRestoreCategory(cat)}
+                          className="h-8 px-3 text-xs border-emerald-300 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 rounded-lg font-bold cursor-pointer transition flex items-center gap-1.5"
+                          title="Restaurar categoría al catálogo activo"
+                        >
+                          {isLoadingAction ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <RotateCcw className="w-3.5 h-3.5" />
+                          )}
+                          <span>Restaurar</span>
+                        </Button>
+                      ) : (
+                        /* Acciones Catálogo Activo */
+                        <>
+                          {/* Editar */}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleOpenEdit(cat)}
+                            className="h-8 px-2.5 text-xs text-stone-700 dark:text-zinc-300 hover:bg-stone-200/60 dark:hover:bg-zinc-800 rounded-lg font-medium cursor-pointer"
+                            title="Editar nombre, orden y estado"
+                          >
+                            <Edit2 className="w-3.5 h-3.5 mr-1 text-stone-500" />
+                            Editar
+                          </Button>
 
-                      {/* Alternar Activo/Inactivo */}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        disabled={isLoadingAction}
-                        onClick={() => handleToggleActive(cat)}
-                        className={cn(
-                          'h-8 px-2.5 text-xs rounded-lg font-medium transition cursor-pointer',
-                          cat.is_active
-                            ? 'text-stone-700 dark:text-zinc-300 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40'
-                            : 'text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 font-semibold'
-                        )}
-                        title={cat.is_active ? 'Desactivar de vitrina y caja' : 'Reactivar categoría'}
-                      >
-                        {isLoadingAction ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
-                        ) : (
-                          <Power className="w-3.5 h-3.5 mr-1" />
-                        )}
-                        {cat.is_active ? 'Desactivar' : 'Activar'}
-                      </Button>
+                          {/* Alternar Activo/Pausado */}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={isLoadingAction}
+                            onClick={() => handleToggleActive(cat)}
+                            className={cn(
+                              'h-8 px-2.5 text-xs rounded-lg font-medium transition cursor-pointer',
+                              cat.is_active
+                                ? 'text-stone-700 dark:text-zinc-300 hover:text-amber-600 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40'
+                                : 'text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 font-semibold'
+                            )}
+                            title={cat.is_active ? 'Pausar visibilidad en vitrina y caja' : 'Reactivar en vitrina y caja'}
+                          >
+                            {isLoadingAction ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                            ) : (
+                              <Power className="w-3.5 h-3.5 mr-1" />
+                            )}
+                            {cat.is_active ? 'Pausar' : 'Activar'}
+                          </Button>
 
-                      {/* Eliminar */}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setDeletingCategory(cat)}
-                        className="h-8 px-2.5 text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg font-medium cursor-pointer"
-                        title="Eliminar categoría"
-                      >
-                        <Trash2 className="w-3.5 h-3.5 mr-1" />
-                        Eliminar
-                      </Button>
+                          {/* Eliminar Lógico (Papelera) */}
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setDeletingCategory(cat)}
+                            className="h-8 px-2.5 text-xs text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg font-medium cursor-pointer"
+                            title="Mover a la papelera (eliminación lógica)"
+                          >
+                            <Trash2 className="w-3.5 h-3.5 mr-1" />
+                            Papelera
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
                 );
@@ -776,7 +931,7 @@ export function CategoriesClientView({ slug, initialCategories }: CategoriesClie
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 3: ELIMINAR CATEGORÍA (CONFIRMACIÓN SEGURA)                        */}
+      {/* MODAL 3: ELIMINAR LÓGICAMENTE (MOVER A PAPELERA / SOFT-DELETE)           */}
       {/* ========================================================================= */}
       {deletingCategory && (
         <div
@@ -785,18 +940,18 @@ export function CategoriesClientView({ slug, initialCategories }: CategoriesClie
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-white dark:bg-[#121214] border border-rose-200 dark:border-rose-950/60 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200"
+            className="bg-white dark:bg-[#121214] border border-amber-200 dark:border-amber-950/60 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200"
           >
             <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-rose-50 dark:bg-rose-950/50 border border-rose-200 dark:border-rose-900/60 flex items-center justify-center text-rose-600 dark:text-rose-400 shrink-0">
-                <AlertTriangle className="w-5 h-5" />
+              <div className="w-10 h-10 rounded-2xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900/60 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
+                <Archive className="w-5 h-5" />
               </div>
               <div className="space-y-1">
                 <h3 className="font-extrabold text-base text-stone-900 dark:text-white">
-                  ¿Eliminar categoría?
+                  ¿Mover categoría a la papelera?
                 </h3>
                 <p className="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed">
-                  Estás a punto de eliminar la categoría{' '}
+                  Estás a punto de archivar la categoría{' '}
                   <strong className="text-stone-900 dark:text-white font-bold">
                     &quot;{deletingCategory.name}&quot;
                   </strong>
@@ -805,21 +960,20 @@ export function CategoriesClientView({ slug, initialCategories }: CategoriesClie
               </div>
             </div>
 
-            {deletingCategory.product_count > 0 ? (
-              <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-900/40 text-xs text-amber-800 dark:text-amber-300">
-                <p className="font-bold flex items-center gap-1.5 mb-1">
-                  <Package className="w-3.5 h-3.5 shrink-0" />
-                  {deletingCategory.product_count} producto(s) vinculado(s)
-                </p>
-                <p className="text-[11px] leading-relaxed opacity-90">
-                  Tus productos no se borrarán. Quedarán conservados en tu inventario sin categoría asignada para que puedas reasignarlos cuando desees.
-                </p>
-              </div>
-            ) : (
-              <p className="text-xs text-stone-500 dark:text-zinc-400">
-                Esta categoría no tiene productos vinculados. Se eliminará de forma segura e inmediata.
+            <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-zinc-900 border border-stone-200/80 dark:border-zinc-800 text-xs text-stone-700 dark:text-zinc-300 space-y-2">
+              <p className="flex items-center gap-1.5 font-bold text-stone-800 dark:text-zinc-200">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                Eliminación Lógica Protegida (Soft-Delete)
               </p>
-            )}
+              <p className="text-[11px] leading-relaxed text-stone-500 dark:text-zinc-400">
+                La categoría dejará de mostrarse en la vitrina web y en caja. Ningún dato ni producto se eliminará de la base de datos, y podrás restaurarla cuando lo desees desde la pestaña &quot;Papelera / Archivadas&quot;.
+              </p>
+              {deletingCategory.product_count > 0 && (
+                <p className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                  {deletingCategory.product_count} producto(s) vinculado(s) conservan su referencia.
+                </p>
+              )}
+            </div>
 
             <div className="pt-3 border-t border-stone-200/80 dark:border-zinc-800 flex items-center justify-end gap-2">
               <Button
@@ -835,15 +989,18 @@ export function CategoriesClientView({ slug, initialCategories }: CategoriesClie
                 type="button"
                 onClick={handleConfirmDelete}
                 disabled={isDeleting}
-                className="h-10 px-5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs shadow-xs cursor-pointer"
+                className="h-10 px-5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-xs cursor-pointer flex items-center gap-1.5"
               >
                 {isDeleting ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
-                    Eliminando...
+                    Archivando...
                   </>
                 ) : (
-                  'Sí, Eliminar'
+                  <>
+                    <Archive className="w-4 h-4" />
+                    <span>Mover a Papelera</span>
+                  </>
                 )}
               </Button>
             </div>

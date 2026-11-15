@@ -26,6 +26,18 @@ export async function PATCH(
     const body = await request.json();
 
     const updated = await withTenantDb(tenant.db_schema_name, null, async (client) => {
+      // Soporte para restaurar categoría archivada (soft-deleted)
+      if (body.restore === true) {
+        const res = await client.query(
+          `UPDATE categories 
+           SET deleted_at = NULL, is_active = true, updated_at = now() 
+           WHERE id = $1 
+           RETURNING id, name, slug, sort_order, image_url, is_active, deleted_at, updated_at`,
+          [catId]
+        );
+        return res.rows[0] ?? null;
+      }
+
       const existingRes = await client.query('SELECT id, slug, name FROM categories WHERE id = $1', [catId]);
       if (existingRes.rows.length === 0) {
         return null;
@@ -73,7 +85,7 @@ export async function PATCH(
         UPDATE categories 
         SET ${sets.join(', ')} 
         WHERE id = $1 
-        RETURNING id, name, slug, sort_order, image_url, is_active, updated_at
+        RETURNING id, name, slug, sort_order, image_url, is_active, deleted_at, updated_at
       `;
       const res = await client.query(query, vals);
       return res.rows[0];
@@ -102,20 +114,24 @@ export async function DELETE(
     const { tenant } = await requireTenantStaffApi(slug, 'inventory');
 
     const result = await withTenantDb(tenant.db_schema_name, null, async (client) => {
-      // Eliminar categoría de la tabla. Las referencias en products(category_id)
-      // tienen ON DELETE SET NULL, garantizando que ningún producto sea eliminado.
+      // Eliminación lógica canónica (Soft-Delete)
+      // Se marca deleted_at = now() y se desactiva. No se eliminan filas físicas de la base de datos,
+      // preservando la trazabilidad de auditoría, métricas históricas y permitiendo restauración.
       const res = await client.query(
-        `DELETE FROM categories WHERE id = $1 RETURNING id, name`,
+        `UPDATE categories 
+         SET deleted_at = now(), is_active = false, updated_at = now() 
+         WHERE id = $1 AND deleted_at IS NULL 
+         RETURNING id, name, deleted_at`,
         [catId]
       );
       return res.rows[0];
     });
 
     if (!result) {
-      return NextResponse.json({ error: 'Categoría no encontrada' }, { status: 404 });
+      return NextResponse.json({ error: 'Categoría no encontrada o ya archivada' }, { status: 404 });
     }
 
-    return NextResponse.json({ success: true, deletedCategory: result });
+    return NextResponse.json({ success: true, softDeleted: true, deletedCategory: result });
   } catch (error) {
     if (error instanceof TenantAuthError) {
       return NextResponse.json({ error: error.message }, { status: error.statusCode });

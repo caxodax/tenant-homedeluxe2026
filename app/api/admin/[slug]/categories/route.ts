@@ -25,18 +25,32 @@ export async function GET(
     const { tenant } = await requireTenantStaffApi(slug, 'inventory');
     const { searchParams } = new URL(request.url);
     const activeOnly = searchParams.get('active_only') === 'true';
+    const deletedOnly = searchParams.get('deleted_only') === 'true';
+    const includeDeleted = searchParams.get('include_deleted') === 'true';
 
     const categories = await withTenantDb(tenant.db_schema_name, null, async (client) => {
       let query = `
-        SELECT c.id, c.name, c.slug, c.image_url, c.sort_order, c.is_active, c.created_at,
+        SELECT c.id, c.name, c.slug, c.image_url, c.sort_order, c.is_active, c.deleted_at, c.created_at,
                COUNT(p.id)::int as product_count
         FROM categories c
         LEFT JOIN products p ON p.category_id = c.id
       `;
       const values: unknown[] = [];
 
+      const conditions: string[] = [];
+
+      if (deletedOnly) {
+        conditions.push(`c.deleted_at IS NOT NULL`);
+      } else if (!includeDeleted) {
+        conditions.push(`c.deleted_at IS NULL`);
+      }
+
       if (activeOnly) {
-        query += ` WHERE c.is_active = true `;
+        conditions.push(`c.is_active = true`);
+      }
+
+      if (conditions.length > 0) {
+        query += ` WHERE ${conditions.join(' AND ')} `;
       }
 
       query += `
