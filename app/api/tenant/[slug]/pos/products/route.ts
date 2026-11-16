@@ -26,23 +26,25 @@ export async function GET(
     const activePlugins = pluginsRes.rows.map((r: { plugin_id: string }) => r.plugin_id);
 
     const data = await withTenantDb(db_schema_name, null, async (client) => {
-      const [pRes, sRes, storeRes, pmRows] = await Promise.all([
+      const [pRes, sRes, storeRes, pmRows, catRes] = await Promise.all([
         client.query(`
           SELECT 
-            id, 
-            name, 
-            sku, 
-            barcode,
-            price_primary, 
-            price_primary as price_usd, 
-            current_stock, 
-            min_stock_alert, 
-            category_id,
-            image_url,
-            is_tax_exempt
-          FROM products
-          WHERE is_active = true AND deleted_at IS NULL
-          ORDER BY name ASC
+            p.id, 
+            p.name, 
+            p.sku, 
+            p.barcode,
+            p.price_primary, 
+            p.price_primary as price_usd, 
+            p.current_stock, 
+            p.min_stock_alert, 
+            p.category_id,
+            c.name as category_name,
+            p.image_url,
+            p.is_tax_exempt
+          FROM products p
+          LEFT JOIN categories c ON c.id = p.category_id
+          WHERE p.is_active = true AND p.deleted_at IS NULL
+          ORDER BY p.name ASC
         `),
         client.query(`
           SELECT business_name, logo_url, primary_color, secondary_color, accent_color,
@@ -54,7 +56,7 @@ export async function GET(
         client.query(`
           SELECT id
           FROM stores
-          WHERE is_active = true AND deleted_at IS NULL
+          WHERE is_active = true
           ORDER BY created_at ASC
           LIMIT 1
         `),
@@ -63,6 +65,12 @@ export async function GET(
           onlyActive: true,
           channel: 'pos',
         }),
+        client.query(`
+          SELECT id, name
+          FROM categories
+          WHERE is_active = true AND deleted_at IS NULL
+          ORDER BY name ASC
+        `),
       ]);
 
       return {
@@ -70,11 +78,13 @@ export async function GET(
         settings: sRes.rows[0] ?? null,
         store_id: storeRes.rows[0]?.id || null,
         payment_methods: pmRows,
+        categories: catRes.rows,
       };
     });
 
     return NextResponse.json({
       products: data.products,
+      categories: data.categories,
       payment_methods: data.payment_methods,
       store_id: data.store_id,
       business_name: data.settings?.business_name || name || 'Comercio',

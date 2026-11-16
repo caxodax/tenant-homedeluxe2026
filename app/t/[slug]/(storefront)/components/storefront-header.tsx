@@ -73,10 +73,10 @@ export function StorefrontHeader({
         {/* Acciones: Tasa BCV, Atención, Favoritos, Tema y Carrito */}
         <div className="flex items-center gap-2 sm:gap-3">
           {effectiveRate > 0 && (
-            <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-zinc-800/80 border border-stone-200/80 dark:border-zinc-700/80 text-xs font-mono font-bold text-stone-800 dark:text-zinc-200">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>BCV ({primaryCurrency}):</span>
-              <span className="tenant-primary-text font-black">
+            <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-500/10 dark:bg-emerald-500/15 border border-emerald-500/30 text-xs font-mono font-bold text-emerald-950 dark:text-emerald-200">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+              <span className="text-stone-600 dark:text-zinc-400">BCV ({primaryCurrency}):</span>
+              <span className="font-extrabold text-stone-950 dark:text-white">
                 Bs. {effectiveRate.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
@@ -115,23 +115,27 @@ export function StorefrontHeader({
           {/* Botón Carrito en Header con Badge Despegado y Espaciado Óptico */}
           <Link
             href={`/t/${slug}/cart`}
-            className="relative flex items-center gap-2 px-3.5 py-2.5 rounded-2xl tenant-primary-bg text-white font-extrabold text-xs shadow-sm hover:brightness-105 active:scale-[0.98] transition-all group"
+            className="relative flex items-center gap-2 px-3.5 py-2.5 rounded-2xl tenant-primary-bg text-white font-extrabold text-xs shadow-md hover:brightness-105 active:scale-[0.98] transition-all group select-none"
+            style={{ backgroundColor: 'var(--tenant-primary, #dc2626)', color: 'var(--tenant-contrast, #ffffff)' }}
           >
             <div className="relative flex items-center justify-center">
               <ShoppingBag className="w-4 h-4 text-white" />
               {totalItems > 0 && (
-                <span className="absolute -top-2.5 -right-3 min-w-[20px] h-[20px] px-1 rounded-full bg-stone-950 text-white dark:bg-white dark:text-stone-950 text-[10px] font-black font-mono flex items-center justify-center ring-2 ring-white dark:ring-[#121214] shadow-xs">
+                <span 
+                  className="absolute -top-2.5 -right-3 min-w-[20px] h-[20px] px-1 rounded-full bg-white text-stone-950 font-black font-mono text-[10px] flex items-center justify-center shadow-md border"
+                  style={{ borderColor: 'var(--tenant-primary, #dc2626)' }}
+                >
                   {totalItems}
                 </span>
               )}
             </div>
 
-            <div className="hidden sm:flex flex-col text-left font-mono leading-tight pl-1">
-              <span className="font-black text-xs">
+            <div className="hidden sm:flex flex-col text-left font-mono leading-tight pl-1.5">
+              <span className="font-black text-xs text-white">
                 {currencySymbol}{totalPrice.toFixed(2)}
               </span>
               {totalBs && (
-                <span className="text-[9px] font-bold text-white/80">
+                <span className="text-[10px] font-bold text-white/90">
                   Bs. {Number(totalBs).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               )}

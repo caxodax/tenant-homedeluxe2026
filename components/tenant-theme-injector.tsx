@@ -52,6 +52,19 @@ export function TenantThemeInjector({
       --tenant-secondary-contrast: ${secondaryContrast};
       --tenant-accent: ${safeAccent};
     }
+    .tenant-primary-bg {
+      background-color: ${safePrimary} !important;
+      color: ${primaryContrast} !important;
+    }
+    .tenant-primary-text {
+      color: ${safePrimary} !important;
+    }
+    .tenant-primary-border {
+      border-color: ${safePrimary} !important;
+    }
+    .tenant-primary-ring {
+      --tw-ring-color: ${safePrimary} !important;
+    }
     .tenant-secondary-surface {
       background-color: ${safeSecondary} !important;
       color: ${secondaryContrast} !important;

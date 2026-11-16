@@ -203,6 +203,18 @@ Plataforma SaaS Multi-Tenant de Comercio Universal (Minimarkets, Retail, Restaur
 - **Barra Flotante Inferior Móvil**: Barra fija al final de la pantalla que exhibe el conteo de ítems, el subtotal bimonetario (`USD` / `Bs.`) y acceso directo `Ver Carrito →`.
 - **Alineación Geométrica de Cesta**: Separación y anillo de contraste (`ring-2 ring-white`) para el badge numérico del carrito en el Header, erradicando cualquier solapamiento con el icono.
 
+### ✅ FASE 4.3: Terminal POS Móvil Táctil & Filtrado Rápido de Categorías
+- **Catálogo POS a 2 Columnas Móvil (`grid-cols-2`)**: Cuadrícula táctil simétrica adaptada al estándar de la Vitrina Digital, con tarjetas compactas cuadradas, fotos 1:1 y estados activos hápticos (`active:scale-[0.98]`).
+- **Precios Bimonetarios en Vivo**: Moneda primaria en tipografía mono destacada y moneda secundaria calculada en tiempo real según la tasa oficial activa del día (BCV).
+- **Régimen Fiscal Condicional**: Desglose automático de IVA unitario (`+IVA` o `IVA Inc.`) en USD y Bs. solo cuando el tenant tiene activado `tax_enabled: true`. En modo no fiscal, la interfaz se mantiene 100% limpia sin etiquetas parásitas.
+- **Botón Rápido [+] de Mostrador**: Añade 1 unidad al ticket instantáneamente con confirmación háptica/toast sin abrir modales, agilizando el despacho rápido.
+- **Modal / Bottom Sheet de Detalle de Producto**: Desliza al tocar cualquier parte de la tarjeta para inspeccionar stock real disponible, desglose fiscal completo y selector táctil ergonómico de cantidad (`[-] [Cantidad] [+]`).
+- **Barra Flotante de Ticket en Móvil**: Barra inferior fija cuando hay productos en el ticket con badge de cesta, conteo, total bimonetario consolidado y botón de apertura `Ver Ticket →`.
+- **Bottom Sheet de Ticket y Cobro**: Panel deslizable desde la parte inferior para modificar cantidades o eliminar ítems, resumen fiscal y acceso directo al flujo de cobro con métodos de pago registrados.
+- **Combobox de Categorías en POS**: Selector desplegable con conteo en vivo de productos por categoría y filtrado instantáneo combinado con búsqueda por nombre, SKU y código de barras.
+- **Corrección de Zona Horaria en Histórico de Tasas (`/admin/rates`)**: Implementación del parseador seguro `formatRateDate` que fija mediodía local para evitar el desplazamiento de 1 día provocado por la medianoche UTC en husos horarios negativos (Venezuela UTC-4).
+- **Corrección de Consulta de Sedes en POS (`route.ts`)**: Eliminación del filtro `deleted_at` inexistente sobre la tabla `stores`, garantizando respuesta `200 OK` en el catálogo de caja.
+
 ---
 
 ## 🛠️ Variables de Entorno (`.env.local`)

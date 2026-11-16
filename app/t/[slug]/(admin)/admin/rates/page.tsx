@@ -158,15 +158,36 @@ export default function RatesAdminPage() {
   const liveUsdt = data?.liveBcv?.usdtRate || (liveUsd > 0 ? liveUsd * 1.15 : 0);
   const activeEffectiveRate = data?.activeRate || liveUsd;
 
-  // Fecha valor / timestamp
+  // Fecha valor / timestamp seguro sin desplazamiento UTC
+  const formatRateDate = (dateStr: string | null | undefined) => {
+    if (!dateStr) return { dayName: '—', isoDate: '' };
+    const isoDate = dateStr.split('T')[0] || '';
+    const parts = isoDate.split('-');
+    if (parts.length === 3) {
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const day = parseInt(parts[2], 10);
+      const d = new Date(year, month, day, 12, 0, 0);
+      const dayName = d.toLocaleDateString('es-VE', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+      return { dayName, isoDate };
+    }
+    const dObj = new Date(dateStr);
+    return {
+      dayName: isNaN(dObj.getTime()) ? isoDate : dObj.toLocaleDateString('es-VE', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }),
+      isoDate,
+    };
+  };
+
   const dateStr = data?.liveBcv?.timestamp
-    ? new Date(data.liveBcv.timestamp).toISOString().split('T')[0]
+    ? data.liveBcv.timestamp.split('T')[0]
     : new Date().toISOString().split('T')[0];
 
   const dateReadable = useMemo(() => {
     try {
-      const d = data?.liveBcv?.timestamp ? new Date(data.liveBcv.timestamp) : new Date();
-      return d.toLocaleDateString('es-VE', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+      if (data?.liveBcv?.timestamp) {
+        return formatRateDate(data.liveBcv.timestamp).dayName;
+      }
+      return new Date().toLocaleDateString('es-VE', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
     } catch {
       return dateStr;
     }
@@ -443,9 +464,7 @@ export default function RatesAdminPage() {
                       const eur = item.rate_eur_usd ? parseFloat(item.rate_eur_usd) : null;
                       const usdt = item.rate_usdt ? parseFloat(item.rate_usdt) : null;
                       const variation = item.variation ?? 0;
-                      const dObj = new Date(item.date_rate);
-                      const dayName = dObj.toLocaleDateString('es-VE', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
-                      const isoDate = item.date_rate?.split('T')[0] || '';
+                      const { dayName, isoDate } = formatRateDate(item.date_rate);
 
                       return (
                         <tr key={item.id} className="hover:bg-stone-50/60 dark:hover:bg-zinc-900/40 transition-colors">
@@ -506,9 +525,7 @@ export default function RatesAdminPage() {
               const eur = item.rate_eur_usd ? parseFloat(item.rate_eur_usd) : null;
               const usdt = item.rate_usdt ? parseFloat(item.rate_usdt) : null;
               const variation = item.variation ?? 0;
-              const dObj = new Date(item.date_rate);
-              const dayName = dObj.toLocaleDateString('es-VE', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
-              const isoDate = item.date_rate?.split('T')[0] || '';
+              const { dayName, isoDate } = formatRateDate(item.date_rate);
 
               return (
                 <div

@@ -155,25 +155,22 @@ export function ProductCard({
             </button>
           </div>
 
-          {/* Categoría y SKU reubicados en la sección de información */}
-          <div className="flex items-center gap-1.5 flex-wrap mb-1">
+          {/* Categoría y SKU reubicados en la sección de información con alto contraste */}
+          <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
             {product.category_name && (
-              <span className="text-[10px] font-bold text-stone-500 dark:text-zinc-400 uppercase tracking-wider">
+              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-stone-100 dark:bg-zinc-800 text-stone-600 dark:text-zinc-300 uppercase tracking-wider">
                 {product.category_name}
               </span>
             )}
-            {product.category_name && product.sku && (
-              <span className="text-stone-300 dark:text-zinc-600 text-[10px]">·</span>
-            )}
             {product.sku && (
-              <span className="text-[10px] font-mono text-stone-400 dark:text-zinc-500">
+              <span className="text-[10px] font-mono font-medium text-stone-400 dark:text-zinc-500">
                 {product.sku}
               </span>
             )}
           </div>
 
           {/* Título del Producto */}
-          <h3 className="text-xs sm:text-sm font-extrabold text-stone-900 dark:text-white line-clamp-2 leading-snug group-hover:tenant-primary-text transition-colors min-h-[2rem]">
+          <h3 className="text-xs sm:text-sm font-extrabold text-stone-900 dark:text-white line-clamp-2 leading-snug transition-colors min-h-[2.25rem]">
             {product.name}
           </h3>
         </div>
@@ -181,7 +178,10 @@ export function ProductCard({
         {/* Sección de Precios y Botón de Acción */}
         <div className="mt-3 pt-2.5 border-t border-stone-100 dark:border-zinc-800/80">
           <div className="flex items-baseline gap-1 font-mono">
-            <span className="text-base sm:text-lg font-black tenant-primary-text tracking-tight">
+            <span 
+              className="text-base sm:text-lg font-black tracking-tight"
+              style={{ color: 'var(--tenant-primary, #dc2626)' }}
+            >
               {currencySymbol}{price.toFixed(2)}
             </span>
             <span className="text-[10px] font-bold text-stone-400 uppercase">
@@ -190,7 +190,7 @@ export function ProductCard({
           </div>
 
           {priceBs !== null && (
-            <p className="text-[11px] font-mono font-bold text-stone-500 dark:text-zinc-400">
+            <p className="text-[11px] font-mono font-bold text-stone-600 dark:text-zinc-300">
               Bs. {priceBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
           )}
@@ -201,7 +201,7 @@ export function ProductCard({
               <button
                 type="button"
                 disabled
-                className="w-full h-9 rounded-xl bg-stone-200 dark:bg-zinc-800 text-stone-400 dark:text-zinc-500 font-extrabold text-xs cursor-not-allowed text-center select-none"
+                className="w-full h-9 rounded-xl bg-stone-100 dark:bg-zinc-800 text-stone-400 dark:text-zinc-500 font-extrabold text-xs cursor-not-allowed text-center select-none"
               >
                 Agotado
               </button>
@@ -209,10 +209,10 @@ export function ProductCard({
               <button
                 type="button"
                 onClick={handleQuickAdd}
-                className={`w-full h-9 rounded-xl font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs ${
+                className={`w-full h-9 rounded-xl font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs ${
                   isAdded
                     ? 'bg-emerald-500 text-white'
-                    : 'bg-stone-100 dark:bg-zinc-800 hover:tenant-primary-bg hover:text-white text-stone-800 dark:text-zinc-200'
+                    : 'bg-stone-100 hover:bg-stone-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-stone-800 dark:text-zinc-100'
                 }`}
               >
                 <Plus className="w-3.5 h-3.5 stroke-[2.5]" />

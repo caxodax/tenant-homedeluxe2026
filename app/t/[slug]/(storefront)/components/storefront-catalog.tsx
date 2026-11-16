@@ -97,36 +97,44 @@ export function StorefrontCatalog({
   }
 
   return (
-    <div className="space-y-6 sm:space-y-8 pb-24 sm:pb-16">
-      {/* Hero Banner de la Vitrina */}
-      <section className="relative rounded-3xl overflow-hidden tenant-secondary-surface border-b-4 border-stone-200 dark:border-zinc-800 p-6 sm:p-10 shadow-sm">
+    <div className="space-y-6 sm:space-y-8 pb-32 sm:pb-20">
+      {/* Hero Banner de la Vitrina con Contraste y Simetría Impeccable */}
+      <section className="relative rounded-3xl overflow-hidden bg-white dark:bg-[#141416] border border-stone-200/90 dark:border-zinc-800/80 p-6 sm:p-10 shadow-sm border-l-6"
+        style={{ borderLeftColor: 'var(--tenant-primary, #dc2626)' }}
+      >
         {bannerUrl && (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={bannerUrl}
             alt={`Banner de ${businessName}`}
-            className="absolute inset-0 w-full h-full object-cover opacity-15 pointer-events-none"
+            className="absolute inset-0 w-full h-full object-cover opacity-10 pointer-events-none"
           />
         )}
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
           <div className="max-w-2xl space-y-2.5">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black tenant-primary-bg text-white shadow-xs w-fit">
+            <div 
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black text-white shadow-xs w-fit"
+              style={{ backgroundColor: 'var(--tenant-primary, #dc2626)' }}
+            >
               <Sparkles className="w-3.5 h-3.5" />
               <span>Retiro inmediato en mostrador (Pick-up)</span>
             </div>
 
             <h1 className="text-2xl sm:text-4xl font-black tracking-tight leading-tight text-stone-950 dark:text-white">
-              Catálogo Online de <span className="tenant-primary-text">{businessName}</span>
+              Catálogo Online de{' '}
+              <span style={{ color: 'var(--tenant-primary, #dc2626)' }}>
+                {businessName}
+              </span>
             </h1>
 
-            <p className="text-xs sm:text-sm tenant-secondary-muted font-medium leading-relaxed">
+            <p className="text-xs sm:text-sm text-stone-600 dark:text-zinc-400 font-medium leading-relaxed">
               Explora nuestros productos con inventario y precios actualizados en tiempo real. 
               Arma tu pedido y retira en tienda física sin filas.
             </p>
           </div>
 
           {logoUrl && (
-            <div className="hidden md:flex w-24 h-24 rounded-3xl bg-white p-2.5 items-center justify-center shrink-0 shadow-md border border-stone-200 dark:border-zinc-700">
+            <div className="hidden md:flex w-24 h-24 rounded-3xl bg-white dark:bg-zinc-900 p-2.5 items-center justify-center shrink-0 shadow-md border border-stone-200 dark:border-zinc-700">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={logoUrl} alt={businessName} className="w-full h-full object-contain" />
             </div>
