@@ -44,6 +44,7 @@ export interface Product {
   slug: string;
   sku: string | null;
   barcode: string | null;
+  price_primary?: number | string;
   price_usd: number | string;
   cost_price?: number | string | null;
   current_stock: number;
@@ -489,6 +490,7 @@ export default function InventoryPage() {
       const payload = {
         name: trimmedName,
         category_id: formCategoryId || null,
+        price_primary: price,
         price_usd: price,
         cost_price: isNaN(cost as number) ? null : cost,
         current_stock: stock,
@@ -690,7 +692,11 @@ export default function InventoryPage() {
 
         <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
           {exchangeRate > 0 && (
-            <div className="px-3 py-1.5 rounded-xl border border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs flex items-center gap-1.5 font-bold font-mono text-stone-800 dark:text-zinc-200 shadow-2xs">
+            <Link
+              href={`/t/${slug}/admin/rates`}
+              className="px-3 py-1.5 rounded-xl border border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:bg-stone-50 dark:hover:bg-zinc-800 text-xs flex items-center gap-1.5 font-bold font-mono text-stone-800 dark:text-zinc-200 shadow-2xs transition cursor-pointer"
+              title="Ver monitor oficial BCV y fijación de tasas"
+            >
               <span className="text-[11px] text-emerald-600 dark:text-emerald-400">Bs.</span>
               <span>
                 {exchangeRate.toLocaleString('es-VE', {
@@ -699,7 +705,7 @@ export default function InventoryPage() {
                 })}
               </span>
               <RefreshCw className="w-3 h-3 text-stone-400 ml-0.5" />
-            </div>
+            </Link>
           )}
 
           <Link

@@ -12,7 +12,8 @@ const ProductSchema = z.object({
   barcode: z.string().optional().nullable(),
   category_id: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
-  price_usd: z.number().positive('El precio debe ser mayor a 0'),
+  price_primary: z.number().positive('El precio debe ser mayor a 0').optional(),
+  price_usd: z.number().positive('El precio debe ser mayor a 0').optional(),
   current_stock: z.number().nonnegative('El stock no puede ser negativo'),
   min_stock_alert: z.number().nonnegative().default(5),
   image_url: z.string().optional().nullable(),
@@ -36,11 +37,14 @@ export async function createProduct(slug: string, input: ProductInput) {
       barcode,
       category_id,
       description,
+      price_primary,
       price_usd,
       current_stock,
       min_stock_alert,
       image_url,
     } = validated.data;
+
+    const finalPrice = Math.max(0.01, Number(price_primary ?? price_usd ?? 0));
 
     // Validar sesión y permisos RBAC de inventario
     const { tenant } = await requireTenantStaffApi(slug, 'inventory');
@@ -57,13 +61,13 @@ export async function createProduct(slug: string, input: ProductInput) {
       const pRes = await client.query(
         `INSERT INTO products (
           id, category_id, name, slug, description, sku, barcode,
-          image_url, price_usd, current_stock, min_stock_alert,
+          image_url, price_primary, current_stock, min_stock_alert,
           track_inventory, is_tax_exempt, is_active, created_at, updated_at
         ) VALUES (
           gen_random_uuid(), $1, $2, $3, $4, $5, $6,
           $7, $8, $9, $10,
           true, false, true, now(), now()
-        ) RETURNING id, name, sku, price_usd, current_stock, image_url`,
+        ) RETURNING id, name, sku, price_primary, price_primary as price_usd, current_stock, image_url`,
         [
           category_id || null,
           name,
@@ -72,7 +76,7 @@ export async function createProduct(slug: string, input: ProductInput) {
           sku,
           barcode || null,
           image_url || null,
-          price_usd,
+          finalPrice,
           current_stock,
           min_stock_alert,
         ]
@@ -125,11 +129,14 @@ export async function updateProduct(slug: string, productId: string, input: Prod
       barcode,
       category_id,
       description,
+      price_primary,
       price_usd,
       current_stock,
       min_stock_alert,
       image_url,
     } = validated.data;
+
+    const finalPrice = Math.max(0.01, Number(price_primary ?? price_usd ?? 0));
 
     const { tenant } = await requireTenantStaffApi(slug, 'inventory');
     const db_schema_name = tenant.db_schema_name;
@@ -143,7 +150,7 @@ export async function updateProduct(slug: string, productId: string, input: Prod
           barcode = $3,
           category_id = $4,
           description = $5,
-          price_usd = $6,
+          price_primary = $6,
           current_stock = $7,
           min_stock_alert = $8,
           image_url = $9,
@@ -155,7 +162,7 @@ export async function updateProduct(slug: string, productId: string, input: Prod
           barcode || null,
           category_id || null,
           description || null,
-          price_usd,
+          finalPrice,
           current_stock,
           min_stock_alert,
           image_url || null,

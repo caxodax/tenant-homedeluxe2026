@@ -346,6 +346,44 @@ export async function fetchOfficialBcvRate(): Promise<BcvRateInfo> {
 }
 
 // ============================================================================
+// 4.1 REGÍMENES DE CONVERSIÓN A BOLÍVARES (V4)
+// ============================================================================
+
+export type BcvRegimeMode =
+  | 'bcv_direct'
+  | 'bcv_average'
+  | 'bcv_cross_eur'
+  | 'custom_spread';
+
+export interface BcvRegimeConfig {
+  mode: BcvRegimeMode;
+  customRate?: number;
+}
+
+export function calculateEffectiveRate(
+  regime: BcvRegimeConfig,
+  liveRates: BcvRateInfo,
+  primaryCurrency: string = 'USD'
+): number {
+  const usd = liveRates.usdRate > 0 ? liveRates.usdRate : 904.4485;
+  const eur = (liveRates.eurRate && liveRates.eurRate > 0) ? liveRates.eurRate : usd;
+
+  switch (regime.mode) {
+    case 'bcv_average':
+      return Number(((usd + eur) / 2).toFixed(4));
+    case 'bcv_cross_eur':
+      return Number(eur.toFixed(4));
+    case 'custom_spread':
+      return regime.customRate && regime.customRate > 0
+        ? Number(regime.customRate.toFixed(4))
+        : Number(usd.toFixed(4));
+    case 'bcv_direct':
+    default:
+      return primaryCurrency === 'EUR' ? Number(eur.toFixed(4)) : Number(usd.toFixed(4));
+  }
+}
+
+// ============================================================================
 // 5. EXPORTACIÓN DE LIBRO DE VENTAS SENIAT (CSV)
 // Art. 56 Ley del IVA & Providencia Administrativa SNAT/2011/00071
 // ============================================================================

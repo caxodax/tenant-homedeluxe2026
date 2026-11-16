@@ -99,7 +99,7 @@ const SETTINGS_SECTIONS: SettingsSection[] = [
   { id: 'general', label: 'General & Datos Básicos', description: 'Nombre comercial, dirección física y monedas canónicas', icon: Store },
   { id: 'branding', label: 'Marca & Logo', description: 'Colores corporativos, logotipo y banner de tienda', icon: Palette },
   { id: 'payments', label: 'Métodos de Pago', description: 'Pasarelas, cuentas y formas de cobro habilitadas', icon: CreditCard },
-  { id: 'bcv', label: 'Tasa & Moneda (BCV)', description: 'Sincronización cambiaria oficial, Pago Móvil e IGTF', icon: Coins, pluginId: 'local_venezuela', badge: 'Plugin VE' },
+  { id: 'bcv', label: 'Moneda & BCV', description: 'Moneda base de catálogo, regímenes de conversión oficial y simulador en vivo', icon: Coins, pluginId: 'local_venezuela', badge: 'Plugin VE' },
   { id: 'contact', label: 'Contacto & Contingencia', description: 'WhatsApp de atención y modo offline de contingencia', icon: MessageCircle },
   { id: 'social', label: 'Redes Sociales', description: 'Canales y enlaces directos a perfiles sociales', icon: Share2 },
 ];

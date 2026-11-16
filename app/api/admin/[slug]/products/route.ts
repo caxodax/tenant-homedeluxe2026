@@ -13,7 +13,8 @@ const productSchema = z.object({
   sku: z.string().optional().nullable(),
   barcode: z.string().optional().nullable(),
   category_id: z.string().optional().nullable(),
-  price_usd: z.number().min(0, 'Precio debe ser >= 0'),
+  price_primary: z.number().min(0, 'Precio debe ser >= 0').optional(),
+  price_usd: z.number().min(0, 'Precio debe ser >= 0').optional(),
   cost_price: z.number().min(0).optional().nullable(),
   is_tax_exempt: z.boolean().default(false),
   track_inventory: z.boolean().default(true),
@@ -44,7 +45,8 @@ export async function GET(
       }
 
       const res = await client.query(
-        `SELECT p.id, p.name, p.slug, p.description, p.sku, p.barcode, p.price_usd, 
+        `SELECT p.id, p.name, p.slug, p.description, p.sku, p.barcode, 
+                p.price_primary, p.price_primary as price_usd,
                 p.cost_price, p.current_stock, p.min_stock_alert, p.is_active, 
                 p.deleted_at, p.image_url, p.is_tax_exempt, p.track_inventory,
                 c.name as category_name, c.id as category_id
@@ -106,6 +108,7 @@ export async function POST(
     }
 
     const data = parsed.data;
+    const finalPrice = Math.max(0, Number(data.price_primary ?? data.price_usd ?? 0));
     const productSlug = data.slug || data.name
       .toLowerCase()
       .trim()
@@ -116,13 +119,16 @@ export async function POST(
       const pRes = await client.query(
         `INSERT INTO products (
           id, category_id, name, slug, description, sku, barcode,
-          image_url, price_usd, cost_price, current_stock, min_stock_alert,
+          image_url, price_primary, cost_price, current_stock, min_stock_alert,
           track_inventory, is_tax_exempt, is_active, created_at, updated_at
         ) VALUES (
           gen_random_uuid(), $1, $2, $3, $4, $5, $6,
           $7, $8, $9, $10, $11,
           $12, $13, $14, now(), now()
-        ) RETURNING *`,
+        ) RETURNING id, category_id, name, slug, description, sku, barcode,
+                    image_url, price_primary, price_primary as price_usd,
+                    cost_price, current_stock, min_stock_alert,
+                    track_inventory, is_tax_exempt, is_active, created_at, updated_at`,
         [
           data.category_id || null,
           data.name,
@@ -131,7 +137,7 @@ export async function POST(
           data.sku || null,
           data.barcode || null,
           data.image_url || null,
-          data.price_usd,
+          finalPrice,
           data.cost_price || 0,
           data.current_stock,
           data.min_stock_alert,

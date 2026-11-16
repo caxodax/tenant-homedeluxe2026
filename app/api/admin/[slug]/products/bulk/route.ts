@@ -20,7 +20,8 @@ function slugify(text: string): string {
 interface BulkProductRow {
   name: string;
   category_name?: string;
-  price_usd: number;
+  price_primary?: number;
+  price_usd?: number;
   current_stock?: number;
   sku?: string;
   barcode?: string;
@@ -62,7 +63,7 @@ export async function POST(
         const rawName = (item.name || '').trim();
         if (!rawName) continue;
 
-        const price = Math.max(0, Number(item.price_usd) || 0);
+        const price = Math.max(0, Number(item.price_primary ?? item.price_usd) || 0);
         const stock = Math.max(0, Number(item.current_stock) || 0);
         const sku = item.sku ? item.sku.trim() : null;
         const barcode = item.barcode ? item.barcode.trim() : null;
@@ -107,7 +108,7 @@ export async function POST(
         // Insertar producto
         const insertRes = await client.query(
           `INSERT INTO products (
-             name, slug, category_id, price_usd, current_stock, 
+             name, slug, category_id, price_primary, current_stock, 
              sku, barcode, is_tax_exempt, description, is_active
            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
            RETURNING id`,

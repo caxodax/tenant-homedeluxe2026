@@ -70,8 +70,8 @@ export default async function ReportsPage({
     const summaryRes = await client.query(`
       SELECT
         COUNT(*)::int AS total_orders,
-        COALESCE(SUM(total_usd), 0) AS total_revenue_usd,
-        COALESCE(AVG(total_usd), 0) AS avg_ticket_usd
+        COALESCE(SUM(total_primary), 0) AS total_revenue_usd,
+        COALESCE(AVG(total_primary), 0) AS avg_ticket_usd
       FROM orders
       WHERE status != 'CANCELLED'
         AND created_at >= $1 AND created_at <= $2
@@ -85,7 +85,7 @@ export default async function ReportsPage({
           ELSE delivery_type
         END AS channel,
         COUNT(*)::int AS orders_count,
-        COALESCE(SUM(total_usd), 0) AS total_usd
+        COALESCE(SUM(total_primary), 0) AS total_usd
       FROM orders
       WHERE status != 'CANCELLED'
         AND created_at >= $1 AND created_at <= $2
@@ -129,7 +129,7 @@ export default async function ReportsPage({
         COALESCE(p.name, oi.product_name) AS name,
         COALESCE(p.sku, 'SIN-SKU') AS sku,
         SUM(oi.quantity) AS units_sold,
-        SUM(oi.total_price_usd) AS revenue_usd,
+        SUM(oi.total_price_primary) AS revenue_usd,
         SUM(oi.quantity * COALESCE(p.cost_price, 0)) AS est_cost_usd
       FROM order_items oi
       JOIN orders o ON oi.order_id = o.id
@@ -146,7 +146,7 @@ export default async function ReportsPage({
       SELECT
         to_char(date_trunc('day', created_at), 'DD/MM') AS day,
         date_trunc('day', created_at) AS raw_day,
-        COALESCE(SUM(total_usd), 0) AS revenue,
+        COALESCE(SUM(total_primary), 0) AS revenue,
         COUNT(*)::int AS orders
       FROM orders
       WHERE status != 'CANCELLED'
@@ -158,7 +158,7 @@ export default async function ReportsPage({
     // 6. Margen bruto
     const marginRes = await client.query(`
       SELECT
-        COALESCE(SUM(oi.total_price_usd), 0) AS tracked_revenue,
+        COALESCE(SUM(oi.total_price_primary), 0) AS tracked_revenue,
         COALESCE(SUM(oi.quantity * p.cost_price), 0) AS tracked_cost
       FROM order_items oi
       JOIN orders o ON o.id = oi.order_id
@@ -183,7 +183,7 @@ export default async function ReportsPage({
           WHEN o.is_offline_sale = true OR o.delivery_type = 'POS_DESK' THEN 'Mostrador POS'
           ELSE 'Vitrina Web'
         END AS channel,
-        o.total_usd,
+        o.total_primary AS total_usd,
         o.total_secondary,
         o.exchange_rate_applied,
         o.status,

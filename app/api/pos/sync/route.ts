@@ -14,15 +14,22 @@ const saleSchema = z.object({
     product_id: z.string().min(1, 'ID de producto requerido'),
     product_name: z.string(),
     quantity: z.number().positive(),
-    unit_price_usd: z.number().nonnegative(),
-    total_price_usd: z.number().nonnegative(),
+    unit_price_primary: z.number().nonnegative().optional(),
+    unit_price_usd: z.number().nonnegative().optional(),
+    total_price_primary: z.number().nonnegative().optional(),
+    total_price_usd: z.number().nonnegative().optional(),
     metadata: z.record(z.string(), z.unknown()).optional(),
   })).min(1),
-  subtotal_usd: z.number().nonnegative(),
-  discount_usd: z.number().nonnegative().default(0),
-  tax_usd: z.number().nonnegative().default(0),
-  shipping_usd: z.number().nonnegative().default(0),
-  total_usd: z.number().nonnegative(),
+  subtotal_primary: z.number().nonnegative().optional(),
+  subtotal_usd: z.number().nonnegative().optional(),
+  discount_primary: z.number().nonnegative().default(0).optional(),
+  discount_usd: z.number().nonnegative().default(0).optional(),
+  tax_primary: z.number().nonnegative().default(0).optional(),
+  tax_usd: z.number().nonnegative().default(0).optional(),
+  shipping_primary: z.number().nonnegative().default(0).optional(),
+  shipping_usd: z.number().nonnegative().default(0).optional(),
+  total_primary: z.number().nonnegative().optional(),
+  total_usd: z.number().nonnegative().optional(),
   total_secondary: z.number().nonnegative().optional().nullable(),
   exchange_rate_applied: z.number().positive().default(1.0),
   offline_ticket_ref: z.string().min(1),
@@ -83,11 +90,28 @@ export async function POST(request: NextRequest) {
         : defaultStoreId || sale.store_id;
       const phone = sale.customer_phone?.trim();
       const resolvedPhone = phone && phone.length >= 7 ? phone : '0000000000';
+      const tot = sale.total_primary ?? sale.total_usd ?? 0;
+      const sub = sale.subtotal_primary ?? sale.subtotal_usd ?? tot;
 
       return {
         ...sale,
+        total_primary: tot,
+        total_usd: tot,
+        subtotal_primary: sub,
+        subtotal_usd: sub,
         store_id: resolvedStoreId,
         customer_phone: resolvedPhone,
+        items: sale.items.map((i) => {
+          const up = i.unit_price_primary ?? i.unit_price_usd ?? 0;
+          const tp = i.total_price_primary ?? i.total_price_usd ?? Number((up * i.quantity).toFixed(2));
+          return {
+            ...i,
+            unit_price_primary: up,
+            unit_price_usd: up,
+            total_price_primary: tp,
+            total_price_usd: tp,
+          };
+        }),
       };
     });
     
@@ -106,7 +130,7 @@ export async function POST(request: NextRequest) {
         (d: { status?: string; order_id?: string }) => d.status === 'RECONCILED'
       );
       const batchTotalUsd = normalizedBatch.reduce(
-        (sum, sale) => sum + Number(sale.total_usd || 0),
+        (sum, sale) => sum + Number(sale.total_primary || sale.total_usd || 0),
         0
       );
 

@@ -105,7 +105,7 @@ export default function ProductFormPage() {
         sku: data.sku || '',
         barcode: data.barcode || '',
         category_id: data.category_id || undefined,
-        price_usd: parseFloat(data.price_usd),
+        price_usd: parseFloat(data.price_primary || data.price_usd || '0'),
         cost_price: parseFloat(data.cost_price) || 0,
         is_tax_exempt: data.is_tax_exempt ?? false,
         track_inventory: data.track_inventory ?? true,
@@ -131,7 +131,7 @@ export default function ProductFormPage() {
       const res = await fetch(url, {
         method: isEditing ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, price_primary: data.price_usd }),
       });
 
       if (res.ok) {
@@ -318,12 +318,12 @@ export default function ProductFormPage() {
           <TabsContent value="pricing" className="space-y-4">
             <Card className="border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#121214]">
               <CardHeader>
-                <CardTitle className="text-slate-900 dark:text-white text-sm font-extrabold">Precios e Impuestos (Core en USD)</CardTitle>
+                <CardTitle className="text-slate-900 dark:text-white text-sm font-extrabold">Precios e Impuestos (Moneda Principal)</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="price_usd">Precio de Venta Base (USD $) *</Label>
+                    <Label htmlFor="price_usd">Precio de Venta Base *</Label>
                     <Input
                       id="price_usd"
                       type="number"

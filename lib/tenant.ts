@@ -194,32 +194,32 @@ export const getCachedStorefrontCatalog = cache(
     return unstable_cache(
       async () => {
         const raw = await withTenantDb(dbSchemaName, null, async (client) => {
-          const [productsRes, categoriesRes] = await Promise.all([
-            client.query(`
-              SELECT
-                p.id,
-                p.name,
-                p.slug,
-                p.description,
-                p.barcode,
-                p.sku,
-                p.price_usd,
-                p.current_stock,
-                p.min_stock_alert,
-                p.image_url,
-                p.is_tax_exempt,
-                c.name AS category_name
-              FROM products p
-              LEFT JOIN categories c ON p.category_id = c.id
-              WHERE p.is_active = true
-              ORDER BY p.name ASC
-            `),
-            client.query(`
-              SELECT id, name, slug
-              FROM categories
-              ORDER BY name ASC
-            `),
-          ]);
+          const productsRes = await client.query(`
+            SELECT
+              p.id,
+              p.name,
+              p.slug,
+              p.description,
+              p.barcode,
+              p.sku,
+              COALESCE(p.price_primary, 0) AS price_usd,
+              p.current_stock,
+              p.min_stock_alert,
+              p.image_url,
+              p.is_tax_exempt,
+              c.name AS category_name
+            FROM products p
+            LEFT JOIN categories c ON p.category_id = c.id
+            WHERE p.is_active = true
+            ORDER BY p.name ASC
+          `);
+
+          const categoriesRes = await client.query(`
+            SELECT id, name, slug
+            FROM categories
+            WHERE is_active = true
+            ORDER BY sort_order ASC, name ASC
+          `);
 
           return {
             products: productsRes.rows,

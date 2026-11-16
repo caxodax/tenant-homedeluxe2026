@@ -24,13 +24,17 @@ async function getOrderDetails(slug: string, orderId: string) {
     const [orderRes, itemsRes, settingsRes, paymentRes] = await Promise.all([
       client.query(`
         SELECT id, order_number, customer_name, customer_phone, status, 
-               delivery_type, delivery_address, subtotal_usd, total_usd, 
+               delivery_type, delivery_address, 
+               subtotal_primary, subtotal_primary as subtotal_usd, 
+               total_primary, total_primary as total_usd, 
                total_secondary, exchange_rate_applied, notes, created_at
         FROM orders 
         WHERE id = $1
       `, [orderId]),
       client.query(`
-        SELECT product_name, quantity, unit_price_usd, total_price_usd
+        SELECT product_name, quantity, 
+               unit_price_primary, unit_price_primary as unit_price_usd, 
+               total_price_primary, total_price_primary as total_price_usd
         FROM order_items
         WHERE order_id = $1
       `, [orderId]),

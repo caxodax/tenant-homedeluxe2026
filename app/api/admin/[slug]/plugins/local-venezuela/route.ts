@@ -6,6 +6,8 @@ import {
   fetchOfficialBcvRate,
   generateSeniatSalesBookCsv,
   OrderForSalesBook,
+  calculateEffectiveRate,
+  BcvRegimeMode,
 } from '@/lib/plugins/local-venezuela';
 import { z } from 'zod';
 
@@ -26,7 +28,7 @@ export async function GET(
       const [ordersData, settingsData] = await withTenantDb(schema, null, async (client) => {
         const oRes = await client.query(`
           SELECT id, order_number, created_at, status, customer_name, customer_id_number,
-                 total_usd, total_ves, exchange_rate_applied, subtotal_exempt_usd,
+                 total_primary AS total_usd, total_secondary AS total_ves, exchange_rate_applied, subtotal_exempt_usd,
                  subtotal_taxable_usd, iva_amount_usd, igtf_amount_usd,
                  fiscal_invoice_number, fiscal_control_number
           FROM orders
@@ -70,7 +72,7 @@ export async function GET(
       }),
       withTenantDb(schema, null, async (client) => {
         const h = await client.query(`
-          SELECT id, date_rate, rate_ves_usd, rate_eur_usd, source, created_at
+          SELECT id, date_rate, rate_ves_usd, rate_eur_usd, rate_usdt, source, created_at
           FROM exchange_rate_history
           ORDER BY date_rate DESC
           LIMIT 50
@@ -89,15 +91,36 @@ export async function GET(
     const primaryCurrency = settingsRow?.primary_currency || 'USD';
     const fallbackRate = primaryCurrency === 'EUR' ? (liveBcv.eurRate || liveBcv.usdRate) : liveBcv.usdRate;
 
+    // Calcular variación día contra día para el historial inmutable
+    const historyWithVariation = historyRows.map((row: any, idx: number, arr: any[]) => {
+      const prev = arr[idx + 1];
+      let variation = 0;
+      if (prev && parseFloat(prev.rate_ves_usd) > 0) {
+        const curr = parseFloat(row.rate_ves_usd);
+        const p = parseFloat(prev.rate_ves_usd);
+        variation = Number((((curr - p) / p) * 100).toFixed(2));
+      }
+      return {
+        ...row,
+        variation,
+      };
+    });
+
+    const bcvRegime = settingsRow?.value?.bcv_regime || {
+      mode: 'bcv_direct',
+      customRate: null,
+    };
+
     return NextResponse.json({
       isPluginActive,
       primaryCurrency,
       activeRate: Number(settingsRow?.exchange_rate || fallbackRate),
       secondaryCurrency: settingsRow?.secondary_currency || 'VES',
       liveBcv,
+      bcvRegime,
       igtfEnabled: Boolean(pluginConfig.igtf_enabled ?? true),
       fiscalRif: settingsRow?.value?.fiscal_rif || '',
-      history: historyRows,
+      history: historyWithVariation,
     });
   } catch (error) {
     if (error instanceof TenantAuthError) {
@@ -112,6 +135,11 @@ const actionSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('set_base_currency'),
     currency: z.enum(['USD', 'EUR']),
+  }),
+  z.object({
+    action: z.literal('set_regime'),
+    mode: z.enum(['bcv_direct', 'bcv_average', 'bcv_cross_eur', 'custom_spread']),
+    customRate: z.number().positive().optional().nullable(),
   }),
   z.object({
     action: z.literal('toggle_plugin'),
@@ -157,26 +185,21 @@ export async function POST(
 
     if (payload.action === 'set_base_currency') {
       const selectedCurr = payload.currency;
-      let newRate = 0;
+      const liveBcv = await fetchOfficialBcvRate();
+      let newEffectiveRate = 0;
 
       await withTenantDb(schema, null, async (client) => {
-        const histRes = await client.query(`
-          SELECT rate_ves_usd, rate_eur_usd
-          FROM exchange_rate_history
-          ORDER BY date_rate DESC
-          LIMIT 1
-        `);
-        const latest = histRes.rows[0];
+        const sRes = await client.query(`SELECT value FROM settings WHERE key = 'general' LIMIT 1`);
+        const regime = sRes.rows[0]?.value?.bcv_regime || { mode: 'bcv_direct' };
+        newEffectiveRate = calculateEffectiveRate(regime, liveBcv, selectedCurr);
 
         if (selectedCurr === 'EUR') {
-          newRate = Number(latest?.rate_eur_usd || 1003.4947);
           await client.query(`
             INSERT INTO payment_methods (code, name, currency, is_active, plugin_id)
             VALUES ('CASH_EUR', 'Efectivo Euros (€)', 'LOCAL', true, 'local_venezuela')
             ON CONFLICT (code) DO UPDATE SET is_active = true, name = 'Efectivo Euros (€)';
           `);
         } else {
-          newRate = Number(latest?.rate_ves_usd || 904.4485);
           await client.query(`
             UPDATE payment_methods SET is_active = false WHERE code = 'CASH_EUR';
           `);
@@ -186,7 +209,7 @@ export async function POST(
           UPDATE settings
           SET primary_currency = $1, exchange_rate = $2, secondary_currency = 'VES', updated_at = now()
           WHERE key = 'general'
-        `, [selectedCurr, newRate]);
+        `, [selectedCurr, newEffectiveRate]);
       });
 
       await invalidateTenantCache(slug);
@@ -194,8 +217,46 @@ export async function POST(
       return NextResponse.json({
         success: true,
         primaryCurrency: selectedCurr,
-        activeRate: newRate,
+        activeRate: newEffectiveRate,
         message: `Moneda base cambiada a ${selectedCurr === 'EUR' ? 'Euros (€)' : 'Dólares ($)'} con tasa oficial correspondiente.`,
+      });
+    }
+
+    if (payload.action === 'set_regime') {
+      const liveBcv = await fetchOfficialBcvRate();
+      let effectiveRate = 0;
+      const regimeObj = {
+        mode: payload.mode as BcvRegimeMode,
+        customRate: payload.customRate || null,
+        updated_at: new Date().toISOString(),
+      };
+
+      await withTenantDb(schema, null, async (client) => {
+        const sRes = await client.query(`SELECT primary_currency FROM settings WHERE key = 'general' LIMIT 1`);
+        const primaryCurrency = sRes.rows[0]?.primary_currency || 'USD';
+        effectiveRate = calculateEffectiveRate(
+          { mode: payload.mode as BcvRegimeMode, customRate: payload.customRate || undefined },
+          liveBcv,
+          primaryCurrency
+        );
+
+        await client.query(
+          `UPDATE settings
+           SET exchange_rate = $1,
+               value = jsonb_set(COALESCE(value, '{}'::jsonb), '{bcv_regime}', $2::jsonb),
+               updated_at = now()
+           WHERE key = 'general'`,
+          [effectiveRate, JSON.stringify(regimeObj)]
+        );
+      });
+
+      await invalidateTenantCache(slug);
+
+      return NextResponse.json({
+        success: true,
+        message: 'Régimen de conversión a Bolívares actualizado exitosamente',
+        effectiveRate,
+        regime: regimeObj,
       });
     }
 
@@ -247,26 +308,30 @@ export async function POST(
         return NextResponse.json({ error: 'No se pudo obtener la tasa oficial' }, { status: 502 });
       }
 
+      let effectiveRate = rateInfo.usdRate;
+
       await withTenantDb(schema, null, async (client) => {
         await client.query(`
-          INSERT INTO exchange_rate_history (date_rate, rate_ves_usd, rate_eur_usd, source)
-          VALUES ($1, $2, $3, $4)
+          INSERT INTO exchange_rate_history (date_rate, rate_ves_usd, rate_eur_usd, rate_usdt, source)
+          VALUES ($1, $2, $3, $4, $5)
           ON CONFLICT (date_rate) DO UPDATE
           SET rate_ves_usd = EXCLUDED.rate_ves_usd,
               rate_eur_usd = EXCLUDED.rate_eur_usd,
+              rate_usdt = EXCLUDED.rate_usdt,
               source = EXCLUDED.source,
               created_at = now()
-        `, [today, rateInfo.usdRate, rateInfo.eurRate || null, rateInfo.source]);
+        `, [today, rateInfo.usdRate, rateInfo.eurRate || null, rateInfo.usdtRate || null, rateInfo.source]);
 
-        const sRes = await client.query(`SELECT primary_currency FROM settings WHERE key = 'general' LIMIT 1`);
+        const sRes = await client.query(`SELECT primary_currency, value FROM settings WHERE key = 'general' LIMIT 1`);
         const baseCurr = sRes.rows[0]?.primary_currency || 'USD';
-        const targetRate = baseCurr === 'EUR' && rateInfo.eurRate ? rateInfo.eurRate : rateInfo.usdRate;
+        const regime = sRes.rows[0]?.value?.bcv_regime || { mode: 'bcv_direct' };
+        effectiveRate = calculateEffectiveRate(regime, rateInfo, baseCurr);
 
         await client.query(`
           UPDATE settings
           SET exchange_rate = $1, secondary_currency = 'VES', updated_at = now()
           WHERE key = 'general'
-        `, [targetRate]);
+        `, [effectiveRate]);
       });
 
       await invalidateTenantCache(slug);
@@ -275,11 +340,17 @@ export async function POST(
         success: true,
         message: 'Tasa oficial BCV sincronizada exitosamente',
         rateInfo,
+        effectiveRate,
       });
     }
 
     if (payload.action === 'manual') {
       const manualRate = Number(payload.rate.toFixed(4));
+      const regimeObj = {
+        mode: 'custom_spread',
+        customRate: manualRate,
+        updated_at: new Date().toISOString(),
+      };
 
       await withTenantDb(schema, null, async (client) => {
         await client.query(`
@@ -293,9 +364,11 @@ export async function POST(
 
         await client.query(`
           UPDATE settings
-          SET exchange_rate = $1, secondary_currency = 'VES', updated_at = now()
+          SET exchange_rate = $1, secondary_currency = 'VES',
+              value = jsonb_set(COALESCE(value, '{}'::jsonb), '{bcv_regime}', $2::jsonb),
+              updated_at = now()
           WHERE key = 'general'
-        `, [manualRate]);
+        `, [manualRate, JSON.stringify(regimeObj)]);
       });
 
       await invalidateTenantCache(slug);

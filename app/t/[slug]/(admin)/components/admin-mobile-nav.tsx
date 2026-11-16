@@ -18,6 +18,7 @@ import {
   ShieldCheck,
   ChevronRight,
   Tag,
+  Coins,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { LogoutButton } from '@/components/auth/logout-button';
@@ -65,6 +66,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: 'ADMINISTRACIÓN',
     items: [
+      { label: 'Tasas (BCV)', href: '/rates', icon: Coins, permission: 'settings', badgeColor: 'emerald' },
       { label: 'Reportes', href: '/reports', icon: BarChart3, permission: 'reports', badgeColor: 'emerald' },
       { label: 'Equipo & Roles', href: '/staff', icon: ShieldCheck, permission: 'staff', badgeColor: 'rose' },
       { label: 'Configuración', href: '/settings', icon: Settings, permission: 'settings', badgeColor: 'stone' },

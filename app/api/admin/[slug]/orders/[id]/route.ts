@@ -49,7 +49,7 @@ const patchOrderSchema = z.discriminatedUnion('action', [
 async function loadFullOrderDetail(schema: string, orderId: string) {
   return withTenantDb(schema, null, async (client) => {
     const orderRes = await client.query(
-      `SELECT o.*, s.name AS store_name
+      `SELECT o.*, o.total_primary as total_usd, o.subtotal_primary as subtotal_usd, s.name AS store_name
        FROM orders o
        LEFT JOIN stores s ON s.id = o.store_id
        WHERE o.id = $1
@@ -62,7 +62,7 @@ async function loadFullOrderDetail(schema: string, orderId: string) {
 
     const [itemsRes, paymentsRes, auditRes, movementsRes, settingsRes] = await Promise.all([
       client.query(
-        `SELECT oi.*, p.sku, p.image_url
+        `SELECT oi.*, oi.unit_price_primary as unit_price_usd, oi.total_price_primary as total_price_usd, p.sku, p.image_url
          FROM order_items oi
          LEFT JOIN products p ON p.id = oi.product_id
          WHERE oi.order_id = $1
@@ -168,7 +168,7 @@ export async function PATCH(
 
     await withTenantDb(tenant.db_schema_name, staff.id, async (client) => {
       const orderRes = await client.query(
-        `SELECT id, order_number, status, total_usd FROM orders WHERE id = $1 FOR UPDATE`,
+        `SELECT id, order_number, status, total_primary, total_primary as total_usd FROM orders WHERE id = $1 FOR UPDATE`,
         [id]
       );
       if ((orderRes.rowCount || 0) === 0) {

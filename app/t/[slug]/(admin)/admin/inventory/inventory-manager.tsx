@@ -34,6 +34,7 @@ export interface ProductItem {
   description?: string | null;
   current_stock: string;
   min_stock_alert: string;
+  price_primary?: string | number;
   price_usd: string;
   category_id?: string | null;
   category_name?: string | null;
@@ -107,7 +108,8 @@ export function InventoryManager({ slug, initialProducts, categories }: Inventor
     setBarcode(prod.barcode || '');
     setCategoryId(prod.category_id || '');
     setDescription(prod.description || '');
-    setPriceUsd(parseFloat(prod.price_usd).toFixed(2));
+    const rawPrice = prod.price_primary !== undefined ? String(prod.price_primary) : String(prod.price_usd || '0');
+    setPriceUsd(parseFloat(rawPrice || '0').toFixed(2));
     setCurrentStock(parseFloat(prod.current_stock).toString());
     setMinStockAlert(parseFloat(prod.min_stock_alert).toString());
     setImageUrl(prod.image_url || '');
@@ -147,6 +149,7 @@ export function InventoryManager({ slug, initialProducts, categories }: Inventor
       barcode: barcode.trim() || null,
       category_id: categoryId || null,
       description: description.trim() || null,
+      price_primary: parseFloat(priceUsd),
       price_usd: parseFloat(priceUsd),
       current_stock: parseFloat(currentStock),
       min_stock_alert: parseFloat(minStockAlert),
@@ -170,7 +173,8 @@ export function InventoryManager({ slug, initialProducts, categories }: Inventor
                     category_id: payload.category_id || null,
                     image_url: payload.image_url || null,
                     current_stock: payload.current_stock.toString(),
-                    price_usd: payload.price_usd.toString(),
+                    price_primary: (payload.price_primary ?? payload.price_usd ?? 0).toString(),
+                    price_usd: (payload.price_primary ?? payload.price_usd ?? 0).toString(),
                     min_stock_alert: payload.min_stock_alert.toString(),
                   }
                 : p

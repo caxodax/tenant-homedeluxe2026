@@ -13,6 +13,7 @@ const updateProductSchema = z.object({
   sku: z.string().optional().nullable(),
   barcode: z.string().optional().nullable(),
   category_id: z.string().optional().nullable(),
+  price_primary: z.number().min(0).optional(),
   price_usd: z.number().min(0).optional(),
   cost_price: z.number().min(0).optional().nullable(),
   is_tax_exempt: z.boolean().optional(),
@@ -34,7 +35,7 @@ export async function GET(
 
     const product = await withTenantDb(schema, null, async (client) => {
       const res = await client.query(
-        `SELECT p.*, c.name as category_name
+        `SELECT p.*, p.price_primary as price_usd, c.name as category_name
          FROM products p
          LEFT JOIN categories c ON c.id = p.category_id
          WHERE p.id = $1`,
@@ -94,11 +95,17 @@ export async function PATCH(
     }
 
     const data = parsed.data;
+    const finalData = { ...data };
+    if (finalData.price_primary === undefined && finalData.price_usd !== undefined) {
+      finalData.price_primary = finalData.price_usd;
+    }
+    delete (finalData as Record<string, unknown>).price_usd;
+
     const fields: string[] = [];
     const values: any[] = [];
     let paramIndex = 1;
 
-    for (const [key, value] of Object.entries(data)) {
+    for (const [key, value] of Object.entries(finalData)) {
       if (value !== undefined) {
         fields.push(`${key} = $${paramIndex}`);
         values.push(value);

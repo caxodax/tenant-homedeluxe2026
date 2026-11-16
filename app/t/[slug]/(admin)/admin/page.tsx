@@ -18,7 +18,7 @@ async function getTenantMetrics(schema: string) {
   return withTenantDb(schema, null, async (client) => {
     const todaySales = await client.query(`
       SELECT 
-        COALESCE(SUM(total_usd), 0) as total,
+        COALESCE(SUM(total_primary), 0) as total,
         COALESCE(SUM(total_secondary), 0) as total_sec,
         COUNT(*) as count
       FROM orders 
@@ -69,7 +69,7 @@ async function getSalesTrend(schema: string): Promise<TrendItem[]> {
     const res = await client.query(`
       SELECT 
         DATE_TRUNC('day', created_at)::date as day,
-        SUM(total_usd) as revenue,
+        SUM(total_primary) as revenue,
         COUNT(*) as orders
       FROM orders
       WHERE status != 'CANCELLED'
@@ -291,7 +291,7 @@ function KpiCard({
 async function RecentOrdersCard({ schema, slug }: { schema: string; slug: string }) {
   const { orders, exchangeRate } = await withTenantDb(schema, null, async (client) => {
     const ordersRes = await client.query(`
-      SELECT order_number, customer_name, total_usd, total_secondary, exchange_rate_applied, status, created_at, id
+      SELECT order_number, customer_name, total_primary, total_primary as total_usd, total_secondary, exchange_rate_applied, status, created_at, id
       FROM orders
       ORDER BY created_at DESC
       LIMIT 6
