@@ -187,6 +187,13 @@ Plataforma SaaS Multi-Tenant de Comercio Universal (Minimarkets, Retail, Restaur
   - Corrección de la agregación de ingresos por método de pago: pagos en `VES` son normalizados a `USD` mediante su `exchange_rate` registrado, eliminando distorsiones en métodos locales (Pago Móvil / Transferencia).
   - Selector segmentado bimonetario `[ 💵 USD ($) | 🇻🇪 Bs. (BCV) ]` que permite al comerciante visualizar todos los KPIs, gráficas y desgloses en cualquiera de las dos monedas con un solo clic.
 
+### ✅ FASE 4: Plugin de Localización Venezuela (`local_venezuela`) & Automatización en Base de Datos
+- **Automatización Nativa en BD (`pg_cron`)**: Sincronización diaria a las 7:00 AM VET (11:00 UTC) ejecutada directamente por PostgreSQL (`SELECT public.trigger_bcv_rate_sync();`) vía `pg_net`.
+- **Cero Consumo de CPU en Vercel**: Se erradicó el uso de Vercel Cron. El frontend opera de forma ligera y desacoplada, leyendo la tasa inyectada directamente de la base de datos sin latencias ni bloqueos por caídas de APIs externas.
+- **Moneda Primaria Agnóstica (USD/EUR)**: Soporte completo para fijar el catálogo en Dólares ($) o Euros (€), con migración SQL `012` (`price_primary`, `total_primary`).
+- **Panel Administrativo de Tasas (`/admin/rates`)**: 4 Hero Cards (Dólar BCV, Euro BCV, Promedio Ponderado, USDT P2P), historial inmutable de tasas, búsqueda por fecha/fuente y contingencia manual.
+- **Régimen de Tasa en Configuración (`/admin/settings` - Tab Moneda & BCV)**: Selección entre 4 regímenes (BCV Directo, Promedio Ponderado, Tasa Cruzada EUR, Especial Personalizada) con simulador interactivo de precios en tiempo real.
+
 ---
 
 ## 🛠️ Variables de Entorno (`.env.local`)
