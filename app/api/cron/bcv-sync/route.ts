@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { pool, withTenantDb } from '@/lib/db';
-import { fetchOfficialBcvRate } from '@/lib/plugins/local-venezuela';
+import { fetchOfficialBcvRate, calculateEffectiveRate, BcvRegimeConfig } from '@/lib/plugins/local-venezuela';
 import { revalidateTag } from 'next/cache';
 
 export const dynamic = 'force-dynamic';
@@ -32,21 +32,23 @@ export async function GET(request: NextRequest) {
 
     for (const tenant of tenantsRes.rows) {
       await withTenantDb(tenant.db_schema_name, null, async (client) => {
-        // 1. Guardar o actualizar en historial inmutable de tasas
+        // 1. Guardar o actualizar en historial inmutable de tasas con rate_usdt
         await client.query(`
-          INSERT INTO exchange_rate_history (date_rate, rate_ves_usd, rate_eur_usd, source)
-          VALUES ($1, $2, $3, $4)
+          INSERT INTO exchange_rate_history (date_rate, rate_ves_usd, rate_eur_usd, rate_usdt, source)
+          VALUES ($1, $2, $3, $4, $5)
           ON CONFLICT (date_rate) DO UPDATE
           SET rate_ves_usd = EXCLUDED.rate_ves_usd,
               rate_eur_usd = EXCLUDED.rate_eur_usd,
+              rate_usdt = COALESCE(EXCLUDED.rate_usdt, exchange_rate_history.rate_usdt),
               source = EXCLUDED.source,
               created_at = now()
-        `, [today, rateInfo.usdRate, rateInfo.eurRate || null, rateInfo.source]);
+        `, [today, rateInfo.usdRate, rateInfo.eurRate || null, rateInfo.usdtRate || null, rateInfo.source]);
 
-        // 2. Actualizar configuración activa del comercio (según su moneda base USD o EUR)
-        const sRes = await client.query(`SELECT primary_currency FROM settings WHERE key = 'general' LIMIT 1`);
+        // 2. Actualizar configuración activa del comercio respetando su régimen cambiario y moneda base
+        const sRes = await client.query(`SELECT primary_currency, value FROM settings WHERE key = 'general' LIMIT 1`);
         const baseCurr = sRes.rows[0]?.primary_currency || 'USD';
-        const targetRate = baseCurr === 'EUR' && rateInfo.eurRate ? rateInfo.eurRate : rateInfo.usdRate;
+        const regime: BcvRegimeConfig = sRes.rows[0]?.value?.bcv_regime || { mode: 'bcv_direct' };
+        const effectiveRate = calculateEffectiveRate(regime, rateInfo, baseCurr);
 
         await client.query(`
           UPDATE settings
@@ -54,7 +56,7 @@ export async function GET(request: NextRequest) {
               secondary_currency = 'VES',
               updated_at = now()
           WHERE key = 'general'
-        `, [targetRate]);
+        `, [effectiveRate]);
       });
 
       try {
