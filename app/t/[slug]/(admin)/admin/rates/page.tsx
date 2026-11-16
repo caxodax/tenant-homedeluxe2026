@@ -368,7 +368,7 @@ export default function RatesAdminPage() {
             <div className="flex items-center gap-2 text-stone-500 dark:text-zinc-400">
               <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
               <span>
-                Cron Autónomo: Sincronización diaria 7:00 AM VET (AlCambio / Supabase / Vercel)
+                Cron Autónomo: Sincronización nativa en Base de Datos a las 7:00 AM VET (pg_cron en PostgreSQL)
               </span>
             </div>
 
