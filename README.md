@@ -194,6 +194,15 @@ Plataforma SaaS Multi-Tenant de Comercio Universal (Minimarkets, Retail, Restaur
 - **Panel Administrativo de Tasas (`/admin/rates`)**: 4 Hero Cards (Dólar BCV, Euro BCV, Promedio Ponderado, USDT P2P), historial inmutable de tasas, búsqueda por fecha/fuente y contingencia manual.
 - **Régimen de Tasa en Configuración (`/admin/settings` - Tab Moneda & BCV)**: Selección entre 4 regímenes (BCV Directo, Promedio Ponderado, Tasa Cruzada EUR, Especial Personalizada) con simulador interactivo de precios en tiempo real.
 
+### ✅ FASE 4.2: Vitrina Digital V4 (Paginación Híbrida & Experiencia Móvil Impeccable)
+- **Paginación Híbrida y Óptima por BD**: Endpoint `/api/tenant/[slug]/storefront/products` con queries `LIMIT $1 OFFSET $2` sobre índices compuestos (`migrations/014_storefront_pagination_and_indexes.sql`), complementado con paginación reactiva de 12, 24 y 48 productos por página.
+- **Barra Sticky Superior**: Buscador de productos y selector de categorías fijados (`sticky top-[70px]`) al hacer scroll con fondo translúcido `backdrop-blur-md`.
+- **Selector Modal de Categorías (Bottom-Sheet)**: Hoja interactiva con radio buttons, opción "Solo Mis Favoritos", conteo en vivo de productos y botones de acción rápida.
+- **Sistema de Favoritos**: Persistencia en `localStorage` con botón de corazón en tarjeta de producto (con feedback háptico) y badge numérico en el header.
+- **Tarjeta de Producto Limpia**: Imagen despejada sin etiquetas parásitas, categoría reubicada junto al SKU y precio, tratamiento atenuado `Agotado` con botón deshabilitado cuando el stock llega a cero, y eliminación del texto innecesario "Disponible".
+- **Barra Flotante Inferior Móvil**: Barra fija al final de la pantalla que exhibe el conteo de ítems, el subtotal bimonetario (`USD` / `Bs.`) y acceso directo `Ver Carrito →`.
+- **Alineación Geométrica de Cesta**: Separación y anillo de contraste (`ring-2 ring-white`) para el badge numérico del carrito en el Header, erradicando cualquier solapamiento con el icono.
+
 ---
 
 ## 🛠️ Variables de Entorno (`.env.local`)

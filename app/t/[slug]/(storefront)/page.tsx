@@ -30,7 +30,7 @@ export default async function StorefrontPage({
   );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-6">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 sm:pt-6">
       <StorefrontCatalog
         products={catalog.products}
         categories={catalog.categories}
@@ -39,6 +39,7 @@ export default async function StorefrontPage({
         bannerUrl={shell.settings.banner_url}
         exchangeRate={shell.settings.exchange_rate}
         primaryCurrency={shell.settings.primary_currency || 'USD'}
+        slug={slug}
       />
     </div>
   );

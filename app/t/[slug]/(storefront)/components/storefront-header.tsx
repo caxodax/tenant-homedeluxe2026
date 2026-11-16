@@ -2,8 +2,9 @@
 
 import Link from 'next/link';
 import { useCart } from '@/lib/cart/cart-store';
+import { useFavorites } from '@/lib/favorites/favorites-store';
 import { useHasMounted } from '@/lib/cart/use-cart-hydrated';
-import { ShoppingBag, Store, Phone } from 'lucide-react';
+import { ShoppingBag, Store, Phone, Heart } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 interface StorefrontHeaderProps {
@@ -14,6 +15,7 @@ interface StorefrontHeaderProps {
   primaryColor?: string | null;
   exchangeRate?: number | null;
   primaryCurrency?: string;
+  onOpenFavorites?: () => void;
 }
 
 export function StorefrontHeader({
@@ -24,10 +26,12 @@ export function StorefrontHeader({
   primaryColor,
   exchangeRate,
   primaryCurrency = 'USD',
+  onOpenFavorites,
 }: StorefrontHeaderProps) {
   const hasMounted = useHasMounted();
   const rawTotalItems = useCart((state) => state.getTotalItems());
   const rawTotalPrice = useCart((state) => state.getTotalPrice());
+  const { favoritesCount } = useFavorites();
 
   const totalItems = hasMounted ? rawTotalItems : 0;
   const totalPrice = hasMounted ? rawTotalPrice : 0;
@@ -37,42 +41,42 @@ export function StorefrontHeader({
 
   return (
     <header
-      className="sticky top-0 z-40 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border-b border-slate-200 dark:border-zinc-800 transition-colors shadow-xs"
+      className="sticky top-0 z-40 bg-white/95 dark:bg-[#121214]/95 backdrop-blur-md border-b border-stone-200/80 dark:border-zinc-800/80 transition-colors shadow-xs"
       style={primaryColor ? { borderTop: `4px solid ${primaryColor}` } : undefined}
     >
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 min-h-[72px] py-2 flex items-center justify-between gap-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 min-h-[70px] py-2 flex items-center justify-between gap-3">
         {/* Identidad del Comercio */}
         <Link 
           href={`/t/${slug}`} 
           className="flex items-center gap-3 group shrink-0"
         >
           {logoUrl ? (
-            <div className="w-12 h-12 rounded-2xl bg-white dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 flex items-center justify-center overflow-hidden shadow-sm group-hover:scale-105 transition-transform">
+            <div className="w-11 h-11 rounded-2xl bg-white dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 flex items-center justify-center overflow-hidden shadow-xs group-hover:scale-105 transition-transform">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={logoUrl} alt={storeName} className="w-full h-full object-contain p-1" />
             </div>
           ) : (
-            <div className="w-12 h-12 rounded-2xl tenant-secondary-surface border border-lime-500/40 flex items-center justify-center font-extrabold text-base shadow-sm group-hover:scale-105 transition-transform">
-              <Store className="w-6 h-6" />
+            <div className="w-11 h-11 rounded-2xl tenant-secondary-surface border border-stone-200 dark:border-zinc-700 flex items-center justify-center font-extrabold text-base shadow-xs group-hover:scale-105 transition-transform">
+              <Store className="w-5 h-5" />
             </div>
           )}
-          <div>
-            <span className="text-lg font-black tracking-tight text-slate-950 dark:text-white line-clamp-1 group-hover:text-lime-700 dark:group-hover:text-lime-400 transition-colors">
+          <div className="flex flex-col">
+            <span className="text-base sm:text-lg font-black tracking-tight text-stone-950 dark:text-white line-clamp-1 group-hover:tenant-primary-text transition-colors">
               {storeName}
             </span>
-            <span className="inline-block text-[11px] font-mono font-bold uppercase px-2 py-0.5 rounded-md tenant-secondary-badge border">
+            <span className="inline-block text-[10px] font-mono font-bold uppercase px-1.5 py-0.2 rounded-md tenant-secondary-badge border w-fit">
               Vitrina Digital
             </span>
           </div>
         </Link>
 
-        {/* Acciones y Carrito */}
+        {/* Acciones: Tasa BCV, Atención, Favoritos, Tema y Carrito */}
         <div className="flex items-center gap-2 sm:gap-3">
           {effectiveRate > 0 && (
-            <div className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-zinc-800/80 border border-slate-200/80 dark:border-zinc-700/80 text-xs font-mono font-bold text-slate-800 dark:text-zinc-200">
+            <div className="hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-zinc-800/80 border border-stone-200/80 dark:border-zinc-700/80 text-xs font-mono font-bold text-stone-800 dark:text-zinc-200">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>BCV ({primaryCurrency === 'EUR' ? 'EUR' : 'USD'}):</span>
-              <span className="text-lime-700 dark:text-lime-400">
+              <span>BCV ({primaryCurrency}):</span>
+              <span className="tenant-primary-text font-black">
                 Bs. {effectiveRate.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
@@ -90,28 +94,45 @@ export function StorefrontHeader({
             </a>
           )}
 
+          {/* Botón de Favoritos en Header */}
+          <button
+            type="button"
+            onClick={onOpenFavorites}
+            className="relative w-10 h-10 rounded-2xl bg-stone-100 dark:bg-zinc-800/80 hover:bg-stone-200/70 dark:hover:bg-zinc-700 border border-stone-200/80 dark:border-zinc-700/80 flex items-center justify-center text-stone-700 dark:text-zinc-300 transition-all cursor-pointer active:scale-95"
+            aria-label="Ver favoritos"
+            title="Mis Favoritos"
+          >
+            <Heart className={`w-4 h-4 ${hasMounted && favoritesCount > 0 ? 'fill-rose-500 text-rose-500' : ''}`} />
+            {hasMounted && favoritesCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-black font-mono flex items-center justify-center ring-2 ring-white dark:ring-[#121214] shadow-xs">
+                {favoritesCount}
+              </span>
+            )}
+          </button>
+
           <ThemeToggle />
 
-          {/* Botón Flotante / Sticky de Carrito */}
+          {/* Botón Carrito en Header con Badge Despegado y Espaciado Óptico */}
           <Link
             href={`/t/${slug}/cart`}
-            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-lime-500 hover:bg-lime-600 text-black font-extrabold text-xs shadow-sm transition-all group"
+            className="relative flex items-center gap-2 px-3.5 py-2.5 rounded-2xl tenant-primary-bg text-white font-extrabold text-xs shadow-sm hover:brightness-105 active:scale-[0.98] transition-all group"
           >
-            <div className="relative">
-              <ShoppingBag className="w-4 h-4" />
+            <div className="relative flex items-center justify-center">
+              <ShoppingBag className="w-4 h-4 text-white" />
               {totalItems > 0 && (
-                <span className="absolute -top-2 -right-2.5 w-4 h-4 rounded-full bg-black text-lime-400 text-[10px] font-black font-mono flex items-center justify-center ring-2 ring-lime-500">
+                <span className="absolute -top-2.5 -right-3 min-w-[20px] h-[20px] px-1 rounded-full bg-stone-950 text-white dark:bg-white dark:text-stone-950 text-[10px] font-black font-mono flex items-center justify-center ring-2 ring-white dark:ring-[#121214] shadow-xs">
                   {totalItems}
                 </span>
               )}
             </div>
-            <div className="flex flex-col text-left font-mono">
-              <span className="hidden sm:inline leading-none">
+
+            <div className="hidden sm:flex flex-col text-left font-mono leading-tight pl-1">
+              <span className="font-black text-xs">
                 {currencySymbol}{totalPrice.toFixed(2)}
               </span>
               {totalBs && (
-                <span className="hidden sm:inline text-[9px] font-semibold text-slate-900 leading-tight">
-                  Bs. {totalBs}
+                <span className="text-[9px] font-bold text-white/80">
+                  Bs. {Number(totalBs).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               )}
             </div>
