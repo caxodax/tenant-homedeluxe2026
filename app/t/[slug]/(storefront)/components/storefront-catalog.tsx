@@ -45,7 +45,6 @@ export function StorefrontCatalog({
   slug,
 }: StorefrontCatalogProps) {
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [isFavoritesOnly, setIsFavoritesOnly] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
 
@@ -53,7 +52,17 @@ export function StorefrontCatalog({
   const [pageSize, setPageSize] = useState<number>(24);
   const [currentPage, setCurrentPage] = useState<number>(1);
 
-  const { favorites, favoritesCount } = useFavorites();
+  const { favorites, favoritesCount, isFavoritesOnly, setIsFavoritesOnly } = useFavorites();
+
+  // Si la URL contiene ?filter=favorites, activar reactivamente
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('filter') === 'favorites') {
+        setIsFavoritesOnly(true);
+      }
+    }
+  }, [setIsFavoritesOnly]);
 
   // Reset de página al cambiar filtros
   useEffect(() => {
@@ -212,6 +221,33 @@ export function StorefrontCatalog({
 
       {/* Grid de Productos (2 Columnas en móvil, 3 en tablet, 4 en desktop) */}
       <section className="space-y-6">
+        {isFavoritesOnly && (
+          <div className="flex items-center justify-between gap-3 p-3.5 sm:p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-900/40 text-rose-900 dark:text-rose-200 animate-in fade-in duration-200">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-rose-500/10 dark:bg-rose-500/20 flex items-center justify-center shrink-0">
+                <Heart className="w-4 h-4 fill-rose-500 text-rose-500" />
+              </div>
+              <div className="truncate">
+                <p className="text-xs sm:text-sm font-extrabold tracking-tight">
+                  Tus Productos Favoritos ({favoritesCount})
+                </p>
+                <p className="text-[11px] text-stone-500 dark:text-zinc-400 truncate">
+                  {favoritesCount === 0 
+                    ? 'No has marcado productos todavía' 
+                    : 'Filtrando solo los productos que te gustan'}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsFavoritesOnly(false)}
+              className="px-3 py-1.5 rounded-xl text-xs font-bold bg-white dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 text-stone-700 dark:text-zinc-200 hover:bg-stone-50 dark:hover:bg-zinc-700 transition shrink-0 cursor-pointer shadow-2xs"
+            >
+              Ver Todo el Catálogo
+            </button>
+          </div>
+        )}
+
         {totalProducts === 0 ? (
           <div className="py-16 text-center rounded-3xl border border-dashed border-stone-200 dark:border-zinc-800 bg-stone-50/50 dark:bg-zinc-900/30 p-8 max-w-md mx-auto space-y-3">
             <PackageX className="w-12 h-12 text-stone-300 dark:text-zinc-600 mx-auto" />

@@ -26,6 +26,16 @@ const CheckoutSchema = z.object({
   proof_file_hash: z.string().trim().max(128).optional(),
   notes: z.string().optional(),
   items: z.array(CartItemSchema).min(1, 'El carrito no puede estar vacío'),
+  delivery_type: z.enum(['PICKUP', 'DELIVERY']).default('PICKUP'),
+  delivery_address: z.string().optional(),
+  delivery_zone_id: z.string().uuid().optional().nullable(),
+  delivery_reference_point: z.string().optional().nullable(),
+  delivery_latitude: z.number().nullable().optional(),
+  delivery_longitude: z.number().nullable().optional(),
+  delivery_accuracy: z.number().nullable().optional(),
+  delivery_gps_consent: z.boolean().default(false),
+  cash_tendered_primary: z.number().optional().nullable(),
+  cash_change_primary: z.number().optional().nullable(),
 });
 
 export type CheckoutFormData = z.infer<typeof CheckoutSchema>;
@@ -51,7 +61,17 @@ export async function createStorefrontOrder(data: CheckoutFormData) {
       proof_image_url,
       proof_file_hash,
       notes, 
-      items 
+      items,
+      delivery_type,
+      delivery_address,
+      delivery_zone_id,
+      delivery_reference_point,
+      delivery_latitude,
+      delivery_longitude,
+      delivery_accuracy,
+      delivery_gps_consent,
+      cash_tendered_primary,
+      cash_change_primary,
     } = validated.data;
 
     // 1. Obtener datos del tenant y plugins activos
@@ -187,15 +207,38 @@ export async function createStorefrontOrder(data: CheckoutFormData) {
         ? Number((subtotalUsd + igtfUsd).toFixed(2)) 
         : Number((subtotalUsd + vatUsd + igtfUsd).toFixed(2));
 
+    // Resolución de flete delivery si aplica
+    let shippingPrimary = 0.00;
+    if (delivery_type === 'DELIVERY' && activePlugins.includes('delivery_fleet')) {
+      if (delivery_zone_id) {
+        const zoneRes = await withTenantDb(tenant.db_schema_name, null, async (client) => {
+          return client.query(`SELECT rate_primary FROM df_zones WHERE id = $1`, [delivery_zone_id]);
+        });
+        if (zoneRes.rows[0]) {
+          shippingPrimary = Number(zoneRes.rows[0].rate_primary) || 0.00;
+        }
+      } else if (delivery_latitude && delivery_longitude) {
+        const resolved = await pool.query(
+          `SELECT platform.rpc_df_resolve_zone($1, $2, $3) AS zone`,
+          [tenant.db_schema_name, delivery_latitude, delivery_longitude]
+        );
+        if (resolved.rows[0]?.zone) {
+          shippingPrimary = Number(resolved.rows[0].zone.rate_primary) || 0.00;
+        }
+      }
+    }
+
+    const totalWithShippingUsd = Number((totalUsdFinal + shippingPrimary).toFixed(2));
+
     let paymentCurrency = 'USD';
-    let paymentAmount = totalUsdFinal;
+    let paymentAmount = totalWithShippingUsd;
 
     if (isLocalVenezuela && (selectedMethod.code === 'PAGO_MOVIL' || selectedMethod.code === 'CASH_LOCAL')) {
       paymentCurrency = 'VES';
-      paymentAmount = Number((totalUsdFinal * exchangeRate).toFixed(2));
+      paymentAmount = Number((totalWithShippingUsd * exchangeRate).toFixed(2));
     }
 
-    const totalSecondary = isLocalVenezuela && exchangeRate > 0 ? Number((totalUsdFinal * exchangeRate).toFixed(2)) : null;
+    const totalSecondary = isLocalVenezuela && exchangeRate > 0 ? Number((totalWithShippingUsd * exchangeRate).toFixed(2)) : null;
     const exchangeRateApplied = isLocalVenezuela && exchangeRate > 0 ? exchangeRate : 1.0;
 
     const additiveTaxUsd = !taxEnabled ? 0.00 : pricesIncludeTax ? igtfUsd : totalTaxUsd;
@@ -203,7 +246,8 @@ export async function createStorefrontOrder(data: CheckoutFormData) {
     const formattedNotes = [
       customer_id_number && customer_id_number !== 'N/A' ? `[Doc: ${customer_id_number}]` : '',
       pricesIncludeTax && vatUsd > 0 ? `[IVA inc: $${vatUsd.toFixed(2)}]` : '',
-      notes || 'Pedido desde Vitrina Digital',
+      delivery_reference_point ? `[Ref: ${delivery_reference_point}]` : '',
+      notes || (delivery_type === 'DELIVERY' ? 'Pedido para Delivery' : 'Pedido desde Vitrina Digital'),
     ].filter(Boolean).join(' ');
 
     const orderPayload = {
@@ -211,18 +255,18 @@ export async function createStorefrontOrder(data: CheckoutFormData) {
       customer_name,
       customer_phone,
       customer_id_number,
-      delivery_type: 'PICKUP',
-      delivery_address: storeAddress,
+      delivery_type: delivery_type === 'DELIVERY' ? 'DELIVERY' : 'PICKUP',
+      delivery_address: delivery_type === 'DELIVERY' ? (delivery_address || 'Dirección de Entrega') : storeAddress,
       subtotal_primary: subtotalUsd,
       subtotal_usd: subtotalUsd,
       discount_primary: 0.00,
       discount_usd: 0.00,
       tax_primary: additiveTaxUsd,
       tax_usd: additiveTaxUsd,
-      shipping_primary: 0.00,
-      shipping_usd: 0.00,
-      total_primary: totalUsdFinal,
-      total_usd: totalUsdFinal,
+      shipping_primary: shippingPrimary,
+      shipping_usd: shippingPrimary,
+      total_primary: totalWithShippingUsd,
+      total_usd: totalWithShippingUsd,
       total_secondary: totalSecondary,
       exchange_rate_applied: exchangeRateApplied,
       is_offline_sale: false,
@@ -288,9 +332,39 @@ export async function createStorefrontOrder(data: CheckoutFormData) {
           payment_method_name: selectedMethod.name,
           reference_number: payment_reference || null,
           has_proof: Boolean(proof_image_url),
+          delivery_type: delivery_type === 'DELIVERY' ? 'DELIVERY' : 'PICKUP',
         },
       });
     });
+
+    // 5.1 Si es DELIVERY y el plugin delivery_fleet está activo, generar ruta de despacho
+    if (delivery_type === 'DELIVERY' && activePlugins.includes('delivery_fleet')) {
+      try {
+        await pool.query(
+          `SELECT platform.rpc_df_create_dispatch($1, $2, $3::jsonb) AS dispatch`,
+          [
+            tenant.db_schema_name,
+            result.order_id,
+            JSON.stringify({
+              zone_id: delivery_zone_id || null,
+              delivery_address: delivery_address || storeAddress,
+              reference_point: delivery_reference_point || null,
+              customer_name,
+              customer_phone,
+              latitude: delivery_latitude || null,
+              longitude: delivery_longitude || null,
+              accuracy_m: delivery_accuracy || null,
+              gps_consent: delivery_gps_consent,
+              cash_tendered_primary: cash_tendered_primary || null,
+              cash_change_primary: cash_change_primary || null,
+              notes: notes || null,
+            }),
+          ]
+        );
+      } catch (dispErr) {
+        console.error('Error creating dispatch route:', dispErr);
+      }
+    }
 
     // 6. Emitir evento Realtime hacia los paneles Admin conectados
     await broadcastTenantOrderEvent(slug, {

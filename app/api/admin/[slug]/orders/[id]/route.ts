@@ -49,7 +49,12 @@ const patchOrderSchema = z.discriminatedUnion('action', [
 async function loadFullOrderDetail(schema: string, orderId: string) {
   return withTenantDb(schema, null, async (client) => {
     const orderRes = await client.query(
-      `SELECT o.*, o.total_primary as total_usd, o.subtotal_primary as subtotal_usd, s.name AS store_name
+      `SELECT o.*, 
+              o.total_primary as total_usd, 
+              o.subtotal_primary as subtotal_usd,
+              COALESCE(o.shipping_primary, 0) as shipping_usd,
+              COALESCE(o.shipping_primary, 0) as shipping_primary,
+              s.name AS store_name
        FROM orders o
        LEFT JOIN stores s ON s.id = o.store_id
        WHERE o.id = $1

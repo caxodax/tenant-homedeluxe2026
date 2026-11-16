@@ -14,14 +14,18 @@ export async function generateMetadata({
   const { slug } = await params;
   const data = await getTenantPosLayoutData(slug);
   const name = data?.settings?.business_name || data?.tenant?.name || 'MarketOS';
-  const logoUrl = data?.settings?.logo_url || null;
   return {
     title: `${name} · POS Mostrador`,
     description: `Terminal de Punto de Venta Offline-First para ${name}`,
     manifest: `/t/${slug}/manifest.webmanifest?entry=pos`,
     icons: {
-      icon: logoUrl || '/icons/icon-192.png',
-      apple: logoUrl || '/icons/apple-touch-icon.png',
+      icon: [
+        { url: `/api/tenant/${slug}/icon?size=192`, sizes: '192x192', type: 'image/png' },
+        { url: `/api/tenant/${slug}/icon?size=512`, sizes: '512x512', type: 'image/png' },
+      ],
+      apple: [
+        { url: `/api/tenant/${slug}/icon?size=180&purpose=apple`, sizes: '180x180', type: 'image/png' },
+      ],
     },
     appleWebApp: {
       capable: true,

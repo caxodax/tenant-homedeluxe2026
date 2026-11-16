@@ -28,6 +28,7 @@ import {
   Printer,
   FileDown,
   X,
+  Bike,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -47,6 +48,7 @@ interface OrderDetail {
   discount_usd: string;
   tax_usd: string;
   shipping_usd: string;
+  shipping_primary?: string | null;
   total_usd: string;
   total_secondary?: string | null;
   exchange_rate_applied?: string | null;
@@ -686,11 +688,14 @@ export default function AdminOrderDetailPage() {
                   </span>
                 </div>
               )}
-              {parseFloat(order.shipping_usd || '0') > 0 && (
+              {parseFloat(order.shipping_usd || order.shipping_primary || '0') > 0 && (
                 <div className="flex justify-between text-slate-700 dark:text-zinc-300">
-                  <span>Envío</span>
-                  <span className="font-mono font-semibold">
-                    ${parseFloat(order.shipping_usd).toFixed(2)}
+                  <span className="flex items-center gap-1.5 font-medium">
+                    <Bike className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    Flete de Entrega (Delivery)
+                  </span>
+                  <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                    +${parseFloat(order.shipping_usd || order.shipping_primary || '0').toFixed(2)}
                   </span>
                 </div>
               )}

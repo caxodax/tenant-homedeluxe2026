@@ -131,23 +131,21 @@ export async function fetchTenantPaymentMethods(
 ): Promise<TenantPaymentMethod[]> {
   const activePluginSet = new Set(options?.activePlugins || []);
 
-  const [pmRes, settingsRes] = await Promise.all([
-    client.query(`
-      SELECT code, name, currency, is_active, plugin_id, created_at
-      FROM payment_methods
-      ORDER BY
-        CASE code
-          WHEN 'CASH_USD' THEN 1
-          WHEN 'BANK_TRANSFER' THEN 2
-          WHEN 'CARD' THEN 3
-          WHEN 'CASH_LOCAL' THEN 4
-          WHEN 'OTHER' THEN 5
-          ELSE 10
-        END,
-        name ASC
-    `),
-    client.query(`SELECT value FROM settings WHERE key = 'general' LIMIT 1`),
-  ]);
+  const pmRes = await client.query(`
+    SELECT code, name, currency, is_active, plugin_id, created_at
+    FROM payment_methods
+    ORDER BY
+      CASE code
+        WHEN 'CASH_USD' THEN 1
+        WHEN 'BANK_TRANSFER' THEN 2
+        WHEN 'CARD' THEN 3
+        WHEN 'CASH_LOCAL' THEN 4
+        WHEN 'OTHER' THEN 5
+        ELSE 10
+      END,
+      name ASC
+  `);
+  const settingsRes = await client.query(`SELECT value FROM settings WHERE key = 'general' LIMIT 1`);
 
   const savedConfigs: Record<string, Partial<PaymentMethodConfig>> =
     settingsRes.rows[0]?.value?.payment_configs || {};

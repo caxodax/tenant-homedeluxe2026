@@ -8,6 +8,9 @@ interface FavoritesContextType {
   toggleFavorite: (productId: string) => void;
   favoritesCount: number;
   clearFavorites: () => void;
+  isFavoritesOnly: boolean;
+  setIsFavoritesOnly: (value: boolean) => void;
+  toggleFavoritesOnly: () => void;
 }
 
 const FavoritesContext = createContext<FavoritesContextType | undefined>(undefined);
@@ -19,6 +22,7 @@ interface FavoritesProviderProps {
 
 export function FavoritesProvider({ children, slug }: FavoritesProviderProps) {
   const [favorites, setFavorites] = useState<string[]>([]);
+  const [isFavoritesOnly, setIsFavoritesOnly] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
 
   const storageKey = useMemo(() => `marketos_favorites_${slug}`, [slug]);
@@ -73,6 +77,10 @@ export function FavoritesProvider({ children, slug }: FavoritesProviderProps) {
 
   const clearFavorites = () => setFavorites([]);
 
+  const toggleFavoritesOnly = () => {
+    setIsFavoritesOnly((prev) => !prev);
+  };
+
   return (
     <FavoritesContext.Provider
       value={{
@@ -81,6 +89,9 @@ export function FavoritesProvider({ children, slug }: FavoritesProviderProps) {
         toggleFavorite,
         favoritesCount: favorites.length,
         clearFavorites,
+        isFavoritesOnly,
+        setIsFavoritesOnly,
+        toggleFavoritesOnly,
       }}
     >
       {children}

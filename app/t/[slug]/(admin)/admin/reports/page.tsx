@@ -221,12 +221,19 @@ export default async function ReportsPage({
       payment_method: r.payment_method,
     }));
 
+    const drRes = await client.query(
+      `SELECT platform.rpc_df_intel_report($1, $2::date, $3::date) AS report`,
+      [tenant.db_schema_name, startIso.slice(0, 10), endIso.slice(0, 10)]
+    ).catch(() => ({ rows: [] }));
+    const deliveryReport = drRes.rows[0]?.report || null;
+
     const payload: ReportDataPayload = {
       summary: {
         total_orders: Number(summary?.total_orders || 0),
         total_revenue_usd: parseFloat(summary?.total_revenue_usd || '0'),
         avg_ticket_usd: parseFloat(summary?.avg_ticket_usd || '0'),
       },
+      deliveryReport,
       channels: salesByChannel.rows.map((c: any) => ({
         channel: c.channel,
         orders_count: Number(c.orders_count),

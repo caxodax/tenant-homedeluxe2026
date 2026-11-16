@@ -15,22 +15,36 @@ async function getCheckoutData(slug: string) {
     [tenant.id]
   );
   const activePlugins = pluginsRes.rows.map((r: { plugin_id: string }) => r.plugin_id);
+  const isDeliveryFleetActive = activePlugins.includes('delivery_fleet');
   const vePlugin = pluginsRes.rows.find((r: { plugin_id: string }) => r.plugin_id === 'local_venezuela');
   const igtfEnabled = Boolean(vePlugin?.config?.igtf_enabled ?? true);
 
-  const paymentMethods = await withTenantDb(tenant.db_schema_name, null, async (client) =>
-    fetchTenantPaymentMethods(client, {
+  const [paymentMethods, deliveryZones] = await withTenantDb(tenant.db_schema_name, null, async (client) => {
+    const pMethods = await fetchTenantPaymentMethods(client, {
       activePlugins,
       onlyActive: true,
       channel: 'storefront',
-    })
-  );
+    });
+
+    let zones: any[] = [];
+    if (isDeliveryFleetActive) {
+      const zRes = await client.query(
+        `SELECT id, name, description, center_lat, center_lng, radius_km, rate_primary, estimated_time, sort_order 
+         FROM df_zones WHERE is_active = true ORDER BY sort_order ASC, name ASC`
+      );
+      zones = zRes.rows;
+    }
+
+    return [pMethods, zones];
+  });
 
   return {
     storefrontEnabled: tenant.storefront_enabled !== false,
     storeName: settings.business_name || tenant.name,
     address: settings.address || 'Sede Principal del Comercio',
     paymentMethods,
+    deliveryZones,
+    isDeliveryFleetActive,
     exchangeRate: settings.exchange_rate,
     primaryCurrency: settings.primary_currency || 'USD',
     isLocalVenezuela: activePlugins.includes('local_venezuela'),
@@ -55,12 +69,14 @@ export default async function CheckoutPage({
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-6">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 pt-4 sm:pt-6 w-full max-w-full overflow-x-hidden">
       <CheckoutForm
         slug={slug}
         storeName={data.storeName}
         pickupAddress={data.address}
         paymentMethods={data.paymentMethods}
+        deliveryZones={data.deliveryZones}
+        isDeliveryFleetActive={data.isDeliveryFleetActive}
         exchangeRate={data.exchangeRate}
         primaryCurrency={data.primaryCurrency}
         isLocalVenezuela={data.isLocalVenezuela}

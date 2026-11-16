@@ -3,6 +3,7 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { getR2Client, R2_BUCKET_NAME } from "@/lib/r2";
 import fs from "fs/promises";
 import path from "path";
+import sharp from "sharp";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,7 @@ const ALLOWED_FOLDERS = new Set([
   "logos",
   "banners",
   "proofs",
+  "payment-proofs",
   "branding",
   "general",
 ]);
@@ -21,7 +23,8 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
     const rawFolder = ((formData.get("folder") as string) || "products").trim().toLowerCase();
-    const folder = ALLOWED_FOLDERS.has(rawFolder) ? rawFolder : "general";
+    const normalizedFolder = rawFolder === "payment-proofs" ? "proofs" : rawFolder;
+    const folder = ALLOWED_FOLDERS.has(normalizedFolder) ? normalizedFolder : "general";
     const rawTenantSlug =
       (formData.get("tenantSlug") as string) || (formData.get("tenantId") as string) || "";
     const tenantSlug = rawTenantSlug
@@ -41,15 +44,44 @@ export async function POST(request: NextRequest) {
     }
 
     const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    const rawBuffer = Buffer.from(bytes);
 
-    // Normalizar nombre de archivo
+    // Normalizar nombre base
     const sanitizedName = file.name.toLowerCase().replace(/[^a-z0-9.-]/g, "_");
-    const filename = `${Date.now()}-${sanitizedName}`;
+    let finalBuffer: Buffer = rawBuffer;
+    let finalContentType = file.type || "application/octet-stream";
+    let filename = `${Date.now()}-${sanitizedName}`;
+
+    // OPTIMIZACIÓN PONITAIL ULTRA: Transcodificar y comprimir a WebP de alta eficiencia
+    if (file.type?.startsWith("image/") && !file.type.includes("svg") && !file.type.includes("gif")) {
+      try {
+        const isProof = folder === "proofs";
+        const maxDimension = isProof ? 1280 : 1600;
+        const quality = isProof ? 80 : 85;
+
+        finalBuffer = await sharp(rawBuffer)
+          .rotate() // Respeta orientación EXIF de fotos móviles
+          .resize({
+            width: maxDimension,
+            height: maxDimension,
+            fit: "inside",
+            withoutEnlargement: true,
+          })
+          .webp({ quality })
+          .toBuffer();
+
+        finalContentType = "image/webp";
+        const baseName = sanitizedName.replace(/\.[^.]+$/, "");
+        filename = `${Date.now()}-${baseName}.webp`;
+      } catch (sharpError) {
+        console.warn("Compresión sharp omitida, usando original:", sharpError);
+      }
+    }
+
     const storageKey = `${tenantSlug}/${folder}/${filename}`;
     const relativeUrl = `/api/media/${storageKey}`;
 
-    // 1. Intentar subir a Cloudflare R2
+    // 1. Subir a Cloudflare R2 con tamaño optimizado
     const s3 = getR2Client();
     let uploadedToR2 = false;
 
@@ -58,8 +90,8 @@ export async function POST(request: NextRequest) {
         const command = new PutObjectCommand({
           Bucket: R2_BUCKET_NAME,
           Key: storageKey,
-          Body: buffer,
-          ContentType: file.type || "application/octet-stream",
+          Body: finalBuffer,
+          ContentType: finalContentType,
           CacheControl: "public, max-age=31536000, immutable",
         });
 
@@ -70,11 +102,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 2. Fallback de persistencia local si no se pudo subir a R2 o para caché de desarrollo
+    // 2. Fallback de persistencia local
     try {
       const localDir = path.resolve(process.cwd(), "public/media", tenantSlug, folder);
       await fs.mkdir(localDir, { recursive: true });
-      await fs.writeFile(path.join(localDir, filename), buffer);
+      await fs.writeFile(path.join(localDir, filename), finalBuffer);
     } catch (localError) {
       console.warn("Advertencia guardando copia local:", localError);
     }
@@ -83,11 +115,16 @@ export async function POST(request: NextRequest) {
       success: true,
       url: relativeUrl,
       filename,
-      storage: uploadedToR2 ? "cloudflare_r2" : "local_storage",
+      size_bytes: finalBuffer.length,
+      optimized: finalBuffer.length < rawBuffer.length,
+      original_bytes: rawBuffer.length,
+      storage: uploadedToR2 ? "cloudflare_r2" : "local_filesystem",
     });
-  } catch (error: unknown) {
-    console.error("Error en upload de media:", error);
-    const message = error instanceof Error ? error.message : "Error al procesar la imagen";
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch (error: any) {
+    console.error("Error en /api/media/upload:", error);
+    return NextResponse.json(
+      { error: error.message || "Error procesando el archivo multimedia" },
+      { status: 500 }
+    );
   }
 }

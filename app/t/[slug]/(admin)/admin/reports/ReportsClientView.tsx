@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
   BarChart3, TrendingUp, CreditCard, DollarSign, 
   ShoppingBag, Percent, ArrowUpDown, Calendar, 
-  Download, ChevronDown, Filter 
+  Download, ChevronDown, Filter, Bike, Navigation, Clock, UserCheck
 } from 'lucide-react';
 import { SalesChart, type TrendItem } from '../components/sales-chart';
 import { toast } from 'sonner';
@@ -66,6 +66,15 @@ export interface ReportDataPayload {
   exportOrders: ExportOrderItem[];
   tenantSlug: string;
   businessName: string;
+  deliveryReport?: {
+    delivery_revenue_primary: number;
+    total_deliveries: number;
+    completed_deliveries: number;
+    failed_deliveries: number;
+    avg_delivery_minutes: number;
+    zones_top_revenue: Array<{ zone_name: string; count: number; total_primary: number }>;
+    drivers_performance: Array<{ driver_name: string; license_plate: string; completed_count: number; avg_minutes: number }>;
+  } | null;
 }
 
 export type CurrencyMode = 'USD' | 'VES' | 'BOTH';
@@ -484,6 +493,84 @@ export function ReportsClientView({ data }: { data: ReportDataPayload }) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Inteligencia Logística · Plugin Delivery Fleet */}
+      {data.deliveryReport && (
+        <Card className="bg-white dark:bg-[#121214] border-slate-200 dark:border-zinc-800 shadow-xs">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Bike className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                <div>
+                  <CardTitle className="text-base font-extrabold text-slate-950 dark:text-white">
+                    Inteligencia Logística · Delivery Fleet
+                  </CardTitle>
+                  <p className="text-xs text-slate-500 dark:text-zinc-400">
+                    Despachos, tiempos promedio de entrega y rendimiento por zona y chofer
+                  </p>
+                </div>
+              </div>
+              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                Plugin Capa 2
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800">
+                <p className="text-[11px] font-bold text-slate-500 uppercase">Total Pedidos Delivery</p>
+                <p className="text-xl font-black font-mono text-slate-950 dark:text-white mt-0.5">
+                  {data.deliveryReport.total_deliveries}
+                </p>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800">
+                <p className="text-[11px] font-bold text-slate-500 uppercase">Entregas Exitosas</p>
+                <p className="text-xl font-black font-mono text-emerald-600 dark:text-emerald-400 mt-0.5">
+                  {data.deliveryReport.completed_deliveries}
+                </p>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800">
+                <p className="text-[11px] font-bold text-slate-500 uppercase">Tiempo Promedio</p>
+                <p className="text-xl font-black font-mono text-blue-600 dark:text-blue-400 mt-0.5">
+                  {data.deliveryReport.avg_delivery_minutes > 0 ? `${data.deliveryReport.avg_delivery_minutes} min` : 'N/A'}
+                </p>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800">
+                <p className="text-[11px] font-bold text-slate-500 uppercase">Recaudación Fletes</p>
+                <p className="text-xl font-black font-mono text-slate-950 dark:text-white mt-0.5">
+                  ${Number(data.deliveryReport.delivery_revenue_primary || 0).toFixed(2)}
+                </p>
+              </div>
+            </div>
+
+            {/* Rendimiento de Repartidores */}
+            {data.deliveryReport.drivers_performance && data.deliveryReport.drivers_performance.length > 0 && (
+              <div className="pt-2">
+                <p className="text-xs font-bold text-slate-700 dark:text-zinc-300 mb-2 flex items-center gap-1.5">
+                  <UserCheck className="w-3.5 h-3.5 text-emerald-500" />
+                  Rendimiento por Repartidor
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                  {data.deliveryReport.drivers_performance.map((drv) => (
+                    <div key={drv.driver_name} className="p-2.5 rounded-xl bg-slate-50 dark:bg-zinc-900/60 border border-slate-200 dark:border-zinc-800 flex items-center justify-between text-xs">
+                      <div>
+                        <p className="font-bold text-slate-950 dark:text-white">{drv.driver_name}</p>
+                        <p className="text-[10px] text-slate-500 font-mono">{drv.license_plate}</p>
+                      </div>
+                      <div className="text-right">
+                        <span className="font-black text-emerald-600 font-mono">{drv.completed_count} entregas</span>
+                        {drv.avg_minutes > 0 && (
+                          <p className="text-[10px] text-slate-400 font-mono">{drv.avg_minutes} min prom</p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Top Productos */}
       <Card className="bg-white dark:bg-[#121214] border-slate-200 dark:border-zinc-800 shadow-xs">

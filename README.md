@@ -215,6 +215,16 @@ Plataforma SaaS Multi-Tenant de Comercio Universal (Minimarkets, Retail, Restaur
 - **Corrección de Zona Horaria en Histórico de Tasas (`/admin/rates`)**: Implementación del parseador seguro `formatRateDate` que fija mediodía local para evitar el desplazamiento de 1 día provocado por la medianoche UTC en husos horarios negativos (Venezuela UTC-4).
 - **Corrección de Consulta de Sedes en POS (`route.ts`)**: Eliminación del filtro `deleted_at` inexistente sobre la tabla `stores`, garantizando respuesta `200 OK` en el catálogo de caja.
 
+### 🚚 FASE 14: Plugin Canónico `delivery_fleet` (Logística & Despacho)
+- **Base de Datos Canónica & Blast Radius = 0 (`05_PLUGIN_SCHEMAS.sql`, `015_delivery_fleet_plugin_canonical.sql`)**: 4 tablas segregadas en el esquema del inquilino (`df_zones`, `df_drivers`, `df_dispatch_routes`, `df_audit_logs`) con triggers automáticos de auditoría y timestamp.
+- **Moneda Primaria Agnóstica (Agnostic Currency Standard)**: Tarifas de zonas y snapshots de despacho en `rate_primary` y `zone_rate_snapshot_primary`, con columnas generadas almacenadas (`STORED`) `rate_usd` y `zone_rate_snapshot_usd` para 100% de compatibilidad hacia atrás.
+- **Resolución Geográfica Haversine Nativa en BD (`rpc_df_resolve_zone`)**: Motor de cálculo matemático en microsegundos (< 2ms) en PostgreSQL que determina la zona activa más cercana y su tarifa sin costos de APIs externas.
+- **Transaccionalidad y Ciclo de Vida de Despacho (`rpc_df_create_dispatch`, `rpc_df_assign_driver`, `rpc_df_update_status`)**: Estados de entrega `PENDING → ASSIGNED → EN_ROUTE → ARRIVED → COMPLETED / FAILED`. Al completar la entrega (`COMPLETED`), la orden Core pasa de forma atómica e idempotente a `orders.status = 'DELIVERED'`.
+- **Inteligencia Logística (`rpc_df_intel_report`)**: Reporte consolidado con ingresos por flete en moneda primaria (`delivery_revenue_primary`), tiempo promedio de entrega, ranking de zonas y rendimiento por motorizado.
+- **Centro de Control Logístico Dedicado (`/admin/delivery`)**: Pestañas unificadas de Tablero Kanban en vivo con sincronización Realtime, Gestor de Zonas con mapa interactivo Leaflet + OpenStreetMap y Directorio de Choferes.
+- **Comanda WhatsApp con Vuelto en Efectivo & Enlace GPS**: Plantilla formateada que incluye desglose de productos, cálculo de vuelto (`paga con X, vuelto Y`), pin con geolocalización a Google Maps y visualización bimonetaria.
+- **Integración POS Mostrador**: Selector combobox de zonas de delivery activas con sus tarifas precargadas en moneda primaria y autocalculado de `shipping_primary`.
+
 ---
 
 ## 🛠️ Variables de Entorno (`.env.local`)

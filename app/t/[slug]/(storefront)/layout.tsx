@@ -15,14 +15,18 @@ export async function generateMetadata({
   const { slug } = await params;
   const data = await getCachedTenantShell(slug);
   const name = data?.settings?.business_name || data?.tenant?.name || 'MarketOS';
-  const logoUrl = data?.settings?.logo_url || null;
   return {
     title: `${name} · Vitrina Digital`,
     description: `Catálogo online y compras directas en ${name}`,
     manifest: `/t/${slug}/manifest.webmanifest`,
     icons: {
-      icon: logoUrl || '/icons/icon-192.png',
-      apple: logoUrl || '/icons/apple-touch-icon.png',
+      icon: [
+        { url: `/api/tenant/${slug}/icon?size=192`, sizes: '192x192', type: 'image/png' },
+        { url: `/api/tenant/${slug}/icon?size=512`, sizes: '512x512', type: 'image/png' },
+      ],
+      apple: [
+        { url: `/api/tenant/${slug}/icon?size=180&purpose=apple`, sizes: '180x180', type: 'image/png' },
+      ],
     },
     appleWebApp: {
       capable: true,
@@ -56,7 +60,7 @@ export default async function StorefrontLayout({
         secondaryColor={settings?.secondary_color}
         accentColor={settings?.accent_color}
       />
-      <div className="min-h-screen flex flex-col bg-stone-50/60 dark:bg-[#09090b] text-stone-900 dark:text-zinc-100 font-sans transition-colors duration-200">
+      <div className="min-h-screen flex flex-col bg-stone-50/60 dark:bg-[#09090b] text-stone-900 dark:text-zinc-100 font-sans transition-colors duration-200 w-full max-w-full overflow-x-hidden">
         {/* Banner de contingencia offline inteligente (inicializado desde SSR) */}
         <ContingencyBanner slug={slug} initialInContingency={inContingency} />
 
@@ -72,7 +76,7 @@ export default async function StorefrontLayout({
         />
 
         {/* Contenido principal de la vitrina */}
-        <main className="flex-1 pb-16">
+        <main className="flex-1 pb-16 w-full max-w-full overflow-x-hidden">
           {children}
         </main>
 

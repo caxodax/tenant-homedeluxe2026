@@ -26,52 +26,72 @@ export async function GET(
     const activePlugins = pluginsRes.rows.map((r: { plugin_id: string }) => r.plugin_id);
 
     const data = await withTenantDb(db_schema_name, null, async (client) => {
-      const [pRes, sRes, storeRes, pmRows, catRes] = await Promise.all([
-        client.query(`
-          SELECT 
-            p.id, 
-            p.name, 
-            p.sku, 
-            p.barcode,
-            p.price_primary, 
-            p.price_primary as price_usd, 
-            p.current_stock, 
-            p.min_stock_alert, 
-            p.category_id,
-            c.name as category_name,
-            p.image_url,
-            p.is_tax_exempt
-          FROM products p
-          LEFT JOIN categories c ON c.id = p.category_id
-          WHERE p.is_active = true AND p.deleted_at IS NULL
-          ORDER BY p.name ASC
-        `),
-        client.query(`
-          SELECT business_name, logo_url, primary_color, secondary_color, accent_color,
-                 primary_currency, exchange_rate, secondary_currency, value
-          FROM settings
-          WHERE key = 'general'
-          LIMIT 1
-        `),
-        client.query(`
-          SELECT id
-          FROM stores
+      const pRes = await client.query(`
+        SELECT 
+          p.id, 
+          p.name, 
+          p.sku, 
+          p.barcode,
+          p.price_primary, 
+          p.price_primary as price_usd, 
+          p.current_stock, 
+          p.min_stock_alert, 
+          p.category_id,
+          c.name as category_name,
+          p.image_url,
+          p.is_tax_exempt
+        FROM products p
+        LEFT JOIN categories c ON c.id = p.category_id
+        WHERE p.is_active = true AND p.deleted_at IS NULL
+        ORDER BY p.name ASC
+      `);
+
+      const sRes = await client.query(`
+        SELECT business_name, logo_url, primary_color, secondary_color, accent_color,
+               primary_currency, exchange_rate, secondary_currency, value
+        FROM settings
+        WHERE key = 'general'
+        LIMIT 1
+      `);
+
+      const storeRes = await client.query(`
+        SELECT id
+        FROM stores
+        WHERE is_active = true
+        ORDER BY created_at ASC
+        LIMIT 1
+      `);
+
+      const pmRows = await fetchTenantPaymentMethods(client, {
+        activePlugins,
+        onlyActive: true,
+        channel: 'pos',
+      });
+
+      const catRes = await client.query(`
+        SELECT id, name
+        FROM categories
+        WHERE is_active = true AND deleted_at IS NULL
+        ORDER BY name ASC
+      `);
+
+      let deliveryZones: Array<{
+        id: string;
+        name: string;
+        description: string | null;
+        rate_primary: number;
+        estimated_time: string;
+      }> = [];
+
+      if (activePlugins.includes('delivery_fleet')) {
+        const dzRes = await client.query(`
+          SELECT id, name, description, rate_primary, estimated_time
+          FROM df_zones
           WHERE is_active = true
-          ORDER BY created_at ASC
-          LIMIT 1
-        `),
-        fetchTenantPaymentMethods(client, {
-          activePlugins,
-          onlyActive: true,
-          channel: 'pos',
-        }),
-        client.query(`
-          SELECT id, name
-          FROM categories
-          WHERE is_active = true AND deleted_at IS NULL
-          ORDER BY name ASC
-        `),
-      ]);
+          ORDER BY sort_order ASC, name ASC
+        `);
+        deliveryZones = dzRes.rows;
+      }
 
       return {
         products: pRes.rows,
@@ -79,6 +99,8 @@ export async function GET(
         store_id: storeRes.rows[0]?.id || null,
         payment_methods: pmRows,
         categories: catRes.rows,
+        delivery_zones: deliveryZones,
+        is_delivery_active: activePlugins.includes('delivery_fleet'),
       };
     });
 
@@ -86,6 +108,8 @@ export async function GET(
       products: data.products,
       categories: data.categories,
       payment_methods: data.payment_methods,
+      delivery_zones: data.delivery_zones,
+      is_delivery_active: data.is_delivery_active,
       store_id: data.store_id,
       business_name: data.settings?.business_name || name || 'Comercio',
       logo_url: data.settings?.logo_url || null,

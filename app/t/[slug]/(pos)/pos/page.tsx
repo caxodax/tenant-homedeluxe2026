@@ -13,9 +13,10 @@ import { posDb } from '@/lib/pos/offline-db';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { 
-  ArrowLeft, ArrowRight, Search, Plus, Minus, Trash2, ShoppingCart, 
+  ArrowLeft, ArrowRight, Search, Plus, Minus, Trash2, ShoppingCart, ShoppingBag,
   CreditCard, Banknote, CheckCircle2, RotateCcw,
-  Package, Printer, Lock, Unlock, X, Calculator, ChevronDown
+  Package, Printer, Lock, Unlock, X, Calculator, ChevronDown,
+  Bike, MapPin, Store
 } from 'lucide-react';
 
 interface Product {
@@ -206,9 +207,21 @@ export default function PosPage({ params }: PosPageProps) {
   const [isMobileTicketOpen, setIsMobileTicketOpen] = useState<boolean>(false);
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
+
+  // Plugin Delivery Fleet en POS
+  const [isDeliveryActive, setIsDeliveryActive] = useState(false);
+  const [deliveryZones, setDeliveryZones] = useState<Array<{ id: string; name: string; rate_primary: number; estimated_time?: string }>>([]);
+  const [posDeliveryType, setPosDeliveryType] = useState<'PICKUP' | 'DELIVERY'>('PICKUP');
+  const [selectedPosZoneId, setSelectedPosZoneId] = useState<string>('');
+  const [posDeliveryAddress, setPosDeliveryAddress] = useState<string>('');
+
   const baseCurrency = settings.primary_currency || 'USD';
   const currencySymbol = baseCurrency === 'EUR' ? '€' : '$';
   const effectiveRate = Number(settings.exchange_rate || 0);
+
+  const selectedPosZone = deliveryZones.find((z) => z.id === selectedPosZoneId) || deliveryZones[0] || null;
+  const posDeliveryRate = posDeliveryType === 'DELIVERY' ? Number(selectedPosZone?.rate_primary || 0) : 0;
+
   const [completedSale, setCompletedSale] = useState<{
     ticketRef: string;
     totalUsd: number;
@@ -216,6 +229,10 @@ export default function PosPage({ params }: PosPageProps) {
     itemsCount: number;
     customerName: string;
     paymentMethod: string;
+    deliveryType?: 'PICKUP' | 'DELIVERY';
+    deliveryRate?: number;
+    deliveryZoneName?: string;
+    deliveryAddress?: string;
     items: { name: string; quantity: number; unitPrice: number; subtotal: number }[];
     timestamp: string;
     syncStatus: 'synced' | 'pending' | 'error';
@@ -366,6 +383,15 @@ export default function PosPage({ params }: PosPageProps) {
               : data.payment_methods[0].code
           );
         }
+        if (typeof data.is_delivery_active === 'boolean') {
+          setIsDeliveryActive(data.is_delivery_active);
+        }
+        if (Array.isArray(data.delivery_zones)) {
+          setDeliveryZones(data.delivery_zones);
+          if (data.delivery_zones.length > 0) {
+            setSelectedPosZoneId((prev) => prev || data.delivery_zones[0].id);
+          }
+        }
         const nextSettings: PosSettings = {
           business_name: data.business_name || 'Mi Comercio',
           primary_currency: data.currency || 'USD',
@@ -469,10 +495,10 @@ export default function PosPage({ params }: PosPageProps) {
     const igtfAmount = (isTaxActive && isCashDivisas) ? Number((baseForIgtf * 0.03).toFixed(2)) : 0;
 
     const finalTotal = !isTaxActive
-      ? Number(subtotal.toFixed(2))
+      ? Number((subtotal + posDeliveryRate).toFixed(2))
       : pricesIncludeTax
-        ? Number((subtotal + igtfAmount).toFixed(2))
-        : Number((subtotal + vatAmount + igtfAmount).toFixed(2));
+        ? Number((subtotal + posDeliveryRate + igtfAmount).toFixed(2))
+        : Number((subtotal + vatAmount + igtfAmount + posDeliveryRate).toFixed(2));
 
     return {
       subtotalExempt: Number(subtotalExempt.toFixed(2)),
@@ -480,12 +506,13 @@ export default function PosPage({ params }: PosPageProps) {
       subtotal: Number(subtotal.toFixed(2)),
       vatAmount: Number(vatAmount.toFixed(2)),
       igtfAmount: Number(igtfAmount.toFixed(2)),
+      deliveryRate: posDeliveryRate,
       finalTotal,
       taxRatePercent,
       pricesIncludeTax,
       isTaxActive,
     };
-  }, [ticket, settings, paymentMethod]);
+  }, [ticket, settings, paymentMethod, posDeliveryRate]);
 
   const totalUsd = taxCalculations.finalTotal;
 
@@ -562,7 +589,8 @@ export default function PosPage({ params }: PosPageProps) {
         subtotal_usd: taxCalculations.subtotal,
         discount_usd: 0,
         tax_usd: !taxCalculations.isTaxActive ? 0 : taxCalculations.pricesIncludeTax ? taxCalculations.igtfAmount : Number((taxCalculations.vatAmount + taxCalculations.igtfAmount).toFixed(2)),
-        shipping_usd: 0,
+        shipping_usd: posDeliveryRate,
+        shipping_primary: posDeliveryRate,
         total_usd: Number(totalUsd.toFixed(2)),
         total_secondary: effectiveRate > 0 ? Number((totalUsd * effectiveRate).toFixed(2)) : null,
         exchange_rate_applied: effectiveRate > 0 ? effectiveRate : 1.0,
@@ -574,7 +602,9 @@ export default function PosPage({ params }: PosPageProps) {
           currency: (paymentMethod === 'PAGO_MOVIL' || paymentMethod === 'CASH_LOCAL' || ((paymentMethod === 'BANK_TRANSFER' || paymentMethod === 'CARD') && effectiveRate > 1)) ? 'VES' : 'USD',
           reference_number: paymentRef || undefined,
         },
-        notes: `Cobrado en Mostrador POS-01 · ${settings.business_name}${effectiveRate > 0 ? ` (Tasa: ${effectiveRate.toFixed(2)})` : ''}`,
+        notes: posDeliveryType === 'DELIVERY'
+          ? `Delivery: ${selectedPosZone?.name || 'Zona'} · Dirección: ${posDeliveryAddress || customerName} · Cobrado en Mostrador POS-01`
+          : `Cobrado en Mostrador POS-01 · ${settings.business_name}${effectiveRate > 0 ? ` (Tasa: ${effectiveRate.toFixed(2)})` : ''}`,
       };
 
       // 1. Guardar localmente en Dexie IndexedDB
@@ -606,6 +636,10 @@ export default function PosPage({ params }: PosPageProps) {
         itemsCount: ticket.reduce((s, i) => s + i.quantity, 0),
         customerName: customerName.trim() || 'Cliente Mostrador',
         paymentMethod,
+        deliveryType: posDeliveryType,
+        deliveryRate: posDeliveryRate,
+        deliveryZoneName: selectedPosZone?.name,
+        deliveryAddress: posDeliveryAddress,
         items: ticket.map((i) => ({
           name: i.product.name,
           quantity: i.quantity,
@@ -837,15 +871,24 @@ export default function PosPage({ params }: PosPageProps) {
                 const cardTaxVes = effectiveRate > 0 ? cardTaxUsd * effectiveRate : 0;
 
                 return (
-                  <button
+                  <div
                     key={product.id}
-                    type="button"
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedProductDetail(product);
+                        const inT = ticket.find((item) => item.product.id === product.id);
+                        setDetailQuantity(inT ? inT.quantity : 1);
+                      }
+                    }}
                     onClick={() => {
                       setSelectedProductDetail(product);
                       const inT = ticket.find((item) => item.product.id === product.id);
                       setDetailQuantity(inT ? inT.quantity : 1);
                     }}
-                    className={`flex flex-col justify-between text-left p-3 sm:p-3.5 rounded-2xl bg-white dark:bg-[#121214] border transition-all group active:scale-[0.98] cursor-pointer ${
+                    className={`flex flex-col justify-between text-left p-3 sm:p-3.5 rounded-2xl bg-white dark:bg-[#121214] border transition-all group active:scale-[0.98] cursor-pointer select-none ${
                       inTicket
                         ? 'border-lime-500 ring-1 ring-lime-500/30 shadow-sm'
                         : 'border-slate-200 dark:border-zinc-800/80 hover:border-lime-500/50 hover:shadow-md dark:hover:border-lime-500/40'
@@ -928,7 +971,7 @@ export default function PosPage({ params }: PosPageProps) {
                         <Plus className="w-4 h-4" />
                       </button>
                     </div>
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -1053,6 +1096,57 @@ export default function PosPage({ params }: PosPageProps) {
 
           {/* Footer del Ticket y Botón de Cobro */}
           <div className="p-4 border-t border-slate-200 dark:border-zinc-800 bg-slate-50/80 dark:bg-zinc-900/40 space-y-3">
+            {/* Selector de Modo de Entrega (Mostrador vs Delivery) */}
+            {isDeliveryActive && ticket.length > 0 && (
+              <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-zinc-800/80 space-y-2 border border-slate-200 dark:border-zinc-700">
+                <div className="flex items-center gap-1 p-0.5 rounded-lg bg-slate-200 dark:bg-zinc-700 text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setPosDeliveryType('PICKUP')}
+                    className={`flex-1 py-1 px-2 rounded-md text-center transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                      posDeliveryType === 'PICKUP' ? 'bg-white dark:bg-zinc-800 text-slate-950 dark:text-white shadow-xs font-black' : 'text-slate-500'
+                    }`}
+                  >
+                    <Store className="w-3.5 h-3.5" />
+                    <span>Mostrador</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPosDeliveryType('DELIVERY')}
+                    className={`flex-1 py-1 px-2 rounded-md text-center transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                      posDeliveryType === 'DELIVERY' ? 'bg-emerald-500 text-white shadow-xs font-black' : 'text-slate-500'
+                    }`}
+                  >
+                    <Bike className="w-3.5 h-3.5" />
+                    <span>Delivery</span>
+                  </button>
+                </div>
+
+                {posDeliveryType === 'DELIVERY' && (
+                  <div className="space-y-1.5 pt-1 animate-in fade-in duration-150">
+                    <select
+                      value={selectedPosZoneId}
+                      onChange={(e) => setSelectedPosZoneId(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 text-xs font-semibold text-slate-950 dark:text-white focus:outline-none"
+                    >
+                      {deliveryZones.map((z) => (
+                        <option key={z.id} value={z.id}>
+                          {z.name} (+{currencySymbol}{Number(z.rate_primary).toFixed(2)})
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      value={posDeliveryAddress}
+                      onChange={(e) => setPosDeliveryAddress(e.target.value)}
+                      placeholder="Dirección exacta de entrega..."
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 text-xs text-slate-950 dark:text-white focus:outline-none"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
             {ticket.length > 0 && (
               <div className="space-y-1 text-xs border-b border-slate-200 dark:border-zinc-800 pb-2 text-slate-600 dark:text-zinc-400">
                 <div className="flex justify-between">
@@ -1085,6 +1179,15 @@ export default function PosPage({ params }: PosPageProps) {
                   <div className="flex justify-between text-amber-600 dark:text-amber-400 font-bold">
                     <span>IGTF (3% Divisas)</span>
                     <span className="font-mono">+{currencySymbol}{taxCalculations.igtfAmount.toFixed(2)}</span>
+                  </div>
+                )}
+                {posDeliveryRate > 0 && (
+                  <div className="flex justify-between text-emerald-700 dark:text-emerald-400 font-bold">
+                    <span className="flex items-center gap-1">
+                      <Bike className="w-3.5 h-3.5" />
+                      <span>Flete Delivery ({selectedPosZone?.name})</span>
+                    </span>
+                    <span className="font-mono">+{currencySymbol}{posDeliveryRate.toFixed(2)}</span>
                   </div>
                 )}
               </div>
@@ -1129,43 +1232,57 @@ export default function PosPage({ params }: PosPageProps) {
         </section>
       </main>
 
-      {/* Barra Flotante Inferior de Ticket en Móvil (Estilo Vitrina) */}
+      {/* Barra Flotante Inferior de Ticket en Móvil (Estilo Vitrina Impeccable) */}
       {ticket.length > 0 && (
-        <div className="fixed bottom-4 left-4 right-4 z-40 lg:hidden animate-in slide-in-from-bottom-4 duration-200">
+        <div className="fixed bottom-4 left-4 right-4 z-40 lg:hidden animate-in slide-in-from-bottom-5 duration-300">
           <div
             onClick={() => setIsMobileTicketOpen(true)}
-            className="p-3 sm:p-3.5 rounded-2xl shadow-xl flex items-center justify-between gap-3 cursor-pointer active:scale-[0.99] transition-transform border border-white/15 text-white"
+            className="w-full text-white p-3.5 rounded-2xl shadow-2xl flex items-center justify-between border border-white/20 active:scale-[0.99] transition-transform cursor-pointer"
             style={{
-              backgroundColor: settings.primary_color || '#e11d48',
+              backgroundColor: settings.primary_color || '#dc2626',
             }}
           >
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div className="w-9 h-9 rounded-xl bg-black/25 flex items-center justify-center relative shrink-0">
-                <ShoppingCart className="w-5 h-5 text-white" />
-                <span className="absolute -top-1.5 -right-1.5 min-w-[1.25rem] h-5 px-1 bg-white text-slate-950 font-mono font-black text-xs rounded-full flex items-center justify-center shadow-xs">
+            {/* Lado Izquierdo: Icono + Detalle Bimonetario */}
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center relative shadow-inner shrink-0">
+                <ShoppingBag className="w-5 h-5 text-white" />
+                <span
+                  className="absolute -top-1 -right-1 bg-white font-black text-[10px] w-4.5 h-4.5 rounded-full flex items-center justify-center shadow-md border"
+                  style={{
+                    color: settings.primary_color || '#dc2626',
+                    borderColor: settings.primary_color || '#dc2626',
+                  }}
+                >
                   {ticket.reduce((s, i) => s + i.quantity, 0)}
                 </span>
               </div>
-              <div className="min-w-0">
-                <p className="font-extrabold text-xs sm:text-sm text-white truncate leading-tight">
+              <div className="text-left font-mono">
+                <p className="text-xs font-black leading-tight text-white font-sans">
                   {ticket.reduce((s, i) => s + i.quantity, 0)} {ticket.reduce((s, i) => s + i.quantity, 0) === 1 ? 'producto en ticket' : 'productos en ticket'}
                 </p>
-                <p className="text-[11px] font-mono font-bold text-white/90 truncate mt-0.5">
-                  {currencySymbol}{totalUsd.toFixed(2)} {effectiveRate > 0 ? `· Bs. ${(totalUsd * effectiveRate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}
+                <p className="text-[11px] font-bold text-white/95">
+                  {currencySymbol}{totalUsd.toFixed(2)}
+                  {effectiveRate > 0 && (
+                    <span className="text-white/80 font-normal">
+                      {' '}· Bs. {(totalUsd * effectiveRate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  )}
                 </p>
               </div>
             </div>
 
+            {/* Lado Derecho: Botón Blanco de Acción con texto en color de marca */}
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
                 setIsMobileTicketOpen(true);
               }}
-              className="px-3.5 py-2 rounded-xl bg-white text-slate-950 font-black text-xs shrink-0 flex items-center gap-1.5 hover:bg-white/90 active:scale-95 transition-all shadow-xs"
+              className="flex items-center gap-1.5 bg-white px-3.5 py-2 rounded-xl font-black text-xs shadow-md shrink-0 hover:bg-white/90 active:scale-95 transition-all cursor-pointer"
+              style={{ color: settings.primary_color || '#dc2626' }}
             >
               <span>Ver Ticket</span>
-              <ArrowRight className="w-3.5 h-3.5" />
+              <ArrowRight className="w-3.5 h-3.5 stroke-[2.5]" />
             </button>
           </div>
         </div>
@@ -1273,6 +1390,57 @@ export default function PosPage({ params }: PosPageProps) {
               )}
             </div>
 
+            {/* Selector de Modo de Entrega Móvil (Mostrador vs Delivery) */}
+            {isDeliveryActive && ticket.length > 0 && (
+              <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-zinc-800/80 space-y-2 border border-slate-200 dark:border-zinc-700">
+                <div className="flex items-center gap-1 p-0.5 rounded-lg bg-slate-200 dark:bg-zinc-700 text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setPosDeliveryType('PICKUP')}
+                    className={`flex-1 py-1 px-2 rounded-md text-center transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                      posDeliveryType === 'PICKUP' ? 'bg-white dark:bg-zinc-800 text-slate-950 dark:text-white shadow-xs font-black' : 'text-slate-500'
+                    }`}
+                  >
+                    <Store className="w-3.5 h-3.5" />
+                    <span>Mostrador</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPosDeliveryType('DELIVERY')}
+                    className={`flex-1 py-1 px-2 rounded-md text-center transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                      posDeliveryType === 'DELIVERY' ? 'bg-emerald-500 text-white shadow-xs font-black' : 'text-slate-500'
+                    }`}
+                  >
+                    <Bike className="w-3.5 h-3.5" />
+                    <span>Delivery</span>
+                  </button>
+                </div>
+
+                {posDeliveryType === 'DELIVERY' && (
+                  <div className="space-y-1.5 pt-1 animate-in fade-in duration-150">
+                    <select
+                      value={selectedPosZoneId}
+                      onChange={(e) => setSelectedPosZoneId(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 text-xs font-semibold text-slate-950 dark:text-white focus:outline-none"
+                    >
+                      {deliveryZones.map((z) => (
+                        <option key={z.id} value={z.id}>
+                          {z.name} (+{currencySymbol}{Number(z.rate_primary).toFixed(2)})
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      value={posDeliveryAddress}
+                      onChange={(e) => setPosDeliveryAddress(e.target.value)}
+                      placeholder="Dirección exacta de entrega..."
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 text-xs text-slate-950 dark:text-white focus:outline-none"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Resumen Fiscal y Botón de Cobro */}
             <div className="pt-3 border-t border-slate-200 dark:border-zinc-800 space-y-2.5">
               {ticket.length > 0 && taxCalculations.isTaxActive && taxCalculations.vatAmount > 0 && (
@@ -1281,6 +1449,16 @@ export default function PosPage({ params }: PosPageProps) {
                   <span className="font-bold text-slate-800 dark:text-zinc-200">
                     {taxCalculations.pricesIncludeTax ? '' : '+'}{currencySymbol}{taxCalculations.vatAmount.toFixed(2)}
                   </span>
+                </div>
+              )}
+
+              {posDeliveryRate > 0 && (
+                <div className="flex justify-between text-xs text-emerald-700 dark:text-emerald-400 font-bold">
+                  <span className="flex items-center gap-1">
+                    <Bike className="w-3.5 h-3.5" />
+                    <span>Flete Delivery ({selectedPosZone?.name})</span>
+                  </span>
+                  <span className="font-mono">+{currencySymbol}{posDeliveryRate.toFixed(2)}</span>
                 </div>
               )}
 
@@ -1863,6 +2041,15 @@ export default function PosPage({ params }: PosPageProps) {
                   {completedSale.itemsCount} uds
                 </span>
               </div>
+              {completedSale.deliveryType === 'DELIVERY' && (
+                <div className="flex justify-between text-emerald-700 dark:text-emerald-400 font-bold">
+                  <span className="flex items-center gap-1">
+                    <Bike className="w-3.5 h-3.5" />
+                    <span>Flete ({completedSale.deliveryZoneName || 'Delivery'}):</span>
+                  </span>
+                  <span className="font-mono">+${Number(completedSale.deliveryRate || 0).toFixed(2)}</span>
+                </div>
+              )}
               <div className="flex justify-between border-t border-slate-200 dark:border-zinc-800 pt-1.5">
                 <span className="font-bold text-slate-900 dark:text-white">Total USD:</span>
                 <span className="font-mono font-black text-lime-600 dark:text-lime-400 text-sm">
@@ -1949,6 +2136,12 @@ export default function PosPage({ params }: PosPageProps) {
             ))}
           </div>
           <div className="pt-2 text-right">
+            {completedSale.deliveryType === 'DELIVERY' && (
+              <div className="flex justify-between text-[11px] font-bold py-0.5 border-t border-dashed border-black">
+                <span>FLETE ({completedSale.deliveryZoneName || 'DELIVERY'}):</span>
+                <span>+${Number(completedSale.deliveryRate || 0).toFixed(2)}</span>
+              </div>
+            )}
             <p className="text-sm font-black">TOTAL USD: ${completedSale.totalUsd.toFixed(2)}</p>
             {completedSale.totalSecondary != null && completedSale.totalSecondary > 0 && (
               <p className="text-xs font-bold font-mono">

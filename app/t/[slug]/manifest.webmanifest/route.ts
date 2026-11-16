@@ -1,14 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCachedTenantShell } from '@/lib/tenant';
 
-function getIconType(url: string): string {
-  const clean = url.split('?')[0].toLowerCase();
-  if (clean.endsWith('.webp')) return 'image/webp';
-  if (clean.endsWith('.svg')) return 'image/svg+xml';
-  if (clean.endsWith('.jpg') || clean.endsWith('.jpeg')) return 'image/jpeg';
-  return 'image/png';
-}
-
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
@@ -24,31 +16,29 @@ export async function GET(
     }
 
     const businessName = shell.settings.business_name || shell.tenant.name || 'MarketOS';
-    const shortName =
-      businessName.length > 14 ? businessName.slice(0, 12).trim() + '…' : businessName;
+    const shortName = businessName;
     const themeColor = shell.settings.primary_color || '#09090b';
     const backgroundColor = shell.settings.secondary_color || '#09090b';
 
-    const logoUrl = shell.settings.logo_url;
-    const logoMime = logoUrl ? getIconType(logoUrl) : 'image/png';
-
     const icons = [
-      ...(logoUrl
-        ? [
-            {
-              src: logoUrl,
-              sizes: '192x192 512x512',
-              type: logoMime,
-              purpose: 'any',
-            },
-            {
-              src: logoUrl,
-              sizes: '512x512',
-              type: logoMime,
-              purpose: 'maskable',
-            },
-          ]
-        : []),
+      {
+        src: `/api/tenant/${slug}/icon?size=192`,
+        sizes: '192x192',
+        type: 'image/png',
+        purpose: 'any',
+      },
+      {
+        src: `/api/tenant/${slug}/icon?size=512`,
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'any',
+      },
+      {
+        src: `/api/tenant/${slug}/icon?size=512&purpose=maskable`,
+        sizes: '512x512',
+        type: 'image/png',
+        purpose: 'maskable',
+      },
       {
         src: '/icons/icon-192.png',
         sizes: '192x192',
@@ -60,12 +50,6 @@ export async function GET(
         sizes: '512x512',
         type: 'image/png',
         purpose: 'any',
-      },
-      {
-        src: '/icons/icon-maskable-512.png',
-        sizes: '512x512',
-        type: 'image/png',
-        purpose: 'maskable',
       },
     ];
 

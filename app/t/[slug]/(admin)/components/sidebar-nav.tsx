@@ -14,6 +14,7 @@ import {
   ChevronRight,
   Tag,
   Coins,
+  Bike,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { hasPermission, type TenantPermission } from '@/lib/auth/rbac';
@@ -37,6 +38,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Dashboard', href: '', icon: LayoutDashboard, permission: 'dashboard', badgeColor: 'emerald' },
       { label: 'Pedidos', href: '/orders', icon: ShoppingCart, permission: 'orders', badgeColor: 'blue' },
+      { label: 'Delivery', href: '/delivery', icon: Bike, permission: 'orders', badgeColor: 'emerald' },
       { label: 'Caja', href: '/pos', icon: Monitor, permission: 'pos', badgeColor: 'amber' },
     ],
   },
