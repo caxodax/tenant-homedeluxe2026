@@ -97,7 +97,7 @@ export function PluginsManager({ slug, activePlugins: initialActive, onPluginTog
                 </div>
                 <div>
                   <h3 className="text-sm sm:text-base font-extrabold text-stone-950 dark:text-white flex items-center gap-1.5">
-                    Delivery Fleet & Despacho
+                    Delivery
                   </h3>
                   <span className="text-[10px] font-mono font-bold text-stone-400 uppercase">
                     plugin_id: delivery_fleet
