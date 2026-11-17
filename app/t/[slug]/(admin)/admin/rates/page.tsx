@@ -27,6 +27,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 interface ExchangeRateHistoryItem {
   id: string;
@@ -584,94 +585,94 @@ export default function RatesAdminPage() {
       {/* ========================================================================= */}
       {/* MODAL: CARGA MANUAL DE CONTINGENCIA                                      */}
       {/* ========================================================================= */}
-      {isManualModalOpen && (
+      <ModalPortal
+        isOpen={isManualModalOpen}
+        onClose={() => !savingManual && setIsManualModalOpen(false)}
+        backdropClassName="bg-black/70 backdrop-blur-xs"
+        containerClassName="p-4 items-center"
+      >
         <div
-          onClick={() => !savingManual && setIsManualModalOpen(false)}
-          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150"
+          onClick={(e) => e.stopPropagation()}
+          className="bg-white dark:bg-[#121214] border border-stone-200 dark:border-zinc-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200"
         >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white dark:bg-[#121214] border border-stone-200 dark:border-zinc-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200 my-8"
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-stone-200/80 dark:border-zinc-800">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-600 dark:text-rose-400">
-                  <AlertTriangle className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-base text-stone-900 dark:text-white leading-tight">
-                    Carga Manual de Contingencia
-                  </h3>
-                  <p className="text-xs text-stone-500 dark:text-zinc-400">
-                    Fija una tasa en Bs. en caso de caída de internet o emergencia.
-                  </p>
-                </div>
+          <div className="flex items-center justify-between pb-3 border-b border-stone-200/80 dark:border-zinc-800">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-600 dark:text-rose-400">
+                <AlertTriangle className="w-5 h-5" />
               </div>
-              <button
-                type="button"
-                onClick={() => setIsManualModalOpen(false)}
-                disabled={savingManual}
-                className="w-8 h-8 rounded-full bg-stone-100 dark:bg-zinc-800 text-stone-500 hover:text-stone-900 dark:hover:text-white flex items-center justify-center cursor-pointer transition"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveManual} className="space-y-4">
               <div>
-                <label className="text-xs font-bold text-stone-700 dark:text-zinc-300 block mb-1">
-                  Nueva Tasa de Contingencia (Bs. por USD / Moneda Base) *
-                </label>
-                <div className="relative">
-                  <span className="text-xs font-bold text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 font-mono">
-                    Bs.
-                  </span>
-                  <Input
-                    required
-                    type="number"
-                    step="0.01"
-                    min="1"
-                    value={manualRateInput}
-                    onChange={(e) => setManualRateInput(e.target.value)}
-                    placeholder={`Ej: ${activeEffectiveRate.toFixed(2)}`}
-                    className="pl-9 h-10 text-sm rounded-xl font-mono font-bold"
-                    disabled={savingManual}
-                  />
-                </div>
-                <p className="text-[11px] text-stone-400 mt-1">
-                  Esta tasa se aplicará de inmediato al catálogo, vitrina y terminal de Punto de Venta (POS).
+                <h3 className="font-extrabold text-base text-stone-900 dark:text-white leading-tight">
+                  Carga Manual de Contingencia
+                </h3>
+                <p className="text-xs text-stone-500 dark:text-zinc-400">
+                  Fija una tasa en Bs. en caso de caída de internet o emergencia.
                 </p>
               </div>
-
-              <div className="pt-3 border-t border-stone-200/80 dark:border-zinc-800 flex items-center justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setIsManualModalOpen(false)}
-                  disabled={savingManual}
-                  className="h-9 text-xs px-4 rounded-xl cursor-pointer"
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={savingManual || !manualRateInput}
-                  className="h-9 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs shadow-xs cursor-pointer flex items-center gap-1.5"
-                >
-                  {savingManual ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
-                      Fijando...
-                    </>
-                  ) : (
-                    <span>Fijar Tasa Manual</span>
-                  )}
-                </Button>
-              </div>
-            </form>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsManualModalOpen(false)}
+              disabled={savingManual}
+              className="w-8 h-8 rounded-full bg-stone-100 dark:bg-zinc-800 text-stone-500 hover:text-stone-900 dark:hover:text-white flex items-center justify-center cursor-pointer transition"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
+
+          <form onSubmit={handleSaveManual} className="space-y-4">
+            <div>
+              <label className="text-xs font-bold text-stone-700 dark:text-zinc-300 block mb-1">
+                Nueva Tasa de Contingencia (Bs. por USD / Moneda Base) *
+              </label>
+              <div className="relative">
+                <span className="text-xs font-bold text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 font-mono">
+                  Bs.
+                </span>
+                <Input
+                  required
+                  type="number"
+                  step="0.01"
+                  min="1"
+                  value={manualRateInput}
+                  onChange={(e) => setManualRateInput(e.target.value)}
+                  placeholder={`Ej: ${activeEffectiveRate.toFixed(2)}`}
+                  className="pl-9 h-10 text-sm rounded-xl font-mono font-bold"
+                  disabled={savingManual}
+                />
+              </div>
+              <p className="text-[11px] text-stone-400 mt-1">
+                Esta tasa se aplicará de inmediato al catálogo, vitrina y terminal de Punto de Venta (POS).
+              </p>
+            </div>
+
+            <div className="pt-3 border-t border-stone-200/80 dark:border-zinc-800 flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setIsManualModalOpen(false)}
+                disabled={savingManual}
+                className="h-9 text-xs px-4 rounded-xl cursor-pointer"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={savingManual || !manualRateInput}
+                className="h-9 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-xs shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                {savingManual ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                    Fijando...
+                  </>
+                ) : (
+                  <span>Fijar Tasa Manual</span>
+                )}
+              </Button>
+            </div>
+          </form>
         </div>
-      )}
+      </ModalPortal>
     </div>
   );
 }

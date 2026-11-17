@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import Link from 'next/link';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 export interface CategoryData {
   id: string;
@@ -688,15 +689,16 @@ export function CategoriesClientView({ slug, initialCategories }: CategoriesClie
       {/* ========================================================================= */}
       {/* MODAL 1: NUEVA CATEGORÍA                                                   */}
       {/* ========================================================================= */}
-      {isCreateModalOpen && (
+      <ModalPortal
+        isOpen={isCreateModalOpen}
+        onClose={() => !isCreatingModal && setIsCreateModalOpen(false)}
+        backdropClassName="bg-black/70 backdrop-blur-xs"
+        containerClassName="p-4 items-center"
+      >
         <div
-          onClick={() => !isCreatingModal && setIsCreateModalOpen(false)}
-          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150"
+          onClick={(e) => e.stopPropagation()}
+          className="bg-white dark:bg-[#121214] border border-stone-200 dark:border-zinc-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200"
         >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white dark:bg-[#121214] border border-stone-200 dark:border-zinc-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200"
-          >
             <div className="flex items-center justify-between pb-3 border-b border-stone-200/80 dark:border-zinc-800">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
@@ -801,21 +803,21 @@ export function CategoriesClientView({ slug, initialCategories }: CategoriesClie
               </div>
             </form>
           </div>
-        </div>
-      )}
+      </ModalPortal>
 
       {/* ========================================================================= */}
       {/* MODAL 2: EDITAR CATEGORÍA                                                 */}
       {/* ========================================================================= */}
-      {editingCategory && (
+      <ModalPortal
+        isOpen={!!editingCategory}
+        onClose={() => !isUpdating && setEditingCategory(null)}
+        backdropClassName="bg-black/70 backdrop-blur-xs"
+        containerClassName="p-4 items-center"
+      >
         <div
-          onClick={() => !isUpdating && setEditingCategory(null)}
-          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150"
+          onClick={(e) => e.stopPropagation()}
+          className="bg-white dark:bg-[#121214] border border-stone-200 dark:border-zinc-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200"
         >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white dark:bg-[#121214] border border-stone-200 dark:border-zinc-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200"
-          >
             <div className="flex items-center justify-between pb-3 border-b border-stone-200/80 dark:border-zinc-800">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
@@ -860,7 +862,7 @@ export function CategoriesClientView({ slug, initialCategories }: CategoriesClie
                   Slug / Identificador URL
                 </label>
                 <div className="h-9 px-3 rounded-xl bg-stone-100 dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 text-xs font-mono flex items-center text-stone-500 dark:text-zinc-400">
-                  /{editingCategory.slug}
+                  /{editingCategory?.slug}
                 </div>
                 <p className="text-[11px] text-stone-400 dark:text-zinc-500 mt-1">
                   Se actualiza automáticamente al cambiar el nombre.
@@ -927,86 +929,85 @@ export function CategoriesClientView({ slug, initialCategories }: CategoriesClie
               </div>
             </form>
           </div>
-        </div>
-      )}
+      </ModalPortal>
 
       {/* ========================================================================= */}
       {/* MODAL 3: ELIMINAR LÓGICAMENTE (MOVER A PAPELERA / SOFT-DELETE)           */}
       {/* ========================================================================= */}
-      {deletingCategory && (
+      <ModalPortal
+        isOpen={!!deletingCategory}
+        onClose={() => !isDeleting && setDeletingCategory(null)}
+        backdropClassName="bg-black/70 backdrop-blur-xs"
+        containerClassName="p-4 items-center"
+      >
         <div
-          onClick={() => !isDeleting && setDeletingCategory(null)}
-          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150"
+          onClick={(e) => e.stopPropagation()}
+          className="bg-white dark:bg-[#121214] border border-amber-200 dark:border-amber-950/60 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200"
         >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white dark:bg-[#121214] border border-amber-200 dark:border-amber-950/60 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200"
-          >
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900/60 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
-                <Archive className="w-5 h-5" />
-              </div>
-              <div className="space-y-1">
-                <h3 className="font-extrabold text-base text-stone-900 dark:text-white">
-                  ¿Mover categoría a la papelera?
-                </h3>
-                <p className="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed">
-                  Estás a punto de archivar la categoría{' '}
-                  <strong className="text-stone-900 dark:text-white font-bold">
-                    &quot;{deletingCategory.name}&quot;
-                  </strong>
-                  .
-                </p>
-              </div>
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900/60 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
+              <Archive className="w-5 h-5" />
             </div>
-
-            <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-zinc-900 border border-stone-200/80 dark:border-zinc-800 text-xs text-stone-700 dark:text-zinc-300 space-y-2">
-              <p className="flex items-center gap-1.5 font-bold text-stone-800 dark:text-zinc-200">
-                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                Eliminación Lógica Protegida (Soft-Delete)
+            <div className="space-y-1">
+              <h3 className="font-extrabold text-base text-stone-900 dark:text-white">
+                ¿Mover categoría a la papelera?
+              </h3>
+              <p className="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed">
+                Estás a punto de archivar la categoría{' '}
+                <strong className="text-stone-900 dark:text-white font-bold">
+                  &quot;{deletingCategory?.name}&quot;
+                </strong>
+                .
               </p>
-              <p className="text-[11px] leading-relaxed text-stone-500 dark:text-zinc-400">
-                La categoría dejará de mostrarse en la vitrina web y en caja. Ningún dato ni producto se eliminará de la base de datos, y podrás restaurarla cuando lo desees desde la pestaña &quot;Papelera / Archivadas&quot;.
-              </p>
-              {deletingCategory.product_count > 0 && (
-                <p className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
-                  {deletingCategory.product_count} producto(s) vinculado(s) conservan su referencia.
-                </p>
-              )}
-            </div>
-
-            <div className="pt-3 border-t border-stone-200/80 dark:border-zinc-800 flex items-center justify-end gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => setDeletingCategory(null)}
-                disabled={isDeleting}
-                className="h-10 text-xs px-4 rounded-xl cursor-pointer"
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="button"
-                onClick={handleConfirmDelete}
-                disabled={isDeleting}
-                className="h-10 px-5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-xs cursor-pointer flex items-center gap-1.5"
-              >
-                {isDeleting ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
-                    Archivando...
-                  </>
-                ) : (
-                  <>
-                    <Archive className="w-4 h-4" />
-                    <span>Mover a Papelera</span>
-                  </>
-                )}
-              </Button>
             </div>
           </div>
+
+          <div className="p-3.5 rounded-2xl bg-stone-50 dark:bg-zinc-900 border border-stone-200/80 dark:border-zinc-800 text-xs text-stone-700 dark:text-zinc-300 space-y-2">
+            <p className="flex items-center gap-1.5 font-bold text-stone-800 dark:text-zinc-200">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+              Eliminación Lógica Protegida (Soft-Delete)
+            </p>
+            <p className="text-[11px] leading-relaxed text-stone-500 dark:text-zinc-400">
+              La categoría dejará de mostrarse en la vitrina web y en caja. Ningún dato ni producto se eliminará de la base de datos, y podrás restaurarla cuando lo desees desde la pestaña &quot;Papelera / Archivadas&quot;.
+            </p>
+            {deletingCategory && deletingCategory.product_count > 0 && (
+              <p className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                {deletingCategory.product_count} producto(s) vinculado(s) conservan su referencia.
+              </p>
+            )}
+          </div>
+
+          <div className="pt-3 border-t border-stone-200/80 dark:border-zinc-800 flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setDeletingCategory(null)}
+              disabled={isDeleting}
+              className="h-10 text-xs px-4 rounded-xl cursor-pointer"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              onClick={handleConfirmDelete}
+              disabled={isDeleting}
+              className="h-10 px-5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs shadow-xs cursor-pointer flex items-center gap-1.5"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
+                  Archivando...
+                </>
+              ) : (
+                <>
+                  <Archive className="w-4 h-4" />
+                  <span>Mover a Papelera</span>
+                </>
+              )}
+            </Button>
+          </div>
         </div>
-      )}
+      </ModalPortal>
     </div>
   );
 }

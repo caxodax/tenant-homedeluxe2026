@@ -19,6 +19,7 @@ import {
   RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 interface TrackedOrder {
   id: string;
@@ -162,8 +163,8 @@ export function OrderTrackerModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+    <ModalPortal isOpen={isOpen} onClose={onClose} backdropClassName="bg-black/70 backdrop-blur-xs">
+      <div className="bg-white dark:bg-[#121214] border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl max-w-2xl w-full max-h-[calc(100dvh-2.5rem)] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
         {/* Header Modal */}
         <div className="flex items-center justify-between p-5 border-b border-zinc-100 dark:border-zinc-800/80 bg-zinc-50/50 dark:bg-zinc-900/50">
           <div className="flex items-center gap-3">
@@ -395,6 +396,6 @@ export function OrderTrackerModal({
           )}
         </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }

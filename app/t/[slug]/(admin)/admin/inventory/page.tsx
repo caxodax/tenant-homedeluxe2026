@@ -37,6 +37,7 @@ import { cn } from '@/lib/utils';
 import Link from 'next/link';
 import { uploadTenantMedia } from '@/lib/media-client';
 import { CategoryCombobox } from '@/components/admin/category-combobox';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 export interface Product {
   id: string;
@@ -1489,41 +1490,41 @@ export default function InventoryPage() {
       {/* ========================================================================= */}
       {/* MODAL 1: NUEVO / EDITAR PRODUCTO (DISEÑO 2 COLUMNAS + COMPRESOR WEBP)     */}
       {/* ========================================================================= */}
-      {isModalOpen && (
+      <ModalPortal
+        isOpen={isModalOpen}
+        onClose={() => !isSavingProduct && setIsModalOpen(false)}
+      >
         <div
-          onClick={() => !isSavingProduct && setIsModalOpen(false)}
-          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150"
+          className="bg-white dark:bg-[#121214] border border-stone-200 dark:border-zinc-800 rounded-3xl max-w-xl w-full shadow-2xl flex flex-col max-h-[calc(100dvh-2rem)] overflow-hidden animate-in zoom-in-95 duration-200"
         >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white dark:bg-[#121214] border border-stone-200 dark:border-zinc-800 rounded-3xl max-w-xl w-full p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200 my-8"
-          >
-            {/* Header del Modal */}
-            <div className="flex items-center justify-between pb-3 border-b border-stone-200/80 dark:border-zinc-800">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-                  <Package className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="font-extrabold text-base text-stone-900 dark:text-white leading-tight">
-                    {editingProduct ? 'Editar Producto' : 'Nuevo Producto'}
-                  </h2>
-                  <p className="text-xs text-stone-500 dark:text-zinc-400">
-                    Información, precios, categoría y disponibilidad en catálogo
-                  </p>
-                </div>
+          {/* Header del Modal - Fijo en la parte superior */}
+          <div className="flex items-center justify-between p-5 sm:p-6 pb-3.5 border-b border-stone-200/80 dark:border-zinc-800 shrink-0 bg-white dark:bg-[#121214] z-10">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+                <Package className="w-5 h-5" />
               </div>
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(false)}
-                disabled={isSavingProduct}
-                className="w-8 h-8 rounded-full bg-stone-100 dark:bg-zinc-800 text-stone-500 hover:text-stone-900 dark:hover:text-white flex items-center justify-center cursor-pointer transition"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div>
+                <h2 className="font-extrabold text-base text-stone-900 dark:text-white leading-tight">
+                  {editingProduct ? 'Editar Producto' : 'Nuevo Producto'}
+                </h2>
+                <p className="text-xs text-stone-500 dark:text-zinc-400">
+                  Información, precios, categoría y disponibilidad en catálogo
+                </p>
+              </div>
             </div>
+            <button
+              type="button"
+              onClick={() => setIsModalOpen(false)}
+              disabled={isSavingProduct}
+              className="w-8 h-8 rounded-full bg-stone-100 dark:bg-zinc-800 text-stone-500 hover:text-stone-900 dark:hover:text-white flex items-center justify-center cursor-pointer transition shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
 
-            <form onSubmit={handleSaveProduct} className="space-y-4">
+          <form onSubmit={handleSaveProduct} className="flex flex-col flex-1 overflow-hidden min-h-0">
+            {/* Cuerpo del formulario con Scroll vertical natural y adaptabilidad a teclado móvil */}
+            <div className="p-5 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1">
               {/* Fotografía del Producto (con Compresor WebP optimizado) */}
               <div className="p-4 rounded-2xl bg-stone-50 dark:bg-zinc-900/60 border border-stone-200/80 dark:border-zinc-800 space-y-3">
                 <div className="flex items-center justify-between">
@@ -1789,53 +1790,52 @@ export default function InventoryPage() {
                 </label>
               </div>
 
-              {/* Footer */}
-              <div className="pt-3 border-t border-stone-200/80 dark:border-zinc-800 flex items-center justify-end gap-2">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setIsModalOpen(false)}
-                  disabled={isSavingProduct}
-                  className="h-10 text-xs px-4 rounded-xl cursor-pointer"
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={isSavingProduct || !formName.trim() || !formPriceUsd}
-                  className="h-10 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow-xs cursor-pointer flex items-center gap-1.5"
-                >
-                  {isSavingProduct ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin mr-1" />
-                      Guardando...
-                    </>
-                  ) : (
-                    <>
-                      <Check className="w-4 h-4" />
-                      <span>{editingProduct ? 'Guardar Cambios' : 'Crear Producto'}</span>
-                    </>
-                  )}
-                </Button>
-              </div>
-            </form>
-          </div>
+            </div>
+
+            {/* Footer Fijo con Botones Guardar y Cancelar */}
+            <div className="p-4 sm:p-5 pt-3 border-t border-stone-200/80 dark:border-zinc-800 flex items-center justify-end gap-2 bg-stone-50/80 dark:bg-zinc-900/80 shrink-0">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setIsModalOpen(false)}
+                disabled={isSavingProduct}
+                className="h-10 text-xs px-4 rounded-xl cursor-pointer"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={isSavingProduct || !formName.trim() || !formPriceUsd}
+                className="h-10 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow-xs cursor-pointer flex items-center gap-1.5"
+              >
+                {isSavingProduct ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                    Guardando...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    <span>{editingProduct ? 'Guardar Cambios' : 'Crear Producto'}</span>
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
         </div>
-      )}
+      </ModalPortal>
 
       {/* ========================================================================= */}
       {/* MODAL 2: CONFIRMACIÓN DE IMPORTACIÓN MASIVA (PREVIEW CSV)                 */}
       {/* ========================================================================= */}
-      {isImportModalOpen && (
+      <ModalPortal
+        isOpen={isImportModalOpen}
+        onClose={() => !isImporting && setIsImportModalOpen(false)}
+      >
         <div
-          onClick={() => !isImporting && setIsImportModalOpen(false)}
-          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150"
+          className="bg-white dark:bg-[#121214] border border-stone-200 dark:border-zinc-800 rounded-3xl max-w-2xl w-full shadow-2xl flex flex-col max-h-[calc(100dvh-2rem)] overflow-hidden animate-in zoom-in-95 duration-200"
         >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white dark:bg-[#121214] border border-stone-200 dark:border-zinc-800 rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200 my-8"
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-stone-200/80 dark:border-zinc-800">
+          <div className="flex items-center justify-between p-5 sm:p-6 pb-3.5 border-b border-stone-200/80 dark:border-zinc-800 shrink-0 bg-white dark:bg-[#121214]">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
                   <FileSpreadsheet className="w-5 h-5" />
@@ -1929,7 +1929,7 @@ export default function InventoryPage() {
               >
                 {isImporting ? (
                   <>
-                    <Loader2 className="w-4 h-4 animate-spin mr-1" />
+                    <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
                     Procesando {importRows.length} productos...
                   </>
                 ) : (
@@ -1941,21 +1941,18 @@ export default function InventoryPage() {
               </Button>
             </div>
           </div>
-        </div>
-      )}
+      </ModalPortal>
 
       {/* ========================================================================= */}
       {/* MODAL 3: ELIMINACIÓN LÓGICA (MOVER A PAPELERA / SOFT-DELETE)             */}
       {/* ========================================================================= */}
-      {deletingProduct && (
+      <ModalPortal
+        isOpen={Boolean(deletingProduct)}
+        onClose={() => !isDeleting && setDeletingProduct(null)}
+      >
         <div
-          onClick={() => !isDeleting && setDeletingProduct(null)}
-          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150"
+          className="bg-white dark:bg-[#121214] border border-amber-200 dark:border-amber-950/60 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200"
         >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white dark:bg-[#121214] border border-amber-200 dark:border-amber-950/60 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-200"
-          >
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-2xl bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900/60 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
                 <Archive className="w-5 h-5" />
@@ -1967,7 +1964,7 @@ export default function InventoryPage() {
                 <p className="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed">
                   Estás a punto de archivar{' '}
                   <strong className="text-stone-900 dark:text-white font-bold">
-                    &quot;{deletingProduct.name}&quot;
+                    &quot;{deletingProduct?.name}&quot;
                   </strong>
                   .
                 </p>
@@ -2014,8 +2011,7 @@ export default function InventoryPage() {
               </Button>
             </div>
           </div>
-        </div>
-      )}
+      </ModalPortal>
     </div>
   );
 }

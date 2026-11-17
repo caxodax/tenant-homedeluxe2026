@@ -26,6 +26,7 @@ import {
   extractGpsCoordinatesFromText,
   sanitizeWhatsAppPhone,
 } from '@/lib/plugins/delivery-fleet';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 interface DispatchBoardProps {
   slug: string;
@@ -454,120 +455,126 @@ export function DispatchBoard({
       </div>
 
       {/* Modal para Asignar Chofer */}
-      {assigningId && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-[#141416] p-6 rounded-2xl max-w-md w-full border border-stone-200 dark:border-zinc-800 shadow-xl space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-sm text-stone-900 dark:text-white flex items-center gap-2">
-                <Bike className="w-4 h-4 text-emerald-600" />
-                Asignar Repartidor
-              </h3>
-              <button
-                onClick={() => setAssigningId(null)}
-                className="p-1 rounded-lg text-stone-400 hover:text-stone-600 dark:hover:text-zinc-200"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+      <ModalPortal
+        isOpen={!!assigningId}
+        onClose={() => setAssigningId(null)}
+        backdropClassName="bg-black/50 backdrop-blur-xs"
+        containerClassName="p-4 items-center"
+      >
+        <div className="bg-white dark:bg-[#141416] p-6 rounded-2xl max-w-md w-full border border-stone-200 dark:border-zinc-800 shadow-xl space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-sm text-stone-900 dark:text-white flex items-center gap-2">
+              <Bike className="w-4 h-4 text-emerald-600" />
+              Asignar Repartidor
+            </h3>
+            <button
+              onClick={() => setAssigningId(null)}
+              className="p-1 rounded-lg text-stone-400 hover:text-stone-600 dark:hover:text-zinc-200"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-stone-700 dark:text-zinc-300 mb-1">
-                Selecciona un chofer activo:
-              </label>
-              <select
-                value={selectedDriverId}
-                onChange={(e) => setSelectedDriverId(e.target.value)}
-                className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-zinc-700 bg-stone-50 dark:bg-zinc-900 text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              >
-                <option value="">-- Seleccionar repartidor --</option>
-                {drivers.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.full_name} ({d.vehicle_type} · {d.license_plate}) - Tel: {d.phone}
-                  </option>
-                ))}
-              </select>
-            </div>
+          <div>
+            <label className="block text-xs font-semibold text-stone-700 dark:text-zinc-300 mb-1">
+              Selecciona un chofer activo:
+            </label>
+            <select
+              value={selectedDriverId}
+              onChange={(e) => setSelectedDriverId(e.target.value)}
+              className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-zinc-700 bg-stone-50 dark:bg-zinc-900 text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              <option value="">-- Seleccionar repartidor --</option>
+              {drivers.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.full_name} ({d.vehicle_type} · {d.license_plate}) - Tel: {d.phone}
+                </option>
+              ))}
+            </select>
+          </div>
 
-            {drivers.length === 0 && (
-              <p className="text-xs text-amber-600 dark:text-amber-400">
-                ⚠️ No hay motorizados activos registrados. Ve a la pestaña &quot;Repartidores&quot; para registrar uno.
-              </p>
-            )}
+          {drivers.length === 0 && (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              ⚠️ No hay motorizados activos registrados. Ve a la pestaña &quot;Repartidores&quot; para registrar uno.
+            </p>
+          )}
 
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setAssigningId(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-stone-600 dark:text-zinc-400 hover:bg-stone-100 dark:hover:bg-zinc-800"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                disabled={actionLoading || !selectedDriverId}
-                onClick={() => handleAssignDriver(assigningId)}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-xs disabled:opacity-50"
-              >
-                {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                Confirmar Asignación
-              </button>
-            </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setAssigningId(null)}
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-stone-600 dark:text-zinc-400 hover:bg-stone-100 dark:hover:bg-zinc-800"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={actionLoading || !selectedDriverId || !assigningId}
+              onClick={() => assigningId && handleAssignDriver(assigningId)}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs shadow-xs disabled:opacity-50"
+            >
+              {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+              Confirmar Asignación
+            </button>
           </div>
         </div>
-      )}
+      </ModalPortal>
 
       {/* Modal para Motivo de Fallido */}
-      {failingId && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-[#141416] p-6 rounded-2xl max-w-md w-full border border-stone-200 dark:border-zinc-800 shadow-xl space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-sm text-rose-600 flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4" />
-                Marcar Despacho como Fallido
-              </h3>
-              <button
-                onClick={() => setFailingId(null)}
-                className="p-1 rounded-lg text-stone-400 hover:text-stone-600 dark:hover:text-zinc-200"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+      <ModalPortal
+        isOpen={!!failingId}
+        onClose={() => setFailingId(null)}
+        backdropClassName="bg-black/50 backdrop-blur-xs"
+        containerClassName="p-4 items-center"
+      >
+        <div className="bg-white dark:bg-[#141416] p-6 rounded-2xl max-w-md w-full border border-stone-200 dark:border-zinc-800 shadow-xl space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-sm text-rose-600 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" />
+              Marcar Despacho como Fallido
+            </h3>
+            <button
+              onClick={() => setFailingId(null)}
+              className="p-1 rounded-lg text-stone-400 hover:text-stone-600 dark:hover:text-zinc-200"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
 
-            <div>
-              <label className="block text-xs font-semibold text-stone-700 dark:text-zinc-300 mb-1">
-                Motivo del fallo:
-              </label>
-              <textarea
-                rows={3}
-                required
-                value={failureReason}
-                onChange={(e) => setFailureReason(e.target.value)}
-                placeholder="Ej. El cliente no atendió las llamadas en la dirección de entrega."
-                className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-zinc-700 bg-stone-50 dark:bg-zinc-900 text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
-              />
-            </div>
+          <div>
+            <label className="block text-xs font-semibold text-stone-700 dark:text-zinc-300 mb-1">
+              Motivo del fallo:
+            </label>
+            <textarea
+              rows={3}
+              required
+              value={failureReason}
+              onChange={(e) => setFailureReason(e.target.value)}
+              placeholder="Ej. El cliente no atendió las llamadas en la dirección de entrega."
+              className="w-full px-3 py-2 text-xs rounded-xl border border-stone-200 dark:border-zinc-700 bg-stone-50 dark:bg-zinc-900 text-stone-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+            />
+          </div>
 
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setFailingId(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-stone-600 dark:text-zinc-400 hover:bg-stone-100 dark:hover:bg-zinc-800"
-              >
-                Cancelar
-              </button>
-              <button
-                type="button"
-                disabled={actionLoading || !failureReason.trim()}
-                onClick={() => handleUpdateStatus(failingId, 'FAILED', failureReason.trim())}
-                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs shadow-xs disabled:opacity-50"
-              >
-                {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
-                Registrar Fallido
-              </button>
-            </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => setFailingId(null)}
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-stone-600 dark:text-zinc-400 hover:bg-stone-100 dark:hover:bg-zinc-800"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={actionLoading || !failureReason.trim() || !failingId}
+              onClick={() => failingId && handleUpdateStatus(failingId, 'FAILED', failureReason.trim())}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs shadow-xs disabled:opacity-50"
+            >
+              {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+              Registrar Fallido
+            </button>
           </div>
         </div>
-      )}
+      </ModalPortal>
     </div>
   );
 }

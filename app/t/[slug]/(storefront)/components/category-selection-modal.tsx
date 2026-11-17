@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { LayoutGrid, Heart, Check, X } from 'lucide-react';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 interface Category {
   id: string;
@@ -34,18 +35,15 @@ export function CategorySelectionModal({
   favoritesCount,
   getProductCountByCategory,
 }: CategorySelectionModalProps) {
-  if (!isOpen) return null;
-
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200">
-      {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
-        onClick={onClose}
-      />
-
+    <ModalPortal
+      isOpen={isOpen}
+      onClose={onClose}
+      backdropClassName="bg-black/60 backdrop-blur-xs"
+      containerClassName="p-0 sm:p-4 items-end sm:items-center"
+    >
       {/* Contenedor Modal / Bottom Sheet */}
-      <div className="relative w-full max-w-md bg-white dark:bg-[#141416] border border-stone-200 dark:border-zinc-800 rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden z-10 flex flex-col max-h-[85vh] animate-in slide-in-from-bottom duration-250">
+      <div className="relative w-full max-w-md bg-white dark:bg-[#141416] border border-stone-200 dark:border-zinc-800 rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden z-10 flex flex-col max-h-[85vh] animate-in slide-in-from-bottom duration-200">
         
         {/* Cabecera del Selector */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100 dark:border-zinc-800/80">
@@ -196,6 +194,6 @@ export function CategorySelectionModal({
         </div>
 
       </div>
-    </div>
+    </ModalPortal>
   );
 }

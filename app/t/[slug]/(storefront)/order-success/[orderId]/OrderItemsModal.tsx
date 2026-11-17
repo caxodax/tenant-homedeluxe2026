@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Package, X, Receipt } from 'lucide-react';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 interface OrderItem {
   product_name: string;
@@ -43,15 +44,16 @@ export function OrderItemsModal({
         <span>Ver Detalle del Pedido ({items.length} {items.length === 1 ? 'producto' : 'productos'})</span>
       </button>
 
-      {isOpen && (
+      <ModalPortal
+        isOpen={isOpen}
+        onClose={() => setIsOpen(false)}
+        backdropClassName="bg-black/75 backdrop-blur-sm"
+        containerClassName="p-4 items-center"
+      >
         <div
-          className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setIsOpen(false)}
+          className="relative max-w-lg w-full bg-white dark:bg-[#121214] text-slate-900 dark:text-white rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-150"
+          onClick={(e) => e.stopPropagation()}
         >
-          <div
-            className="relative max-w-lg w-full bg-white dark:bg-[#121214] text-slate-900 dark:text-white rounded-3xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-150"
-            onClick={(e) => e.stopPropagation()}
-          >
             {/* Modal Header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-zinc-800">
               <div className="flex items-center gap-2.5">
@@ -133,8 +135,7 @@ export function OrderItemsModal({
               )}
             </div>
           </div>
-        </div>
-      )}
+      </ModalPortal>
     </>
   );
 }

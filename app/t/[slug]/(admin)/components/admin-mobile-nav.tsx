@@ -27,6 +27,7 @@ import { cn } from '@/lib/utils';
 import { hasPermission, type TenantPermission } from '@/lib/auth/rbac';
 import { usePendingOrdersBadge } from '@/components/admin/new-order-notification';
 import { IconBadge, type IconBadgeColor } from '@/components/ui/icon-badge';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 interface AdminMobileNavProps {
   slug: string;
@@ -114,17 +115,15 @@ export function AdminMobileNav({
         <Menu className="w-5 h-5" />
       </button>
 
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex">
-          {/* Backdrop con cierre al tocar */}
-          <div
-            className="fixed inset-0 bg-stone-950/60 backdrop-blur-xs transition-opacity"
-            onClick={() => setIsOpen(false)}
-          />
-
-          {/* Drawer Lateral Deslizante */}
-          <div className="relative ml-auto w-full max-w-xs sm:max-w-sm h-dvh bg-white dark:bg-[#141416] border-l border-stone-200 dark:border-zinc-800 flex flex-col shadow-2xl z-10">
-            {/* Header del Drawer */}
+      <ModalPortal
+        isOpen={isOpen}
+        onClose={() => setIsOpen(false)}
+        backdropClassName="bg-stone-950/60 backdrop-blur-xs"
+        containerClassName="justify-end p-0 overflow-hidden"
+      >
+        {/* Drawer Lateral Deslizante */}
+        <div className="relative ml-auto w-full max-w-xs sm:max-w-sm h-dvh bg-white dark:bg-[#141416] border-l border-stone-200 dark:border-zinc-800 flex flex-col shadow-2xl z-10 animate-in slide-in-from-right duration-200">
+          {/* Header del Drawer */}
             <div className="p-4 border-b border-stone-200/80 dark:border-zinc-800/80 flex items-center justify-between gap-3">
               <Link href={`/t/${slug}/admin`} onClick={() => setIsOpen(false)} className="flex items-center gap-2.5 min-w-0 group">
                 {logoUrl ? (
@@ -241,8 +240,7 @@ export function AdminMobileNav({
               />
             </div>
           </div>
-        </div>
-      )}
+      </ModalPortal>
     </div>
   );
 }

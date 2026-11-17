@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import type { PaymentFieldDetail, TenantPaymentMethod } from '@/lib/payment-methods';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 interface EditingState {
   isNew: boolean;
@@ -369,8 +370,13 @@ export function PaymentMethodsManager({ slug }: { slug: string }) {
       </Card>
 
       {/* Formulario / Editor Modal Inline */}
-      {editing && (
-        <div className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-center justify-center p-4">
+      <ModalPortal
+        isOpen={!!editing}
+        onClose={() => setEditing(null)}
+        backdropClassName="bg-black/65 backdrop-blur-xs"
+        containerClassName="p-4 items-center"
+      >
+        {editing && (
           <div className="bg-white dark:bg-[#121214] border border-slate-200 dark:border-zinc-800 rounded-3xl max-w-2xl w-full p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-zinc-800">
               <div>
@@ -553,8 +559,8 @@ export function PaymentMethodsManager({ slug }: { slug: string }) {
               </Button>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </ModalPortal>
     </div>
   );
 }

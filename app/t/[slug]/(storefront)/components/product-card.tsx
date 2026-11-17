@@ -5,6 +5,7 @@ import { useCart } from '@/lib/cart/cart-store';
 import { useFavorites } from '@/lib/favorites/favorites-store';
 import { toast } from 'sonner';
 import { Plus, Minus, Package, ShoppingBag, X, Heart } from 'lucide-react';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 export interface StorefrontProduct {
   id: string;
@@ -224,95 +225,95 @@ export function ProductCard({
       </div>
 
       {/* Modal Rápido de Detalle y Cantidad */}
-      {isModalOpen && !isOutOfStock && (
+      <ModalPortal
+        isOpen={isModalOpen && !isOutOfStock}
+        onClose={() => setIsModalOpen(false)}
+        backdropClassName="bg-black/60 backdrop-blur-xs"
+        containerClassName="p-4 items-center"
+      >
         <div 
-          onClick={() => setIsModalOpen(false)}
-          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150"
+          onClick={(e) => e.stopPropagation()}
+          className="bg-white dark:bg-[#121214] border border-stone-200 dark:border-zinc-800 rounded-3xl max-w-sm w-full p-5 space-y-4 shadow-2xl animate-in zoom-in-95 duration-200"
         >
-          <div 
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white dark:bg-[#121214] border border-stone-200 dark:border-zinc-800 rounded-3xl max-w-sm w-full p-5 space-y-4 shadow-2xl animate-in zoom-in-95 duration-200"
-          >
-            <div className="flex items-center justify-between pb-2 border-b border-stone-100 dark:border-zinc-800">
-              <span className="text-xs font-bold text-stone-500 uppercase tracking-wider">
-                {product.category_name || 'Producto'}
+          <div className="flex items-center justify-between pb-2 border-b border-stone-100 dark:border-zinc-800">
+            <span className="text-xs font-bold text-stone-500 uppercase tracking-wider">
+              {product.category_name || 'Producto'}
+            </span>
+            <button
+              type="button"
+              onClick={() => setIsModalOpen(false)}
+              className="w-7 h-7 rounded-full bg-stone-100 dark:bg-zinc-800 text-stone-500 flex items-center justify-center cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="aspect-square w-full rounded-2xl bg-stone-50 dark:bg-zinc-900 border border-stone-100 dark:border-zinc-800 flex items-center justify-center overflow-hidden">
+            {product.image_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={product.image_url} alt={product.name} className="w-full h-full object-contain p-4" />
+            ) : (
+              <Package className="w-16 h-16 text-stone-300 dark:text-zinc-600" />
+            )}
+          </div>
+
+          <div>
+            <h4 className="font-extrabold text-base text-stone-900 dark:text-white leading-snug">
+              {product.name}
+            </h4>
+            {product.description && (
+              <p className="text-xs text-stone-500 dark:text-zinc-400 mt-1 line-clamp-2">
+                {product.description}
+              </p>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between pt-1">
+            <div>
+              <p className="text-lg font-black font-mono tenant-primary-text">
+                {currencySymbol}{price.toFixed(2)}
+              </p>
+              {priceBs !== null && (
+                <p className="text-xs font-mono font-bold text-stone-500">
+                  Bs. {priceBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              )}
+            </div>
+
+            {/* Stepper de cantidad */}
+            <div className="flex items-center gap-2 border border-stone-200 dark:border-zinc-800 rounded-xl p-1 bg-stone-50 dark:bg-zinc-900 font-mono">
+              <button
+                type="button"
+                onClick={() => setModalQuantity((q) => Math.max(1, q - 1))}
+                className="w-7 h-7 rounded-lg bg-white dark:bg-zinc-800 text-stone-700 dark:text-zinc-200 font-bold text-sm flex items-center justify-center shadow-2xs cursor-pointer"
+              >
+                <Minus className="w-3.5 h-3.5" />
+              </button>
+              <span className="w-8 text-center font-extrabold text-sm text-stone-900 dark:text-white">
+                {modalQuantity}
               </span>
               <button
                 type="button"
-                onClick={() => setIsModalOpen(false)}
-                className="w-7 h-7 rounded-full bg-stone-100 dark:bg-zinc-800 text-stone-500 flex items-center justify-center cursor-pointer"
+                onClick={() => setModalQuantity((q) => Math.min(stock, q + 1))}
+                className="w-7 h-7 rounded-lg bg-white dark:bg-zinc-800 text-stone-700 dark:text-zinc-200 font-bold text-sm flex items-center justify-center shadow-2xs cursor-pointer"
               >
-                <X className="w-4 h-4" />
+                <Plus className="w-3.5 h-3.5" />
               </button>
             </div>
-
-            <div className="aspect-square w-full rounded-2xl bg-stone-50 dark:bg-zinc-900 border border-stone-100 dark:border-zinc-800 flex items-center justify-center overflow-hidden">
-              {product.image_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={product.image_url} alt={product.name} className="w-full h-full object-contain p-4" />
-              ) : (
-                <Package className="w-16 h-16 text-stone-300 dark:text-zinc-600" />
-              )}
-            </div>
-
-            <div>
-              <h4 className="font-extrabold text-base text-stone-900 dark:text-white leading-snug">
-                {product.name}
-              </h4>
-              {product.description && (
-                <p className="text-xs text-stone-500 dark:text-zinc-400 mt-1 line-clamp-2">
-                  {product.description}
-                </p>
-              )}
-            </div>
-
-            <div className="flex items-center justify-between pt-1">
-              <div>
-                <p className="text-lg font-black font-mono tenant-primary-text">
-                  {currencySymbol}{price.toFixed(2)}
-                </p>
-                {priceBs !== null && (
-                  <p className="text-xs font-mono font-bold text-stone-500">
-                    Bs. {priceBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </p>
-                )}
-              </div>
-
-              {/* Stepper de cantidad */}
-              <div className="flex items-center gap-2 border border-stone-200 dark:border-zinc-800 rounded-xl p-1 bg-stone-50 dark:bg-zinc-900 font-mono">
-                <button
-                  type="button"
-                  onClick={() => setModalQuantity((q) => Math.max(1, q - 1))}
-                  className="w-7 h-7 rounded-lg bg-white dark:bg-zinc-800 text-stone-700 dark:text-zinc-200 font-bold text-sm flex items-center justify-center shadow-2xs cursor-pointer"
-                >
-                  <Minus className="w-3.5 h-3.5" />
-                </button>
-                <span className="w-8 text-center font-extrabold text-sm text-stone-900 dark:text-white">
-                  {modalQuantity}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setModalQuantity((q) => Math.min(stock, q + 1))}
-                  className="w-7 h-7 rounded-lg bg-white dark:bg-zinc-800 text-stone-700 dark:text-zinc-200 font-bold text-sm flex items-center justify-center shadow-2xs cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleModalAdd}
-              className="w-full py-3 rounded-xl tenant-primary-bg text-white font-extrabold text-sm shadow-md hover:brightness-105 active:scale-[0.99] transition cursor-pointer flex items-center justify-center gap-2"
-            >
-              <ShoppingBag className="w-4 h-4" />
-              <span>
-                Agregar al Carrito · {currencySymbol}{(price * modalQuantity).toFixed(2)}
-              </span>
-            </button>
           </div>
+
+          <button
+            type="button"
+            onClick={handleModalAdd}
+            className="w-full py-3 rounded-xl tenant-primary-bg text-white font-extrabold text-sm shadow-md hover:brightness-105 active:scale-[0.99] transition cursor-pointer flex items-center justify-center gap-2"
+          >
+            <ShoppingBag className="w-4 h-4" />
+            <span>
+              Agregar al Carrito · {currencySymbol}{(price * modalQuantity).toFixed(2)}
+            </span>
+          </button>
         </div>
-      )}
+      </ModalPortal>
     </>
   );
 }

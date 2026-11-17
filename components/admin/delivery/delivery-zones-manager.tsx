@@ -17,6 +17,7 @@ import {
   Navigation,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { ModalPortal } from '@/components/ui/modal-portal';
 import type { DeliveryZone } from '@/lib/plugins/delivery-fleet';
 
 interface DeliveryZonesManagerProps {
@@ -313,10 +314,13 @@ export function DeliveryZonesManager({ slug, currencySymbol = '$' }: DeliveryZon
       )}
 
       {/* Modal / Panel Flotante de Creación y Edición */}
-      {(isCreating || editingZone) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
-            <div className="flex items-center justify-between p-5 border-b border-zinc-100 dark:border-zinc-800">
+      <ModalPortal
+        isOpen={Boolean(isCreating || editingZone)}
+        onClose={resetForm}
+        backdropClassName="bg-black/60 backdrop-blur-xs"
+      >
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-2xl max-w-lg w-full max-h-[calc(100dvh-2.5rem)] flex flex-col overflow-hidden animate-in zoom-in-95 duration-150">
+          <div className="flex items-center justify-between p-5 border-b border-zinc-100 dark:border-zinc-800 shrink-0">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
                   <MapPin className="w-4 h-4" />
@@ -333,8 +337,9 @@ export function DeliveryZonesManager({ slug, currencySymbol = '$' }: DeliveryZon
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <div>
+            <form onSubmit={handleSubmit} className="flex flex-col flex-1 overflow-hidden min-h-0">
+              <div className="p-5 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1">
+                <div>
                 <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider mb-1">
                   Nombre de la Zona <span className="text-rose-500">*</span>
                 </label>
@@ -430,6 +435,11 @@ export function DeliveryZonesManager({ slug, currencySymbol = '$' }: DeliveryZon
               </div>
 
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                </div>
+              </div>
+
+              {/* Botones Fijos */}
+              <div className="p-4 sm:p-5 border-t border-zinc-100 dark:border-zinc-800 flex justify-end gap-3 bg-zinc-50/50 dark:bg-zinc-800/30 shrink-0">
                 <button
                   type="button"
                   onClick={resetForm}
@@ -448,8 +458,7 @@ export function DeliveryZonesManager({ slug, currencySymbol = '$' }: DeliveryZon
               </div>
             </form>
           </div>
-        </div>
-      )}
+        </ModalPortal>
     </div>
   );
 }

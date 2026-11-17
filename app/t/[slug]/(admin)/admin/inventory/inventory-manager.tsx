@@ -25,6 +25,7 @@ import { toast } from 'sonner';
 import { createProduct, updateProduct, deleteProduct, ProductInput } from '@/app/actions/tenant/products';
 import { cn } from '@/lib/utils';
 import { CategoryCombobox } from '@/components/admin/category-combobox';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 export interface ProductItem {
   id: string;
@@ -487,38 +488,38 @@ export function InventoryManager({ slug, initialProducts, categories }: Inventor
       </div>
 
       {/* Modal de Crear / Editar Producto */}
-      {isModalOpen && (
+      <ModalPortal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+      >
         <div
-          onClick={() => setIsModalOpen(false)}
-          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150"
+          className="bg-white dark:bg-[#121214] border border-slate-200 dark:border-zinc-800 rounded-3xl max-w-xl w-full shadow-2xl flex flex-col max-h-[calc(100dvh-2rem)] overflow-hidden animate-in zoom-in-95 duration-200"
         >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-white dark:bg-[#121214] border border-slate-200 dark:border-zinc-800 rounded-3xl max-w-xl w-full p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-200 my-8"
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-zinc-800">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-lime-500/10 border border-lime-500/30 flex items-center justify-center text-lime-600 dark:text-lime-400">
-                  <Package className="w-5 h-5" />
-                </div>
-                <div>
-                  <h2 className="font-extrabold text-base text-slate-900 dark:text-white leading-tight">
-                    {editingProduct ? 'Editar Producto' : 'Crear Nuevo Producto'}
-                  </h2>
-                  <p className="text-xs text-slate-500 dark:text-zinc-400">
-                    Catálogo maestro en USD con sincronización Cloudflare R2
-                  </p>
-                </div>
+          {/* Header Fijo */}
+          <div className="flex items-center justify-between p-5 sm:p-6 pb-3.5 border-b border-slate-200/80 dark:border-zinc-800 shrink-0 bg-white dark:bg-[#121214] z-10">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-lime-500/10 border border-lime-500/30 flex items-center justify-center text-lime-600 dark:text-lime-400 shrink-0">
+                <Package className="w-5 h-5" />
               </div>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center justify-center cursor-pointer transition"
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div>
+                <h2 className="font-extrabold text-base text-slate-900 dark:text-white leading-tight">
+                  {editingProduct ? 'Editar Producto' : 'Crear Nuevo Producto'}
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-zinc-400">
+                  Catálogo maestro en USD con sincronización Cloudflare R2
+                </p>
+              </div>
             </div>
+            <button
+              onClick={() => setIsModalOpen(false)}
+              className="w-8 h-8 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center justify-center cursor-pointer transition shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
 
-            <form onSubmit={handleSaveProduct} className="space-y-4">
+          <form onSubmit={handleSaveProduct} className="flex flex-col flex-1 overflow-hidden min-h-0">
+            <div className="p-5 sm:p-6 overflow-y-auto overscroll-contain space-y-4 flex-1">
               {/* Sección de Imagen Cloudflare R2 */}
               <div className="p-4 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200/80 dark:border-zinc-800 space-y-3">
                 <label className="text-xs font-extrabold text-slate-700 dark:text-zinc-300 flex items-center gap-2">
@@ -671,37 +672,38 @@ export function InventoryManager({ slug, initialProducts, categories }: Inventor
                 </div>
               </div>
 
-              {/* Botones de Acción */}
-              <div className="pt-3 border-t border-slate-200/80 dark:border-zinc-800 flex items-center justify-end gap-2.5">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setIsModalOpen(false)}
-                  className="text-xs h-10 px-4 font-bold"
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={isPending || isUploading}
-                  className="text-xs h-10 px-6 font-extrabold bg-lime-500 hover:bg-lime-600 text-black shadow-sm"
-                >
-                  {isPending ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
-                      <span>Guardando...</span>
-                    </>
-                  ) : editingProduct ? (
-                    'Guardar Cambios'
-                  ) : (
-                    'Crear Producto'
-                  )}
-                </Button>
-              </div>
-            </form>
-          </div>
+            </div>
+
+            {/* Botones de Acción Fijos */}
+            <div className="p-4 sm:p-5 pt-3 border-t border-slate-200/80 dark:border-zinc-800 flex items-center justify-end gap-2.5 bg-stone-50/80 dark:bg-zinc-900/80 shrink-0">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsModalOpen(false)}
+                className="text-xs h-10 px-4 font-bold"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                disabled={isPending || isUploading}
+                className="text-xs h-10 px-6 font-extrabold bg-lime-500 hover:bg-lime-600 text-black shadow-sm"
+              >
+                {isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin mr-1.5" />
+                    <span>Guardando...</span>
+                  </>
+                ) : editingProduct ? (
+                  'Guardar Cambios'
+                ) : (
+                  'Crear Producto'
+                )}
+              </Button>
+            </div>
+          </form>
         </div>
-      )}
+      </ModalPortal>
     </div>
   );
 }
