@@ -29,6 +29,7 @@ import {
   FileDown,
   X,
   Bike,
+  UserCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -1392,14 +1393,14 @@ export default function AdminOrderDetailPage() {
 
           {/* Card Despacho y Asignación de Repartidor */}
           {order.delivery_type === 'DELIVERY' && (
-            <div className="bg-white dark:bg-[#121214] border border-emerald-200 dark:border-emerald-950/60 rounded-2xl p-5 space-y-4 shadow-sm">
-              <div className="flex items-center justify-between">
-                <h2 className="text-base font-extrabold text-slate-950 dark:text-white flex items-center gap-2">
-                  <Bike className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                  Asignación de Repartidor & Despacho
+            <div className="bg-white dark:bg-[#121214] border border-emerald-200 dark:border-emerald-950/60 rounded-2xl p-5 space-y-4 shadow-sm overflow-hidden">
+              <div className="flex items-start justify-between gap-2">
+                <h2 className="text-base font-extrabold text-slate-950 dark:text-white flex items-center gap-2 min-w-0">
+                  <Bike className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span className="truncate">Despacho & Repartidor</span>
                 </h2>
                 {dispatch?.status && (
-                  <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                  <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 shrink-0">
                     {dispatch.status}
                   </span>
                 )}
@@ -1418,15 +1419,15 @@ export default function AdminOrderDetailPage() {
                   </div>
                 )}
 
-                <div className="space-y-1.5">
+                <div className="space-y-2">
                   <label className="text-xs font-bold text-slate-700 dark:text-zinc-300 block">
                     Seleccionar Repartidor de la Flota
                   </label>
-                  <div className="flex items-center gap-2">
+                  <div className="space-y-2">
                     <select
                       value={selectedDriverId}
                       onChange={(e) => setSelectedDriverId(e.target.value)}
-                      className="flex-1 h-9 rounded-lg border border-slate-300 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900 px-3 text-xs font-semibold text-slate-950 dark:text-white"
+                      className="w-full h-10 rounded-xl border border-slate-300 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900 px-3 text-xs font-semibold text-slate-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 truncate"
                     >
                       <option value="">-- Seleccionar de la flota --</option>
                       {drivers.map((d) => (
@@ -1435,14 +1436,15 @@ export default function AdminOrderDetailPage() {
                         </option>
                       ))}
                     </select>
+
                     <Button
                       type="button"
-                      size="sm"
                       disabled={assigningDriver || !selectedDriverId}
                       onClick={handleAssignDriver}
-                      className="h-9 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
+                      className="w-full h-10 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50 transition-all"
                     >
-                      {assigningDriver ? 'Asignando...' : dispatch?.driver_id ? 'Cambiar' : 'Asignar'}
+                      <UserCheck className="w-4 h-4" />
+                      <span>{assigningDriver ? 'Asignando chofer...' : dispatch?.driver_id ? 'Cambiar Repartidor' : 'Asignar Repartidor'}</span>
                     </Button>
                   </div>
                 </div>
