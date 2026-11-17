@@ -424,3 +424,43 @@ export async function POST(
     return NextResponse.json({ error: 'Error al procesar acción' }, { status: 500 });
   }
 }
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ slug: string }> }
+) {
+  try {
+    const { slug } = await params;
+    const { tenant, staff } = await requireTenantStaffApi(slug, 'settings');
+    const body = await request.json();
+
+    const is_active = body.is_active !== undefined ? Boolean(body.is_active) : true;
+
+    // Actualizar configuración e invocar RPC canónico de plataforma
+    const res = await pool.query(
+      `SELECT platform.rpc_toggle_tenant_plugin($1, $2, $3, $4::jsonb, $5, $6) AS result`,
+      [
+        tenant.id,
+        'local_venezuela',
+        is_active,
+        JSON.stringify(body.config || {}),
+        staff.id,
+        `${staff.role}: ${staff.full_name}`,
+      ]
+    );
+
+    await invalidateTenantCache(slug);
+
+    return NextResponse.json({
+      success: true,
+      result: res.rows[0]?.result,
+      is_active,
+    });
+  } catch (error) {
+    if (error instanceof TenantAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.statusCode });
+    }
+    console.error('[plugins/local-venezuela] PATCH error:', error);
+    return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });
+  }
+}

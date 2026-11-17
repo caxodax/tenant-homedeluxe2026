@@ -28,11 +28,11 @@ export default async function PosAccessPage({ params }: { params: Promise<{ slug
   const { slug } = await params;
   const { tenant } = await requireTenantStaff(slug, 'pos');
 
-  const shifts: ShiftHistoryRow[] = await withTenantDb(
+  const [shifts, unassignedStats] = await withTenantDb(
     tenant.db_schema_name,
     null,
     async (client) => {
-      const res = await client.query(`
+      const sRes = await client.query(`
         SELECT cs.id, cr.code AS register_code, cs.cashier_name, cs.status,
                cs.opened_at, cs.closed_at, cs.opening_balance_primary,
                cs.expected_by_method, cs.actual_by_method, cs.discrepancy_by_method,
@@ -42,7 +42,18 @@ export default async function PosAccessPage({ params }: { params: Promise<{ slug
         ORDER BY cs.opened_at DESC
         LIMIT 10
       `);
-      return res.rows;
+      const uRes = await client.query(`
+        SELECT COUNT(*)::int AS count, COALESCE(SUM(total_primary), 0)::numeric AS sum_usd
+        FROM orders o
+        WHERE (o.is_offline_sale = true OR o.delivery_type = 'POS_DESK')
+          AND o.status != 'CANCELLED'
+          AND NOT EXISTS (
+            SELECT 1 FROM cash_shifts cs
+            WHERE o.created_at >= cs.opened_at
+              AND (cs.closed_at IS NULL OR o.created_at <= cs.closed_at)
+          )
+      `);
+      return [sRes.rows as ShiftHistoryRow[], uRes.rows[0]];
     }
   );
 
@@ -112,6 +123,17 @@ export default async function PosAccessPage({ params }: { params: Promise<{ slug
           </CardTitle>
         </CardHeader>
         <CardContent>
+          {Number(unassignedStats?.count || 0) > 0 && (
+            <div className="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs text-amber-900 dark:text-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <span>
+                <strong>Auditoría de Turnos:</strong> Hay {unassignedStats.count} ventas de mostrador registradas fuera de turnos activos por un total de <strong>${parseFloat(unassignedStats.sum_usd).toFixed(2)} USD</strong> (ej. cobradas antes de la apertura o con caja cerrada).
+              </span>
+              <Link href={`/t/${slug}/admin/orders`} className="underline font-bold shrink-0">
+                Ver en Pedidos →
+              </Link>
+            </div>
+          )}
+
           {shifts.length === 0 ? (
             <p className="text-sm text-slate-600 dark:text-zinc-400 py-6 text-center">
               Aún no se han registrado aperturas o cierres de caja. Ábrelo desde el terminal POS.

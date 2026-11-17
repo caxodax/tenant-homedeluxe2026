@@ -35,6 +35,7 @@ export interface TenantShellSettings {
   tax_enabled?: boolean;
   tax_rate?: number;
   prices_include_tax?: boolean;
+  social_media?: Record<string, string>;
 }
 
 export interface TenantShellData {
@@ -166,6 +167,7 @@ export const getCachedTenantShell = cache(
             tax_enabled: taxes.tax_enabled ?? true,
             tax_rate: typeof taxes.tax_rate === 'number' ? taxes.tax_rate : 16.0,
             prices_include_tax: taxes.prices_include_tax ?? false,
+            social_media: rawSettings?.value?.social_media || {},
           },
           inContingency,
           bufferUnits,

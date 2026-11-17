@@ -61,6 +61,42 @@ export function PluginsManager({ slug, activePlugins: initialActive, onPluginTog
     }
   };
 
+  const handleToggleVenezuela = async () => {
+    const nextState = !isVenezuelaActive;
+    setLoadingPlugin('local_venezuela');
+
+    try {
+      const res = await fetch(`/api/admin/${slug}/plugins/local-venezuela`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: nextState }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'No se pudo actualizar el estado del plugin');
+      }
+
+      if (nextState) {
+        setActivePlugins((prev) => [...prev.filter((p) => p !== 'local_venezuela'), 'local_venezuela']);
+        toast.success('Plugin Localización Venezuela Activado', {
+          description: 'Sincronización BCV, IGTF y Pago Móvil habilitados.',
+        });
+      } else {
+        setActivePlugins((prev) => prev.filter((p) => p !== 'local_venezuela'));
+        toast.info('Plugin Localización Venezuela Desactivado', {
+          description: 'Se ha deshabilitado la conversión BCV e IGTF en la tienda.',
+        });
+      }
+
+      onPluginToggled?.('local_venezuela', nextState);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al cambiar estado del plugin');
+    } finally {
+      setLoadingPlugin(null);
+    }
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
       <div className="border-b border-stone-200 dark:border-zinc-800 pb-4">
@@ -197,9 +233,29 @@ export function PluginsManager({ slug, activePlugins: initialActive, onPluginTog
                 </div>
               </div>
 
-              <span className="px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-300 font-mono text-[10px] font-black uppercase">
-                Core Región
-              </span>
+              {/* Toggle Switch */}
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isVenezuelaActive}
+                disabled={loadingPlugin === 'local_venezuela'}
+                onClick={handleToggleVenezuela}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 disabled:opacity-50 ${
+                  isVenezuelaActive ? 'bg-amber-500' : 'bg-stone-300 dark:bg-zinc-700'
+                }`}
+              >
+                {loadingPlugin === 'local_venezuela' ? (
+                  <span className="absolute inset-0 flex items-center justify-center text-white">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  </span>
+                ) : (
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                      isVenezuelaActive ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                )}
+              </button>
             </div>
 
             <p className="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed mb-4">
@@ -223,17 +279,23 @@ export function PluginsManager({ slug, activePlugins: initialActive, onPluginTog
           </div>
 
           <div className="mt-5 pt-3 border-t border-stone-200/80 dark:border-zinc-800 flex items-center justify-between gap-2">
-            <span className="text-xs font-bold font-mono px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
-              ● Activo en Tienda
+            <span className={`text-xs font-bold font-mono px-2.5 py-1 rounded-lg ${
+              isVenezuelaActive
+                ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20'
+                : 'bg-stone-200/70 text-stone-600 dark:bg-zinc-800 dark:text-zinc-400'
+            }`}>
+              {isVenezuelaActive ? '● Activo en Tienda' : '○ Desactivado'}
             </span>
 
-            <Link
-              href={`/t/${slug}/admin/rates`}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 dark:bg-white dark:hover:bg-stone-100 text-white dark:text-black font-extrabold text-xs transition-all shadow-xs active:scale-95"
-            >
-              <span>Ver Tasas & BCV</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </Link>
+            {isVenezuelaActive && (
+              <Link
+                href={`/t/${slug}/admin/rates`}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 dark:bg-white dark:hover:bg-stone-100 text-white dark:text-black font-extrabold text-xs transition-all shadow-xs active:scale-95"
+              >
+                <span>Ver Tasas & BCV</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            )}
           </div>
         </div>
       </div>

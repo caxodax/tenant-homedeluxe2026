@@ -121,14 +121,6 @@ export function StorefrontCatalog({
         )}
         <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
           <div className="max-w-2xl space-y-2.5">
-            <div 
-              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black text-white shadow-xs w-fit"
-              style={{ backgroundColor: 'var(--tenant-primary, #dc2626)' }}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              <span>Retiro inmediato en mostrador (Pick-up)</span>
-            </div>
-
             <h1 className="text-2xl sm:text-4xl font-black tracking-tight leading-tight text-stone-950 dark:text-white">
               Catálogo Online de{' '}
               <span style={{ color: 'var(--tenant-primary, #dc2626)' }}>
@@ -137,8 +129,7 @@ export function StorefrontCatalog({
             </h1>
 
             <p className="text-xs sm:text-sm text-stone-600 dark:text-zinc-400 font-medium leading-relaxed">
-              Explora nuestros productos con inventario y precios actualizados en tiempo real. 
-              Arma tu pedido y retira en tienda física sin filas.
+              Explora nuestros productos con los mejores precios. Arma tu pedido y retira en tienda o pidelo por delivery.
             </p>
           </div>
 

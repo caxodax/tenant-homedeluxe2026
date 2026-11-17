@@ -84,12 +84,9 @@ export function StorefrontHeader({
               <Store className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
           )}
-          <div className="flex flex-col min-w-0 max-w-[110px] xs:max-w-[150px] sm:max-w-xs">
+          <div className="flex flex-col min-w-0 max-w-[140px] xs:max-w-[180px] sm:max-w-xs">
             <span className="text-sm sm:text-lg font-black tracking-tight text-stone-950 dark:text-white truncate group-hover:tenant-primary-text transition-colors">
               {storeName}
-            </span>
-            <span className="inline-block text-[9px] sm:text-[10px] font-mono font-bold uppercase px-1.5 py-0.2 rounded-md tenant-secondary-badge border w-fit truncate">
-              Vitrina Digital
             </span>
           </div>
         </Link>

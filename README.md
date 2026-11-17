@@ -227,6 +227,23 @@ Plataforma SaaS Multi-Tenant de Comercio Universal (Minimarkets, Retail, Restaur
 
 ---
 
+### ✅ FASE 12: Optimización UI/UX Móvil, Redes Sociales en Core, Modularidad de Plugins y Blindaje de Turnos POS
+- **Redes Sociales en Core & Footer Dinámico**:
+  - Configuración nativa en pestaña `/admin/settings?tab=social` con persistencia en `settings.value.social_media` (Instagram, Facebook, TikTok, X/Twitter, YouTube, WhatsApp).
+  - Exposición en `TenantShellSettings` y renderizado de barra interactiva de iconos sociales en el footer de la vitrina digital en reemplazo de textos técnicos.
+- **Modularidad Plena de Plugins (Localización Venezuela)**:
+  - Eliminación de etiquetas rígidas de "Core Región"; incorporación de toggle switch interactivo y endpoint `PATCH /api/admin/[slug]/plugins/local-venezuela` respaldado por `platform.rpc_toggle_tenant_plugin`.
+  - Capacidad para cualquier comercio de activar/desactivar la extensión a voluntad con Blast Radius = 0.
+- **Blindaje e Integridad de Turnos POS**:
+  - Exigencia de caja abierta: si no existe un turno abierto (`activeShift.status === 'OPEN'`), la acción de cobro en mostrador queda protegida bajo el botón `🔒 Abrir Caja para Cobrar` requiriendo registrar el fondo inicial antes de facturar.
+  - Auditoría de ventas fuera de turno en `/admin/pos` para visibilidad contable instantánea de cualquier transacción no asociada a turnos.
+- **Ergonomía Móvil Impeccable en Checkout POS**:
+  - Rediseño del modal de cobro bajo patrón Sheet/Dialog con Header fijo, Cuerpo con scroll táctil (`max-h-[92dvh]`, `overflow-y-auto`) y Footer fijo con botones de acción siempre visibles.
+  - Limpieza visual: retiro de badges redundantes (`Vitrina Digital`, `Plan INTERNAL_DEMO`, `Retiro inmediato`, indicador flotante de conectividad).
+
+
+---
+
 ## 🛠️ Variables de Entorno (`.env.local`)
 
 ```env

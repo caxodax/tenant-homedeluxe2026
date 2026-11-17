@@ -118,13 +118,6 @@ export default async function TenantAdminDashboard({ params }: { params: Promise
             Hay <strong className="text-stone-900 dark:text-zinc-200">{metrics.pendingOrders} pedidos en curso</strong> y <strong className="text-stone-900 dark:text-zinc-200">{metrics.lowStock} productos</strong> con alerta de inventario.
           </p>
         </div>
-
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-stone-100 dark:bg-zinc-800 text-stone-700 dark:text-zinc-300 border border-stone-200 dark:border-zinc-700 shadow-xs">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span className="font-mono">{tenant.slug}</span> (Plan {tenant.plan_id})
-          </span>
-        </div>
       </div>
       
       {/* 4 KPIs con Icon Badges suaves (Imagen 2) */}

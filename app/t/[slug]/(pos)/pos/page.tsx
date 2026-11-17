@@ -1,7 +1,6 @@
 'use client';
 
 import { use, useEffect, useState, useMemo } from 'react';
-import { ConnectivityIndicator } from '../components/connectivity-indicator';
 import { usePosBrand } from '../components/pos-brand-provider';
 import { startPosHeartbeat, stopPosHeartbeat, refreshPosPendingCount } from '@/lib/pos/heartbeat';
 import { ThemeToggle } from '@/components/theme-toggle';
@@ -568,6 +567,15 @@ export default function PosPage({ params }: PosPageProps) {
   async function handleCompleteSale() {
     if (ticket.length === 0 || isProcessing) return;
 
+    if (!activeShift || activeShift.status !== 'OPEN') {
+      toast.error('Caja Cerrada', {
+        description: 'Debes abrir un turno de caja antes de registrar cobros en mostrador.',
+      });
+      setIsCheckoutOpen(false);
+      setShiftModalMode('open');
+      return;
+    }
+
     try {
       setIsProcessing(true);
       const ticketRef = await generateOfflineTicketRef('POS-01');
@@ -763,8 +771,6 @@ export default function PosPage({ params }: PosPageProps) {
               <span>Abrir Turno</span>
             </button>
           )}
-
-          <ConnectivityIndicator />
 
           {/* Perfil del Staff y Botón de Salir */}
           {brandContext?.staff && (
@@ -1214,14 +1220,26 @@ export default function PosPage({ params }: PosPageProps) {
               )}
             </div>
 
-            <button
-              onClick={() => setIsCheckoutOpen(true)}
-              disabled={ticket.length === 0}
-              className="w-full py-3.5 px-4 rounded-xl font-extrabold text-base bg-lime-500 hover:bg-lime-600 disabled:bg-slate-200 dark:disabled:bg-zinc-800 disabled:text-slate-500 dark:disabled:text-zinc-600 text-black shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
-            >
-              <CreditCard className="w-5 h-5" />
-              <span>Cobrar Ticket ({currencySymbol}{totalUsd.toFixed(2)})</span>
-            </button>
+            {!activeShift || activeShift.status !== 'OPEN' ? (
+              <button
+                type="button"
+                onClick={() => setShiftModalMode('open')}
+                disabled={ticket.length === 0}
+                className="w-full py-3.5 px-4 rounded-xl font-extrabold text-sm sm:text-base bg-amber-500 hover:bg-amber-600 disabled:bg-slate-200 dark:disabled:bg-zinc-800 disabled:text-slate-500 dark:disabled:text-zinc-600 text-black shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
+              >
+                <Lock className="w-5 h-5" />
+                <span>Abrir Caja para Cobrar ({currencySymbol}{totalUsd.toFixed(2)})</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => setIsCheckoutOpen(true)}
+                disabled={ticket.length === 0}
+                className="w-full py-3.5 px-4 rounded-xl font-extrabold text-base bg-lime-500 hover:bg-lime-600 disabled:bg-slate-200 dark:disabled:bg-zinc-800 disabled:text-slate-500 dark:disabled:text-zinc-600 text-black shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
+              >
+                <CreditCard className="w-5 h-5" />
+                <span>Cobrar Ticket ({currencySymbol}{totalUsd.toFixed(2)})</span>
+              </button>
+            )}
 
             <div className="pt-2 text-center border-t border-slate-200/80 dark:border-zinc-800/60">
               <p className="text-xs font-medium text-slate-600 dark:text-zinc-400 truncate">
@@ -1476,19 +1494,34 @@ export default function PosPage({ params }: PosPageProps) {
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setIsMobileTicketOpen(false);
-                  setIsCheckoutOpen(true);
-                }}
-                disabled={ticket.length === 0}
-                className="w-full py-3.5 px-4 rounded-xl font-extrabold text-sm bg-lime-500 hover:bg-lime-600 text-black shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                style={settings.primary_color ? { backgroundColor: settings.primary_color, color: '#ffffff' } : undefined}
-              >
-                <CreditCard className="w-4 h-4" />
-                <span>Proceder al Cobro ({currencySymbol}{totalUsd.toFixed(2)})</span>
-              </button>
+              {!activeShift || activeShift.status !== 'OPEN' ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMobileTicketOpen(false);
+                    setShiftModalMode('open');
+                  }}
+                  disabled={ticket.length === 0}
+                  className="w-full py-3.5 px-4 rounded-xl font-extrabold text-sm bg-amber-500 hover:bg-amber-600 text-black shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  <Lock className="w-4 h-4" />
+                  <span>Abrir Caja para Cobrar ({currencySymbol}{totalUsd.toFixed(2)})</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMobileTicketOpen(false);
+                    setIsCheckoutOpen(true);
+                  }}
+                  disabled={ticket.length === 0}
+                  className="w-full py-3.5 px-4 rounded-xl font-extrabold text-sm bg-lime-500 hover:bg-lime-600 text-black shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  style={settings.primary_color ? { backgroundColor: settings.primary_color, color: '#ffffff' } : undefined}
+                >
+                  <CreditCard className="w-4 h-4" />
+                  <span>Proceder al Cobro ({currencySymbol}{totalUsd.toFixed(2)})</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1664,9 +1697,10 @@ export default function PosPage({ params }: PosPageProps) {
 
       {/* Modal de Cobro */}
       {isCheckoutOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 print:hidden">
-          <div className="bg-white dark:bg-[#121214] border border-slate-200 dark:border-zinc-800 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-zinc-800">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 print:hidden">
+          <div className="relative w-full max-w-lg max-h-[92dvh] flex flex-col bg-white dark:bg-[#121214] border border-slate-200 dark:border-zinc-800 rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            {/* Header Fijo */}
+            <div className="p-4 sm:p-5 flex items-center justify-between border-b border-slate-100 dark:border-zinc-800 shrink-0 bg-white dark:bg-[#121214]">
               <div className="flex items-center gap-3">
                 {settings.logo_url ? (
                   <div className="w-9 h-9 rounded-xl bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 flex items-center justify-center overflow-hidden shrink-0 shadow-xs">
@@ -1687,280 +1721,283 @@ export default function PosPage({ params }: PosPageProps) {
                     Cobro en Mostrador · {settings.business_name}
                   </h3>
                   <p className="text-[11px] text-slate-500 dark:text-zinc-400 font-mono">
-                    Terminal POS-01 · Operación Offline-First (USD)
+                    Terminal POS-01 · Operación Offline-First ({baseCurrency})
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setIsCheckoutOpen(false)}
-                className="w-7 h-7 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center justify-center text-xs font-bold cursor-pointer"
+                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-500 hover:text-slate-900 dark:hover:text-white flex items-center justify-center text-sm font-bold cursor-pointer transition-colors"
               >
                 ✕
               </button>
             </div>
 
-            {/* Totalizador en Modal con branding */}
-            <div className="p-4 rounded-2xl bg-lime-500/10 border border-lime-500/20 text-center">
-              <p className="text-xs font-bold uppercase tracking-wider text-lime-800 dark:text-lime-400">
-                Monto Total a Recibir
-              </p>
-              <div className="flex items-baseline justify-center gap-2 mt-1 flex-wrap">
-                <span className="text-3xl font-black font-mono text-lime-800 dark:text-lime-300">
-                  {currencySymbol}{totalUsd.toFixed(2)}
-                </span>
-                {effectiveRate > 0 && (
-                  <span className="text-lg font-bold font-mono text-emerald-700 dark:text-emerald-400">
-                    / Bs. {(totalUsd * effectiveRate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {/* Cuerpo Scrollable */}
+            <div className="flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4">
+              {/* Totalizador en Modal con branding */}
+              <div className="p-4 rounded-2xl bg-lime-500/10 border border-lime-500/20 text-center">
+                <p className="text-xs font-bold uppercase tracking-wider text-lime-800 dark:text-lime-400">
+                  Monto Total a Recibir
+                </p>
+                <div className="flex items-baseline justify-center gap-2 mt-1 flex-wrap">
+                  <span className="text-3xl font-black font-mono text-lime-800 dark:text-lime-300">
+                    {currencySymbol}{totalUsd.toFixed(2)}
                   </span>
+                  {effectiveRate > 0 && (
+                    <span className="text-lg font-bold font-mono text-emerald-700 dark:text-emerald-400">
+                      / Bs. {(totalUsd * effectiveRate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  )}
+                </div>
+                {effectiveRate > 0 && (
+                  <p className="text-[11px] font-mono text-slate-500 dark:text-zinc-400 mt-1">
+                    Tasa oficial: Bs. {effectiveRate.toFixed(2)} / {baseCurrency}
+                  </p>
                 )}
               </div>
-              {effectiveRate > 0 && (
-                <p className="text-[11px] font-mono text-slate-500 dark:text-zinc-400 mt-1">
-                  Tasa oficial: Bs. {effectiveRate.toFixed(2)} / {baseCurrency}
-                </p>
-              )}
-            </div>
 
-            {/* Calculadora de Vuelto / Importe Recibido */}
-            <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 space-y-2.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold text-slate-800 dark:text-zinc-200">
-                  Calculadora de Vuelto
-                </label>
-                <div className="flex items-center rounded-lg p-0.5 bg-slate-200 dark:bg-zinc-800 text-[11px] font-bold">
-                  <button
-                    type="button"
-                    onClick={() => { setTenderCurrency('BASE'); setTenderAmount(''); }}
-                    className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
-                      tenderCurrency === 'BASE'
-                        ? 'bg-white dark:bg-zinc-700 text-slate-900 dark:text-white shadow-xs'
-                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                    }`}
-                  >
-                    {baseCurrency} ({currencySymbol})
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setTenderCurrency('VES'); setTenderAmount(''); }}
-                    className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
-                      tenderCurrency === 'VES'
-                        ? 'bg-white dark:bg-zinc-700 text-slate-900 dark:text-white shadow-xs'
-                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                    }`}
-                  >
-                    VES (Bs.)
-                  </button>
-                </div>
-              </div>
-
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold font-mono text-slate-400">
-                  {tenderCurrency === 'BASE' ? currencySymbol : 'Bs.'}
-                </span>
-                <input
-                  type="number"
-                  step="any"
-                  value={tenderAmount}
-                  onChange={(e) => setTenderAmount(e.target.value)}
-                  placeholder={
-                    tenderCurrency === 'BASE'
-                      ? `Ej: ${Math.ceil(totalUsd)} o ${totalUsd.toFixed(2)}`
-                      : `Ej: ${(totalUsd * (effectiveRate || 1)).toFixed(2)}`
-                  }
-                  className="w-full pl-8 pr-3.5 py-2 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl text-sm font-mono font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
-                />
-              </div>
-
-              {/* Botones de sugerencia rápida */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
-                <button
-                  type="button"
-                  onClick={() =>
-                    setTenderAmount(
-                      tenderCurrency === 'BASE'
-                        ? totalUsd.toFixed(2)
-                        : (totalUsd * (effectiveRate || 1)).toFixed(2)
-                    )
-                  }
-                  className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-slate-200/80 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 hover:bg-slate-300 dark:hover:bg-zinc-700 cursor-pointer"
-                >
-                  Exacto
-                </button>
-                {tenderCurrency === 'BASE'
-                  ? [5, 10, 20, 50, 100]
-                      .filter((val) => val >= totalUsd)
-                      .slice(0, 3)
-                      .map((val) => (
-                        <button
-                          key={val}
-                          type="button"
-                          onClick={() => setTenderAmount(val.toString())}
-                          className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-slate-200/80 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 hover:bg-slate-300 dark:hover:bg-zinc-700 cursor-pointer"
-                        >
-                          {currencySymbol}{val}
-                        </button>
-                      ))
-                  : null}
-              </div>
-
-              {/* Resultado del Cambio / Faltante */}
-              {(() => {
-                const amountNum = parseFloat(tenderAmount) || 0;
-                if (amountNum <= 0) return null;
-
-                if (tenderCurrency === 'BASE') {
-                  const diff = amountNum - totalUsd;
-                  if (diff >= 0) {
-                    const diffVes = effectiveRate > 0 ? diff * effectiveRate : 0;
-                    return (
-                      <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 flex items-center justify-between text-xs">
-                        <span className="font-bold text-emerald-800 dark:text-emerald-300">
-                          Vuelto al cliente:
-                        </span>
-                        <div className="text-right font-mono">
-                          <p className="font-extrabold text-emerald-700 dark:text-emerald-400">
-                            {currencySymbol}{diff.toFixed(2)} {baseCurrency}
-                          </p>
-                          {diffVes > 0 && (
-                            <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-500">
-                              Bs. {diffVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  } else {
-                    const missingUsd = Math.abs(diff);
-                    const missingVes = effectiveRate > 0 ? missingUsd * effectiveRate : 0;
-                    return (
-                      <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 flex items-center justify-between text-xs">
-                        <span className="font-bold text-amber-800 dark:text-amber-300">
-                          Faltante por cobrar:
-                        </span>
-                        <div className="text-right font-mono">
-                          <p className="font-extrabold text-amber-700 dark:text-amber-400">
-                            {currencySymbol}{missingUsd.toFixed(2)} {baseCurrency}
-                          </p>
-                          {missingVes > 0 && (
-                            <p className="text-[11px] font-bold text-amber-600 dark:text-amber-500">
-                              Bs. {missingVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  }
-                } else {
-                  const totalVes = totalUsd * (effectiveRate || 1);
-                  const diffVes = amountNum - totalVes;
-                  if (diffVes >= 0) {
-                    const diffUsd = effectiveRate > 0 ? diffVes / effectiveRate : 0;
-                    return (
-                      <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 flex items-center justify-between text-xs">
-                        <span className="font-bold text-emerald-800 dark:text-emerald-300">
-                          Vuelto al cliente:
-                        </span>
-                        <div className="text-right font-mono">
-                          <p className="font-extrabold text-emerald-700 dark:text-emerald-400">
-                            Bs. {diffVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </p>
-                          {diffUsd > 0 && (
-                            <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-500">
-                              {currencySymbol}{diffUsd.toFixed(2)} {baseCurrency}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  } else {
-                    const missingVes = Math.abs(diffVes);
-                    const missingUsd = effectiveRate > 0 ? missingVes / effectiveRate : 0;
-                    return (
-                      <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 flex items-center justify-between text-xs">
-                        <span className="font-bold text-amber-800 dark:text-amber-300">
-                          Faltante por cobrar:
-                        </span>
-                        <div className="text-right font-mono">
-                          <p className="font-extrabold text-amber-700 dark:text-amber-400">
-                            Bs. {missingVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </p>
-                          {missingUsd > 0 && (
-                            <p className="text-[11px] font-bold text-amber-600 dark:text-amber-500">
-                              {currencySymbol}{missingUsd.toFixed(2)} {baseCurrency}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  }
-                }
-              })()}
-            </div>
-
-            {/* Datos del Cliente */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
-                Nombre del Cliente
-              </label>
-              <input
-                type="text"
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                className="w-full px-3.5 py-2 bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
-                placeholder="Cliente Mostrador"
-              />
-            </div>
-
-            {/* Selección de Método de Pago (Administrables por el comercio) */}
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-800 dark:text-zinc-200">
-                Método de Pago
-              </label>
-              <div className="grid grid-cols-2 gap-2.5">
-                {posPaymentMethods.map((pm) => {
-                  const selected = paymentMethod === pm.code;
-                  const isCash = pm.code.includes('CASH');
-                  return (
+              {/* Calculadora de Vuelto / Importe Recibido */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-800 dark:text-zinc-200">
+                    Calculadora de Vuelto
+                  </label>
+                  <div className="flex items-center rounded-lg p-0.5 bg-slate-200 dark:bg-zinc-800 text-[11px] font-bold">
                     <button
-                      key={pm.code}
                       type="button"
-                      onClick={() => setPaymentMethod(pm.code)}
-                      className={`p-3 rounded-xl border flex flex-col items-center text-center gap-1.5 text-xs font-bold transition-all cursor-pointer ${
-                        selected
-                          ? 'bg-lime-500/15 border-lime-500 text-lime-700 dark:text-lime-400 ring-1 ring-lime-500/30'
-                          : 'border-slate-200 dark:border-zinc-800 text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-900'
+                      onClick={() => { setTenderCurrency('BASE'); setTenderAmount(''); }}
+                      className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
+                        tenderCurrency === 'BASE'
+                          ? 'bg-white dark:bg-zinc-700 text-slate-900 dark:text-white shadow-xs'
+                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
                       }`}
                     >
-                      {isCash ? (
-                        <Banknote className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                      ) : (
-                        <CreditCard className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                      )}
-                      <span className="line-clamp-1">{pm.name}</span>
+                      {baseCurrency} ({currencySymbol})
                     </button>
-                  );
-                })}
-              </div>
-            </div>
+                    <button
+                      type="button"
+                      onClick={() => { setTenderCurrency('VES'); setTenderAmount(''); }}
+                      className={`px-2.5 py-1 rounded-md transition cursor-pointer ${
+                        tenderCurrency === 'VES'
+                          ? 'bg-white dark:bg-zinc-700 text-slate-900 dark:text-white shadow-xs'
+                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      VES (Bs.)
+                    </button>
+                  </div>
+                </div>
 
-            {/* Referencia para pagos no en efectivo */}
-            {paymentMethod !== 'CASH_USD' && (
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-800 dark:text-zinc-200">
-                  Número de Referencia / Aprobación (Opcional)
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold font-mono text-slate-400">
+                    {tenderCurrency === 'BASE' ? currencySymbol : 'Bs.'}
+                  </span>
+                  <input
+                    type="number"
+                    step="any"
+                    value={tenderAmount}
+                    onChange={(e) => setTenderAmount(e.target.value)}
+                    placeholder={
+                      tenderCurrency === 'BASE'
+                        ? `Ej: ${Math.ceil(totalUsd)} o ${totalUsd.toFixed(2)}`
+                        : `Ej: ${(totalUsd * (effectiveRate || 1)).toFixed(2)}`
+                    }
+                    className="w-full pl-8 pr-3.5 py-2 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl text-sm font-mono font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
+                  />
+                </div>
+
+                {/* Botones de sugerencia rápida */}
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setTenderAmount(
+                        tenderCurrency === 'BASE'
+                          ? totalUsd.toFixed(2)
+                          : (totalUsd * (effectiveRate || 1)).toFixed(2)
+                      )
+                    }
+                    className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-slate-200/80 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 hover:bg-slate-300 dark:hover:bg-zinc-700 cursor-pointer"
+                  >
+                    Exacto
+                  </button>
+                  {tenderCurrency === 'BASE'
+                    ? [5, 10, 20, 50, 100]
+                        .filter((val) => val >= totalUsd)
+                        .slice(0, 3)
+                        .map((val) => (
+                          <button
+                            key={val}
+                            type="button"
+                            onClick={() => setTenderAmount(val.toString())}
+                            className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-slate-200/80 dark:bg-zinc-800 text-slate-700 dark:text-zinc-300 hover:bg-slate-300 dark:hover:bg-zinc-700 cursor-pointer"
+                          >
+                            {currencySymbol}{val}
+                          </button>
+                        ))
+                    : null}
+                </div>
+
+                {/* Resultado del Cambio / Faltante */}
+                {(() => {
+                  const amountNum = parseFloat(tenderAmount) || 0;
+                  if (amountNum <= 0) return null;
+
+                  if (tenderCurrency === 'BASE') {
+                    const diff = amountNum - totalUsd;
+                    if (diff >= 0) {
+                      const diffVes = effectiveRate > 0 ? diff * effectiveRate : 0;
+                      return (
+                        <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 flex items-center justify-between text-xs">
+                          <span className="font-bold text-emerald-800 dark:text-emerald-300">
+                            Vuelto al cliente:
+                          </span>
+                          <div className="text-right font-mono">
+                            <p className="font-extrabold text-emerald-700 dark:text-emerald-400">
+                              {currencySymbol}{diff.toFixed(2)} {baseCurrency}
+                            </p>
+                            {diffVes > 0 && (
+                              <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-500">
+                                Bs. {diffVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    } else {
+                      const missingUsd = Math.abs(diff);
+                      const missingVes = effectiveRate > 0 ? missingUsd * effectiveRate : 0;
+                      return (
+                        <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 flex items-center justify-between text-xs">
+                          <span className="font-bold text-amber-800 dark:text-amber-300">
+                            Faltante por cobrar:
+                          </span>
+                          <div className="text-right font-mono">
+                            <p className="font-extrabold text-amber-700 dark:text-amber-400">
+                              {currencySymbol}{missingUsd.toFixed(2)} {baseCurrency}
+                            </p>
+                            {missingVes > 0 && (
+                              <p className="text-[11px] font-bold text-amber-600 dark:text-amber-500">
+                                Bs. {missingVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+                  } else {
+                    const totalVes = totalUsd * (effectiveRate || 1);
+                    const diffVes = amountNum - totalVes;
+                    if (diffVes >= 0) {
+                      const diffUsd = effectiveRate > 0 ? diffVes / effectiveRate : 0;
+                      return (
+                        <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 flex items-center justify-between text-xs">
+                          <span className="font-bold text-emerald-800 dark:text-emerald-300">
+                            Vuelto al cliente:
+                          </span>
+                          <div className="text-right font-mono">
+                            <p className="font-extrabold text-emerald-700 dark:text-emerald-400">
+                              Bs. {diffVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </p>
+                            {diffUsd > 0 && (
+                              <p className="text-[11px] font-bold text-emerald-600 dark:text-emerald-500">
+                                {currencySymbol}{diffUsd.toFixed(2)} {baseCurrency}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    } else {
+                      const missingVes = Math.abs(diffVes);
+                      const missingUsd = effectiveRate > 0 ? missingVes / effectiveRate : 0;
+                      return (
+                        <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50 flex items-center justify-between text-xs">
+                          <span className="font-bold text-amber-800 dark:text-amber-300">
+                            Faltante por cobrar:
+                          </span>
+                          <div className="text-right font-mono">
+                            <p className="font-extrabold text-amber-700 dark:text-amber-400">
+                              Bs. {missingVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </p>
+                            {missingUsd > 0 && (
+                              <p className="text-[11px] font-bold text-amber-600 dark:text-amber-500">
+                                {currencySymbol}{missingUsd.toFixed(2)} {baseCurrency}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+                  }
+                })()}
+              </div>
+
+              {/* Datos del Cliente */}
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-slate-700 dark:text-zinc-300">
+                  Nombre del Cliente
                 </label>
                 <input
                   type="text"
-                  value={paymentRef}
-                  onChange={(e) => setPaymentRef(e.target.value)}
-                  placeholder="Ej: APROB-8492 o 123456"
-                  className="w-full px-3.5 py-2 bg-slate-50 dark:bg-zinc-900 border border-slate-300 dark:border-zinc-800 rounded-xl text-sm font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
+                  placeholder="Cliente Mostrador"
                 />
               </div>
-            )}
 
-            {/* Botones de acción */}
-            <div className="flex items-center gap-2 pt-2">
+              {/* Selección de Método de Pago (Administrables por el comercio) */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-slate-800 dark:text-zinc-200">
+                  Método de Pago
+                </label>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {posPaymentMethods.map((pm) => {
+                    const selected = paymentMethod === pm.code;
+                    const isCash = pm.code.includes('CASH');
+                    return (
+                      <button
+                        key={pm.code}
+                        type="button"
+                        onClick={() => setPaymentMethod(pm.code)}
+                        className={`p-3 rounded-xl border flex flex-col items-center text-center gap-1.5 text-xs font-bold transition-all cursor-pointer ${
+                          selected
+                            ? 'bg-lime-500/15 border-lime-500 text-lime-700 dark:text-lime-400 ring-1 ring-lime-500/30'
+                            : 'border-slate-200 dark:border-zinc-800 text-slate-700 dark:text-zinc-300 hover:bg-slate-50 dark:hover:bg-zinc-900'
+                        }`}
+                      >
+                        {isCash ? (
+                          <Banknote className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                        ) : (
+                          <CreditCard className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                        )}
+                        <span className="line-clamp-1">{pm.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Referencia para pagos no en efectivo */}
+              {paymentMethod !== 'CASH_USD' && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-800 dark:text-zinc-200">
+                    Número de Referencia / Aprobación (Opcional)
+                  </label>
+                  <input
+                    type="text"
+                    value={paymentRef}
+                    onChange={(e) => setPaymentRef(e.target.value)}
+                    placeholder="Ej: APROB-8492 o 123456"
+                    className="w-full px-3.5 py-2 bg-slate-50 dark:bg-zinc-900 border border-slate-300 dark:border-zinc-800 rounded-xl text-sm font-mono text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* Footer Fijo */}
+            <div className="p-4 border-t border-slate-100 dark:border-zinc-800 bg-white/95 dark:bg-[#121214]/95 backdrop-blur-xs flex items-center gap-2.5 shrink-0">
               <button
                 type="button"
                 onClick={() => setIsCheckoutOpen(false)}
@@ -1974,7 +2011,7 @@ export default function PosPage({ params }: PosPageProps) {
                 disabled={isProcessing}
                 className="flex-1 py-3 px-4 rounded-xl font-extrabold text-xs bg-lime-500 hover:bg-lime-600 text-black shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
-                {isProcessing ? 'Procesando...' : `Confirmar ($${totalUsd.toFixed(2)})`}
+                {isProcessing ? 'Procesando...' : `Confirmar y Cobrar (${currencySymbol}${totalUsd.toFixed(2)})`}
               </button>
             </div>
           </div>
@@ -2168,7 +2205,7 @@ export default function PosPage({ params }: PosPageProps) {
           onClick={() => !shiftBusy && setShiftModalMode(null)}
         >
           <div
-            className="w-full max-w-md rounded-3xl bg-white dark:bg-[#121214] border border-slate-200 dark:border-zinc-800 p-6 shadow-2xl space-y-4"
+            className="w-full max-w-md max-h-[90dvh] overflow-y-auto rounded-3xl bg-white dark:bg-[#121214] border border-slate-200 dark:border-zinc-800 p-6 shadow-2xl space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between">
