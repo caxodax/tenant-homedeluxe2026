@@ -82,6 +82,7 @@ export default function RootLayout({
         {children}
         <Toaster
           richColors
+          closeButton
           position="top-right"
           offset={{ top: 76, right: 20 }}
           mobileOffset={{ top: 72, right: 12 }}

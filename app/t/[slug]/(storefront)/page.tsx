@@ -1,4 +1,5 @@
 import { notFound, redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
 import { getCachedStorefrontCatalog, getCachedTenantShell } from '@/lib/tenant';
 import { StorefrontCatalog } from './components/storefront-catalog';
 
@@ -20,6 +21,10 @@ export default async function StorefrontPage({
   if (!shell) notFound();
 
   if (shell.tenant.storefront_enabled === false) {
+    const cookieStore = await cookies();
+    if (cookieStore.has('marketos_staff_session')) {
+      redirect(`/t/${slug}/admin`);
+    }
     redirect(`/t/${slug}/login`);
   }
 

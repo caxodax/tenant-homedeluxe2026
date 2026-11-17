@@ -1,5 +1,6 @@
 import { getCachedTenantShell } from '@/lib/tenant';
 import { notFound, redirect } from 'next/navigation';
+import { cookies } from 'next/headers';
 import type { Metadata } from 'next';
 import { StorefrontHeader } from './components/storefront-header';
 import { ContingencyBanner } from './components/contingency-banner';
@@ -48,6 +49,10 @@ export default async function StorefrontLayout({
 
   if (!data) notFound();
   if (data.tenant.storefront_enabled === false) {
+    const cookieStore = await cookies();
+    if (cookieStore.has('marketos_staff_session')) {
+      redirect(`/t/${slug}/admin`);
+    }
     redirect(`/t/${slug}/login`);
   }
 

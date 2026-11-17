@@ -129,16 +129,27 @@ export async function processSyncQueue(
 }
 
 function serializeSaleForApi(sale: OfflineSale) {
+  const discountPrimary = sale.discount_primary ?? sale.discount_usd ?? 0;
+  const subtotalPrimary = sale.subtotal_primary ?? sale.subtotal_usd ?? 0;
+  const taxPrimary = sale.tax_primary ?? sale.tax_usd ?? 0;
+  const shippingPrimary = sale.shipping_primary ?? sale.shipping_usd ?? 0;
+  const totalPrimary = sale.total_primary ?? sale.total_usd ?? 0;
+
   return {
     store_id: sale.store_id,
     customer_name: sale.customer_name,
     customer_phone: sale.customer_phone,
     items: sale.items,
-    subtotal_usd: sale.subtotal_usd,
-    discount_usd: sale.discount_usd,
-    tax_usd: sale.tax_usd,
-    shipping_usd: sale.shipping_usd,
-    total_usd: sale.total_usd,
+    subtotal_primary: subtotalPrimary,
+    subtotal_usd: subtotalPrimary,
+    discount_primary: discountPrimary,
+    discount_usd: discountPrimary,
+    tax_primary: taxPrimary,
+    tax_usd: taxPrimary,
+    shipping_primary: shippingPrimary,
+    shipping_usd: shippingPrimary,
+    total_primary: totalPrimary,
+    total_usd: totalPrimary,
     total_secondary: sale.total_secondary || null,
     exchange_rate_applied: sale.exchange_rate_applied,
     offline_ticket_ref: sale.offline_ticket_ref,

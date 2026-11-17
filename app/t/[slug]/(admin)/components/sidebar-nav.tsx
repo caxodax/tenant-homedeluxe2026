@@ -29,6 +29,7 @@ interface NavSection {
     icon: typeof LayoutDashboard;
     permission: TenantPermission;
     badgeColor: IconBadgeColor;
+    plugin?: string;
   }>;
 }
 
@@ -38,7 +39,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Dashboard', href: '', icon: LayoutDashboard, permission: 'dashboard', badgeColor: 'emerald' },
       { label: 'Pedidos', href: '/orders', icon: ShoppingCart, permission: 'orders', badgeColor: 'blue' },
-      { label: 'Delivery', href: '/delivery', icon: Bike, permission: 'orders', badgeColor: 'emerald' },
+      { label: 'Delivery', href: '/delivery', icon: Bike, permission: 'orders', badgeColor: 'emerald', plugin: 'delivery_fleet' },
       { label: 'Caja', href: '/pos', icon: Monitor, permission: 'pos', badgeColor: 'amber' },
     ],
   },
@@ -61,7 +62,15 @@ const NAV_SECTIONS: NavSection[] = [
   },
 ];
 
-export function SidebarNav({ slug, role = 'OWNER' }: { slug: string; role?: string }) {
+export function SidebarNav({ 
+  slug, 
+  role = 'OWNER',
+  activePlugins 
+}: { 
+  slug: string; 
+  role?: string;
+  activePlugins?: string[];
+}) {
   const pathname = usePathname() || '';
   const cleanPath =
     pathname.endsWith('/') && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
@@ -72,7 +81,8 @@ export function SidebarNav({ slug, role = 'OWNER' }: { slug: string; role?: stri
     <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto">
       {NAV_SECTIONS.map((section) => {
         const visibleItems = section.items.filter((item) =>
-          hasPermission(role, item.permission)
+          hasPermission(role, item.permission) &&
+          (!item.plugin || (activePlugins && activePlugins.includes(item.plugin)))
         );
         if (visibleItems.length === 0) return null;
 

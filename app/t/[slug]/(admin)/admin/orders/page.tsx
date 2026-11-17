@@ -33,6 +33,9 @@ interface OrderListItem {
   status: string;
   delivery_type: string;
   total_usd: string;
+  total_primary?: string;
+  discount_primary?: string | number | null;
+  discount_usd?: string | number | null;
   total_secondary?: string | null;
   exchange_rate_applied?: string | null;
   is_offline_sale: boolean;
@@ -129,6 +132,12 @@ export default function AdminOrdersPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [paymentFilter, setPaymentFilter] = useState('ALL');
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 15;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter, paymentFilter]);
 
   const fetchOrders = useCallback(
     async (silent = false) => {
@@ -226,6 +235,12 @@ export default function AdminOrdersPage() {
     });
   }, [orders, search, statusFilter, paymentFilter]);
 
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
+  const paginatedOrders = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredOrders.slice(start, start + pageSize);
+  }, [filteredOrders, currentPage, pageSize]);
+
   const metrics = useMemo(() => {
     const pendingPayments = orders.filter(
       (o) =>
@@ -252,27 +267,9 @@ export default function AdminOrdersPage() {
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-950 dark:text-white tracking-tight">
             Pedidos y Verificación de Pagos
           </h1>
-          <p className="text-sm text-slate-700 dark:text-zinc-300 mt-1">
-            Supervisa compras de la vitrina digital y mostrador POS, valida comprobantes y consulta la auditoría completa.
-          </p>
         </div>
 
         <div className="flex items-center gap-2.5 self-start sm:self-auto">
-          <span
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold ${
-              realtimeStatus === 'SUBSCRIBED'
-                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-400'
-                : 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400'
-            }`}
-          >
-            <span
-              className={`w-2 h-2 rounded-full ${
-                realtimeStatus === 'SUBSCRIBED' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-400'
-              }`}
-            />
-            {realtimeStatus === 'SUBSCRIBED' ? 'En vivo · Realtime' : 'Reconectando'}
-          </span>
-
           <Button
             variant="outline"
             onClick={() => fetchOrders(true)}
@@ -430,7 +427,7 @@ export default function AdminOrdersPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 dark:divide-zinc-800/80 text-sm">
-                  {filteredOrders.map((order) => {
+                  {paginatedOrders.map((order) => {
                     const st = ORDER_STATUS_META[order.status] || {
                       label: order.status,
                       className: 'bg-slate-100 text-slate-800 border-slate-300',
@@ -503,6 +500,11 @@ export default function AdminOrdersPage() {
                           <div className="font-mono font-black text-slate-950 dark:text-white">
                             ${parseFloat(order.total_usd).toFixed(2)}
                           </div>
+                          {order.discount_primary && parseFloat(String(order.discount_primary)) > 0 && (
+                            <div className="text-[10px] font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                              Desc: -${parseFloat(String(order.discount_primary)).toFixed(2)}
+                            </div>
+                          )}
                           {order.total_secondary && parseFloat(order.total_secondary) > 0 && (
                             <div className="text-[11px] font-mono font-bold text-slate-500 dark:text-zinc-400">
                               Bs. {parseFloat(order.total_secondary).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -543,7 +545,7 @@ export default function AdminOrdersPage() {
 
             {/* Mobile Cards */}
             <div className="lg:hidden space-y-3">
-              {filteredOrders.map((order) => {
+              {paginatedOrders.map((order) => {
                 const st = ORDER_STATUS_META[order.status] || {
                   label: order.status,
                   className: 'bg-slate-100 text-slate-800 border-slate-300',
@@ -574,6 +576,11 @@ export default function AdminOrdersPage() {
                         <p className="text-base font-mono font-black text-slate-950 dark:text-white">
                           ${parseFloat(order.total_usd).toFixed(2)} USD
                         </p>
+                        {order.discount_primary && parseFloat(String(order.discount_primary)) > 0 && (
+                          <p className="text-[11px] font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                            Desc: -${parseFloat(String(order.discount_primary)).toFixed(2)}
+                          </p>
+                        )}
                         {order.total_secondary && parseFloat(order.total_secondary) > 0 && (
                           <p className="text-xs font-mono font-bold text-slate-500 dark:text-zinc-400">
                             Bs. {parseFloat(order.total_secondary).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -609,6 +616,42 @@ export default function AdminOrdersPage() {
                 );
               })}
             </div>
+
+            {/* Controles de Paginación */}
+            {totalPages > 1 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-200 dark:border-zinc-800 text-xs text-slate-600 dark:text-zinc-400">
+                <div>
+                  Mostrando <strong className="text-slate-900 dark:text-white">{(currentPage - 1) * pageSize + 1}</strong> a{' '}
+                  <strong className="text-slate-900 dark:text-white">
+                    {Math.min(currentPage * pageSize, filteredOrders.length)}
+                  </strong>{' '}
+                  de <strong className="text-slate-900 dark:text-white">{filteredOrders.length}</strong> pedidos
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="h-8 px-3 text-xs"
+                  >
+                    Anterior
+                  </Button>
+                  <span className="font-mono font-bold text-slate-900 dark:text-white px-2">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="h-8 px-3 text-xs"
+                  >
+                    Siguiente
+                  </Button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>

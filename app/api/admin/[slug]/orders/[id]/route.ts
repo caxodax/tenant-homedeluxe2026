@@ -44,6 +44,10 @@ const patchOrderSchema = z.discriminatedUnion('action', [
     proof_file_hash: z.string().trim().max(128).optional().nullable(),
     bank_source: z.string().trim().max(100).optional().nullable(),
   }),
+  z.object({
+    action: z.literal('ASSIGN_DRIVER'),
+    driver_id: z.string().uuid(),
+  }),
 ]);
 
 async function loadFullOrderDetail(schema: string, orderId: string) {
@@ -52,6 +56,8 @@ async function loadFullOrderDetail(schema: string, orderId: string) {
       `SELECT o.*, 
               o.total_primary as total_usd, 
               o.subtotal_primary as subtotal_usd,
+              COALESCE(o.discount_primary, 0) as discount_usd,
+              COALESCE(o.discount_primary, 0) as discount_primary,
               COALESCE(o.shipping_primary, 0) as shipping_usd,
               COALESCE(o.shipping_primary, 0) as shipping_primary,
               s.name AS store_name
@@ -65,7 +71,7 @@ async function loadFullOrderDetail(schema: string, orderId: string) {
     if ((orderRes.rowCount || 0) === 0) return null;
     const order = orderRes.rows[0];
 
-    const [itemsRes, paymentsRes, auditRes, movementsRes, settingsRes] = await Promise.all([
+    const [itemsRes, paymentsRes, auditRes, movementsRes, settingsRes, dispatchRes] = await Promise.all([
       client.query(
         `SELECT oi.*, oi.unit_price_primary as unit_price_usd, oi.total_price_primary as total_price_usd, p.sku, p.image_url
          FROM order_items oi
@@ -101,6 +107,15 @@ async function loadFullOrderDetail(schema: string, orderId: string) {
         `SELECT primary_currency, secondary_currency, exchange_rate, business_name, address, phone, whatsapp_number
          FROM settings WHERE key = 'general' LIMIT 1`
       ),
+      client.query(
+        `SELECT r.*, d.full_name as driver_name, d.phone as driver_phone, d.license_plate as driver_plate, d.vehicle_type as driver_vehicle
+         FROM df_dispatch_routes r
+         LEFT JOIN df_drivers d ON d.id = r.driver_id
+         WHERE r.order_id = $1
+         ORDER BY r.created_at DESC
+         LIMIT 1`,
+        [orderId]
+      ).catch(() => ({ rows: [] })),
     ]);
 
     const settings = settingsRes.rows[0] || null;
@@ -121,6 +136,7 @@ async function loadFullOrderDetail(schema: string, orderId: string) {
       payments: paymentsRes.rows,
       audit_logs: auditRes.rows,
       inventory_movements: movementsRes.rows,
+      dispatch: dispatchRes.rows[0] || null,
       settings,
     };
   });
@@ -387,6 +403,39 @@ export async function PATCH(
             },
           });
         }
+      } else if (payload.action === 'ASSIGN_DRIVER') {
+        const dRes = await client.query(
+          `SELECT id FROM df_dispatch_routes WHERE order_id = $1 ORDER BY created_at DESC LIMIT 1`,
+          [id]
+        );
+        let dispatchId = dRes.rows[0]?.id;
+        if (!dispatchId) {
+          const createRes = await client.query(
+            `SELECT platform.rpc_df_create_dispatch($1, $2, $3::jsonb) AS result`,
+            [tenant.db_schema_name, id, JSON.stringify({ notes: 'Asignado desde panel de órdenes' })]
+          );
+          dispatchId = createRes.rows[0]?.result?.dispatch_id;
+        }
+
+        if (!dispatchId) {
+          throw new Error('No se pudo inicializar la ruta de despacho para este pedido');
+        }
+
+        await client.query(
+          `SELECT platform.rpc_df_assign_driver($1, $2, $3, $4, $5)`,
+          [tenant.db_schema_name, dispatchId, payload.driver_id, staffUuid, staff.full_name]
+        );
+
+        await writeTenantAuditLog(client, {
+          actorId: staff.id,
+          actorName: staff.full_name,
+          actorRole: staff.role,
+          action: 'DISPATCH_ASSIGNED',
+          entity: 'order',
+          entityId: id,
+          oldData: null,
+          newData: { driver_id: payload.driver_id, dispatch_id: dispatchId },
+        });
       }
     });
 

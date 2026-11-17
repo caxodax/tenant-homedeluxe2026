@@ -71,7 +71,8 @@ export default async function ReportsPage({
       SELECT
         COUNT(*)::int AS total_orders,
         COALESCE(SUM(total_primary), 0) AS total_revenue_usd,
-        COALESCE(AVG(total_primary), 0) AS avg_ticket_usd
+        COALESCE(AVG(total_primary), 0) AS avg_ticket_usd,
+        COALESCE(SUM(discount_primary), 0) AS total_discounts_usd
       FROM orders
       WHERE status != 'CANCELLED'
         AND created_at >= $1 AND created_at <= $2
@@ -185,6 +186,7 @@ export default async function ReportsPage({
         END AS channel,
         o.total_primary AS total_usd,
         o.total_secondary,
+        COALESCE(o.discount_primary, 0) AS discount_primary,
         o.exchange_rate_applied,
         o.status,
         COALESCE(
@@ -216,22 +218,33 @@ export default async function ReportsPage({
       channel: r.channel,
       total_usd: parseFloat(r.total_usd || '0'),
       total_secondary: parseFloat(r.total_secondary || '0'),
+      discount_primary: parseFloat(r.discount_primary || '0'),
       exchange_rate_applied: parseFloat(r.exchange_rate_applied || '0'),
       status: r.status,
       payment_method: r.payment_method,
     }));
 
-    const drRes = await client.query(
-      `SELECT platform.rpc_df_intel_report($1, $2::date, $3::date) AS report`,
-      [tenant.db_schema_name, startIso.slice(0, 10), endIso.slice(0, 10)]
+    const pluginRes = await client.query(
+      `SELECT is_active FROM platform.tenant_plugins WHERE tenant_id = $1 AND plugin_id = 'delivery_fleet'`,
+      [tenant.id]
     ).catch(() => ({ rows: [] }));
-    const deliveryReport = drRes.rows[0]?.report || null;
+    const isDeliveryActive = Boolean(pluginRes.rows[0]?.is_active);
+
+    let deliveryReport = null;
+    if (isDeliveryActive) {
+      const drRes = await client.query(
+        `SELECT platform.rpc_df_intel_report($1, $2::date, $3::date) AS report`,
+        [tenant.db_schema_name, startIso.slice(0, 10), endIso.slice(0, 10)]
+      ).catch(() => ({ rows: [] }));
+      deliveryReport = drRes.rows[0]?.report || null;
+    }
 
     const payload: ReportDataPayload = {
       summary: {
         total_orders: Number(summary?.total_orders || 0),
         total_revenue_usd: parseFloat(summary?.total_revenue_usd || '0'),
         avg_ticket_usd: parseFloat(summary?.avg_ticket_usd || '0'),
+        total_discounts_usd: parseFloat(summary?.total_discounts_usd || '0'),
       },
       deliveryReport,
       channels: salesByChannel.rows.map((c: any) => ({

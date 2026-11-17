@@ -124,6 +124,10 @@ export async function GET(
         tax_rate: 16.0,
         prices_include_tax: false,
       },
+      discount_settings: data.settings?.value?.discounts || {
+        allow_stacked: false,
+        presets: [],
+      },
     });
   } catch (error: unknown) {
     console.error('Error fetching POS products:', error);

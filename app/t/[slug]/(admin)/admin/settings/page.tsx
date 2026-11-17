@@ -37,13 +37,15 @@ import {
   Receipt,
   CheckCircle2,
   Ban,
-  Blocks
+  Blocks,
+  Tag,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ImageUploader } from '@/components/admin/image-uploader';
 import { PaymentMethodsManager } from './payment-methods-manager';
 import { BcvRateTab } from './bcv-rate-tab';
 import { PluginsManager } from './plugins-manager';
+import { DiscountsTab } from './discounts-tab';
 import { TENANT_DEFAULTS } from '@/lib/tenant/defaults';
 
 const settingsSchema = z.object({
@@ -101,6 +103,7 @@ const SETTINGS_SECTIONS: SettingsSection[] = [
   { id: 'general', label: 'General & Datos Básicos', description: 'Nombre comercial, dirección física y monedas canónicas', icon: Store },
   { id: 'branding', label: 'Marca & Logo', description: 'Colores corporativos, logotipo y banner de tienda', icon: Palette },
   { id: 'payments', label: 'Métodos de Pago', description: 'Pasarelas, cuentas y formas de cobro habilitadas', icon: CreditCard },
+  { id: 'discounts', label: 'Descuentos & Promos', description: 'Descuentos porcentuales, montos fijos y políticas de caja', icon: Tag, badge: 'Core' },
   { id: 'plugins', label: 'Plugins & Extensiones', description: 'Delivery Fleet, Localización Venezuela y módulos modulares', icon: Blocks, badge: 'Capa 2' },
   { id: 'bcv', label: 'Moneda & BCV', description: 'Moneda base de catálogo, regímenes de conversión oficial y simulador en vivo', icon: Coins, pluginId: 'local_venezuela', badge: 'Plugin VE' },
   { id: 'contact', label: 'Contacto & Contingencia', description: 'WhatsApp de atención y modo offline de contingencia', icon: MessageCircle },
@@ -382,6 +385,9 @@ export default function SettingsPage() {
                       </SelectTrigger>
                       <SelectContent className="bg-white dark:bg-[#141416] border-slate-200 dark:border-zinc-800 text-sm">
                         <SelectItem value="USD">USD ($) - Dólares Americanos</SelectItem>
+                        <SelectItem value="VES">VES (Bs.) - Bolívares</SelectItem>
+                        <SelectItem value="COP">COP ($) - Pesos Colombianos</SelectItem>
+                        <SelectItem value="CLP">CLP ($) - Pesos Chilenos</SelectItem>
                         <SelectItem value="EUR">EUR (€) - Euros Unión Europea</SelectItem>
                       </SelectContent>
                     </Select>
@@ -995,6 +1001,10 @@ export default function SettingsPage() {
           <TabsContent value="payments" className="space-y-4">
             <PaymentMethodsManager slug={params.slug} />
           </TabsContent>
+          {/* TAB: DESCUENTOS & PROMOS */}
+          <TabsContent value="discounts" className="space-y-4">
+            <DiscountsTab slug={params.slug} />
+          </TabsContent>
           {/* TAB: PLUGINS & EXTENSIONES */}
           <TabsContent value="plugins" className="space-y-4">
             <PluginsManager
@@ -1016,7 +1026,7 @@ export default function SettingsPage() {
         </Tabs>
 
         {/* Botón Guardar Flotante / Sticky (solo para pestañas del formulario general) */}
-        {activeTab !== 'payments' && activeTab !== 'bcv' && activeTab !== 'plugins' && (
+        {activeTab !== 'payments' && activeTab !== 'discounts' && activeTab !== 'bcv' && activeTab !== 'plugins' && (
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-zinc-800">
             <Button
               type="submit"

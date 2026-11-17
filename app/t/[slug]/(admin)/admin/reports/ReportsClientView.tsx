@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
   BarChart3, TrendingUp, CreditCard, DollarSign, 
   ShoppingBag, Percent, ArrowUpDown, Calendar, 
-  Download, ChevronDown, Filter, Bike, Navigation, Clock, UserCheck
+  Download, ChevronDown, Filter, Bike, Navigation, Clock, UserCheck, Tag
 } from 'lucide-react';
 import { SalesChart, type TrendItem } from '../components/sales-chart';
 import { toast } from 'sonner';
@@ -26,6 +26,7 @@ export interface ExportOrderItem {
   channel: string;
   total_usd: number;
   total_secondary: number;
+  discount_primary?: number;
   exchange_rate_applied: number;
   status: string;
   payment_method: string;
@@ -36,6 +37,7 @@ export interface ReportDataPayload {
     total_orders: number;
     total_revenue_usd: number;
     avg_ticket_usd: number;
+    total_discounts_usd?: number;
   };
   channels: Array<{
     channel: string;
@@ -324,8 +326,8 @@ export function ReportsClientView({ data }: { data: ReportDataPayload }) {
         </div>
       </div>
 
-      {/* KPI Cards (Grid 2x2 en móvil, 4 columnas en desktop) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      {/* KPI Cards (Grid 2 columnas en móvil, 5 en desktop) */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
         <Card className="bg-white dark:bg-[#121214] border-slate-200 dark:border-zinc-800 shadow-xs">
           <CardContent className="p-3.5 sm:p-5">
             <div className="flex items-center justify-between text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-zinc-400 truncate">
@@ -338,6 +340,23 @@ export function ReportsClientView({ data }: { data: ReportDataPayload }) {
             {isBoth && (
               <p className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 mt-0.5 truncate">
                 {getAmounts(data.summary.total_revenue_usd).bs}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="bg-white dark:bg-[#121214] border-slate-200 dark:border-zinc-800 shadow-xs">
+          <CardContent className="p-3.5 sm:p-5">
+            <div className="flex items-center justify-between text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-zinc-400 truncate">
+              <span>Descuentos</span>
+              <Tag className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+            </div>
+            <p className="text-lg sm:text-2xl font-black font-mono text-amber-600 dark:text-amber-400 mt-1 sm:mt-2 truncate">
+              {formatMoney(data.summary.total_discounts_usd || 0)}
+            </p>
+            {isBoth && (
+              <p className="text-xs font-mono font-bold text-slate-500 dark:text-zinc-400 mt-0.5 truncate">
+                {getAmounts(data.summary.total_discounts_usd || 0).bs}
               </p>
             )}
           </CardContent>

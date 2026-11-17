@@ -19,6 +19,8 @@ import {
   X,
   ShieldCheck,
   Zap,
+  List,
+  LayoutGrid,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -70,6 +72,9 @@ export default function RatesAdminPage() {
   const [isManualModalOpen, setIsManualModalOpen] = useState(false);
   const [manualRateInput, setManualRateInput] = useState('');
   const [savingManual, setSavingManual] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 15;
 
   // Cargar datos
   const loadRates = async (silent = false) => {
@@ -205,6 +210,16 @@ export default function RatesAdminPage() {
       return d.includes(q) || s.includes(q);
     });
   }, [data?.history, searchQuery]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredHistory.length / pageSize));
+  const paginatedHistory = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredHistory.slice(start, start + pageSize);
+  }, [filteredHistory, currentPage, pageSize]);
 
   if (loading) {
     return (
@@ -420,7 +435,7 @@ export default function RatesAdminPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
             <div className="relative w-full sm:w-64">
               <Search className="w-3.5 h-3.5 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <Input
@@ -431,14 +446,47 @@ export default function RatesAdminPage() {
                 className="pl-8.5 h-9 text-xs rounded-xl"
               />
             </div>
+
+            {/* Selector de Vista: Lista vs Grid */}
+            <div className="flex items-center rounded-xl bg-stone-100 dark:bg-zinc-800 p-0.5 border border-stone-200/80 dark:border-zinc-700/80 shrink-0">
+              <button
+                type="button"
+                onClick={() => setViewMode('list')}
+                className={cn(
+                  'px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer',
+                  viewMode === 'list'
+                    ? 'bg-white dark:bg-zinc-900 text-stone-900 dark:text-white shadow-2xs font-bold'
+                    : 'text-stone-500 hover:text-stone-900 dark:hover:text-white'
+                )}
+                title="Vista de lista"
+              >
+                <List className="w-3.5 h-3.5" />
+                <span>Lista</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('grid')}
+                className={cn(
+                  'px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer',
+                  viewMode === 'grid'
+                    ? 'bg-white dark:bg-zinc-900 text-stone-900 dark:text-white shadow-2xs font-bold'
+                    : 'text-stone-500 hover:text-stone-900 dark:hover:text-white'
+                )}
+                title="Vista de cuadrícula"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span>Tarjetas</span>
+              </button>
+            </div>
+
             <span className="text-xs font-mono font-bold text-stone-500 dark:text-zinc-400 bg-stone-100 dark:bg-zinc-800 px-2.5 py-1.5 rounded-xl shrink-0">
               {filteredHistory.length} fechas
             </span>
           </div>
         </div>
 
-        {/* TABLA ESCRITORIO (hidden md:block) */}
-        <div className="hidden md:block">
+        {/* VISTA SEGÚN MODO SELECCIONADO (LISTA O TARJETAS) */}
+        {viewMode === 'list' ? (
           <Card className="border-stone-200/80 dark:border-zinc-800/80 overflow-hidden shadow-xs">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
@@ -453,14 +501,14 @@ export default function RatesAdminPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-100 dark:divide-zinc-800/80 font-mono">
-                  {filteredHistory.length === 0 ? (
+                  {paginatedHistory.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="py-12 text-center text-stone-500 dark:text-zinc-400">
                         No hay registros que coincidan con la búsqueda.
                       </td>
                     </tr>
                   ) : (
-                    filteredHistory.map((item) => {
+                    paginatedHistory.map((item) => {
                       const ves = parseFloat(item.rate_ves_usd);
                       const eur = item.rate_eur_usd ? parseFloat(item.rate_eur_usd) : null;
                       const usdt = item.rate_usdt ? parseFloat(item.rate_usdt) : null;
@@ -512,74 +560,109 @@ export default function RatesAdminPage() {
               </table>
             </div>
           </Card>
-        </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {paginatedHistory.length === 0 ? (
+              <div className="col-span-full py-12 text-center text-stone-500 bg-white dark:bg-[#121214] rounded-2xl border border-stone-200/80 p-6">
+                No hay registros que coincidan con la búsqueda.
+              </div>
+            ) : (
+              paginatedHistory.map((item) => {
+                const ves = parseFloat(item.rate_ves_usd);
+                const eur = item.rate_eur_usd ? parseFloat(item.rate_eur_usd) : null;
+                const usdt = item.rate_usdt ? parseFloat(item.rate_usdt) : null;
+                const variation = item.variation ?? 0;
+                const { dayName, isoDate } = formatRateDate(item.date_rate);
 
-        {/* VISTA MÓVIL (md:hidden): TARJETAS COMPACTAS SIN SCROLL HORIZONTAL */}
-        <div className="md:hidden space-y-3">
-          {filteredHistory.length === 0 ? (
-            <div className="py-8 text-center text-stone-500 bg-white dark:bg-[#121214] rounded-2xl border border-stone-200/80 p-6">
-              No hay registros disponibles.
+                return (
+                  <div
+                    key={item.id}
+                    className="p-4 rounded-2xl bg-white dark:bg-[#121214] border border-stone-200/80 dark:border-zinc-800/80 shadow-xs space-y-3 font-mono hover:border-stone-300 dark:hover:border-zinc-700 transition"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-bold text-xs text-stone-950 dark:text-white capitalize leading-tight">
+                          {dayName}
+                        </p>
+                        <p className="text-[10px] text-stone-400">{isoDate}</p>
+                      </div>
+
+                      {variation > 0 ? (
+                        <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200/60">
+                          <ArrowUpRight className="w-3 h-3" />
+                          +{variation.toFixed(2)}%
+                        </span>
+                      ) : variation < 0 ? (
+                        <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-full border border-rose-200/60">
+                          <ArrowDownRight className="w-3 h-3" />
+                          {variation.toFixed(2)}%
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-bold text-stone-400">0.00%</span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 pt-2 border-t border-stone-100 dark:border-zinc-800/80 text-center">
+                      <div className="p-2 rounded-xl bg-stone-50 dark:bg-zinc-900/60 border border-stone-100 dark:border-zinc-800/50">
+                        <span className="text-[9px] font-sans font-bold text-stone-400 block uppercase">USD BCV</span>
+                        <span className="text-xs font-black text-stone-900 dark:text-white">Bs. {ves.toFixed(2)}</span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-stone-50 dark:bg-zinc-900/60 border border-stone-100 dark:border-zinc-800/50">
+                        <span className="text-[9px] font-sans font-bold text-stone-400 block uppercase">EUR BCV</span>
+                        <span className="text-xs font-bold text-stone-700 dark:text-zinc-300">{eur ? `Bs. ${eur.toFixed(2)}` : '—'}</span>
+                      </div>
+                      <div className="p-2 rounded-xl bg-stone-50 dark:bg-zinc-900/60 border border-stone-100 dark:border-zinc-800/50">
+                        <span className="text-[9px] font-sans font-bold text-stone-400 block uppercase">USDT P2P</span>
+                        <span className="text-xs font-bold text-stone-700 dark:text-zinc-300">{usdt ? `Bs. ${usdt.toFixed(2)}` : '—'}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[10px] text-stone-400 font-sans pt-1">
+                      <span>Fuente:</span>
+                      <span className="font-semibold text-stone-700 dark:text-zinc-300">{item.source}</span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+
+        {/* Paginación */}
+        {totalPages > 1 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-stone-200/80 dark:border-zinc-800 text-xs text-stone-600 dark:text-zinc-400">
+            <div>
+              Mostrando <strong className="text-stone-900 dark:text-white">{(currentPage - 1) * pageSize + 1}</strong> a{' '}
+              <strong className="text-stone-900 dark:text-white">
+                {Math.min(currentPage * pageSize, filteredHistory.length)}
+              </strong>{' '}
+              de <strong className="text-stone-900 dark:text-white">{filteredHistory.length}</strong> fechas
             </div>
-          ) : (
-            filteredHistory.map((item) => {
-              const ves = parseFloat(item.rate_ves_usd);
-              const eur = item.rate_eur_usd ? parseFloat(item.rate_eur_usd) : null;
-              const usdt = item.rate_usdt ? parseFloat(item.rate_usdt) : null;
-              const variation = item.variation ?? 0;
-              const { dayName, isoDate } = formatRateDate(item.date_rate);
-
-              return (
-                <div
-                  key={item.id}
-                  className="p-3.5 rounded-2xl bg-white dark:bg-[#121214] border border-stone-200/80 dark:border-zinc-800/80 shadow-xs space-y-2.5 font-mono"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-bold text-xs text-stone-950 dark:text-white capitalize leading-tight">
-                        {dayName}
-                      </p>
-                      <p className="text-[10px] text-stone-400">{isoDate}</p>
-                    </div>
-
-                    {variation > 0 ? (
-                      <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full border border-emerald-200/60">
-                        <ArrowUpRight className="w-3 h-3" />
-                        +{variation.toFixed(2)}%
-                      </span>
-                    ) : variation < 0 ? (
-                      <span className="inline-flex items-center gap-0.5 text-[11px] font-bold text-rose-600 bg-rose-50 dark:bg-rose-950/40 px-2 py-0.5 rounded-full border border-rose-200/60">
-                        <ArrowDownRight className="w-3 h-3" />
-                        {variation.toFixed(2)}%
-                      </span>
-                    ) : (
-                      <span className="text-[11px] font-bold text-stone-400">0.00%</span>
-                    )}
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 pt-2 border-t border-stone-100 dark:border-zinc-800/80 text-center">
-                    <div className="p-1.5 rounded-lg bg-stone-50 dark:bg-zinc-900/60">
-                      <span className="text-[9px] font-sans font-bold text-stone-400 block uppercase">USD BCV</span>
-                      <span className="text-xs font-black text-stone-900 dark:text-white">Bs. {ves.toFixed(2)}</span>
-                    </div>
-                    <div className="p-1.5 rounded-lg bg-stone-50 dark:bg-zinc-900/60">
-                      <span className="text-[9px] font-sans font-bold text-stone-400 block uppercase">EUR BCV</span>
-                      <span className="text-xs font-bold text-stone-700 dark:text-zinc-300">{eur ? `Bs. ${eur.toFixed(2)}` : '—'}</span>
-                    </div>
-                    <div className="p-1.5 rounded-lg bg-stone-50 dark:bg-zinc-900/60">
-                      <span className="text-[9px] font-sans font-bold text-stone-400 block uppercase">USDT P2P</span>
-                      <span className="text-xs font-bold text-stone-700 dark:text-zinc-300">{usdt ? `Bs. ${usdt.toFixed(2)}` : '—'}</span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between text-[10px] text-stone-400 font-sans pt-1">
-                    <span>Fuente:</span>
-                    <span className="font-semibold text-stone-700 dark:text-zinc-300">{item.source}</span>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="h-8 px-3 text-xs"
+              >
+                Anterior
+              </Button>
+              <span className="font-mono font-bold text-stone-900 dark:text-white px-2">
+                {currentPage} / {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="h-8 px-3 text-xs"
+              >
+                Siguiente
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ========================================================================= */}

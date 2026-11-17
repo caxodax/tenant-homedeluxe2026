@@ -62,14 +62,20 @@ export default async function TenantAdminLayout({
   const { slug } = await params;
   const { tenant, staff } = await requireTenantStaff(slug);
   
-  const settings = await withTenantDb(tenant.db_schema_name, null, async (client) => {
+  const { settings, activePlugins } = await withTenantDb(tenant.db_schema_name, null, async (client) => {
     const sRes = await client.query(`
       SELECT business_name, logo_url, primary_color, secondary_color, accent_color 
       FROM settings 
       WHERE key = 'general' 
       LIMIT 1
     `);
-    return sRes.rows[0] ?? null;
+    const pRes = await client.query(`
+      SELECT plugin_id FROM platform.tenant_plugins WHERE tenant_id = $1 AND is_active = true
+    `, [tenant.id]);
+    return {
+      settings: sRes.rows[0] ?? null,
+      activePlugins: pRes.rows.map((r: { plugin_id: string }) => r.plugin_id),
+    };
   });
 
   const storeName = settings?.business_name || tenant.name;
@@ -109,20 +115,15 @@ export default async function TenantAdminLayout({
               <h1 className="font-extrabold text-sm leading-tight text-stone-950 dark:text-white truncate group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
                 {storeName}
               </h1>
-              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                <span className="inline-block px-1.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-wide bg-stone-100 dark:bg-zinc-800 text-stone-700 dark:text-zinc-300 border border-stone-200 dark:border-zinc-700">
-                  {staff.role}
-                </span>
-                <span className="text-[11px] text-stone-500 dark:text-zinc-400 font-medium truncate max-w-[100px]">
-                  {staff.full_name}
-                </span>
-              </div>
+              <p className="text-[11px] text-stone-500 dark:text-zinc-400 font-medium truncate mt-0.5">
+                {staff.full_name}
+              </p>
             </div>
           </Link>
         </div>
         
         {/* Navegación Reactiva con Secciones estructuradas (Opción A) */}
-        <SidebarNav slug={slug} role={staff.role} />
+        <SidebarNav slug={slug} role={staff.role} activePlugins={activePlugins} />
         
         {/* Footer del Sidebar */}
         <div className="p-3 border-t border-stone-200/80 dark:border-zinc-800/80 space-y-1 bg-stone-50/50 dark:bg-zinc-900/30">
@@ -188,6 +189,7 @@ export default async function TenantAdminLayout({
               role={staff.role} 
               logoUrl={logoUrl}
               storefrontEnabled={tenant.storefront_enabled}
+              activePlugins={activePlugins}
             />
           </div>
         </header>

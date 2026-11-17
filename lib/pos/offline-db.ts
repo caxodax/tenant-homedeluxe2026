@@ -16,12 +16,24 @@ export interface OfflineSale {
     metadata?: Record<string, unknown>;
   }>;
   subtotal_usd: number;
+  subtotal_primary?: number;
   discount_usd: number;
+  discount_primary?: number;
   tax_usd: number;
+  tax_primary?: number;
   shipping_usd: number;
+  shipping_primary?: number;
   total_usd: number;
+  total_primary?: number;
   total_secondary?: number | null;
   exchange_rate_applied: number;
+  discounts_applied?: Array<{
+    id?: string;
+    name: string;
+    type: 'PERCENTAGE' | 'FIXED_AMOUNT';
+    value: number;
+    amount_primary: number;
+  }>;
   payment: {
     method: string;
     amount: number;
@@ -67,6 +79,16 @@ export interface CachedPosCatalog {
     primary_color?: string | null;
     secondary_color?: string | null;
     accent_color?: string | null;
+    discount_settings?: {
+      allow_stacked: boolean;
+      presets: Array<{
+        id: string;
+        name: string;
+        type: 'PERCENTAGE' | 'FIXED_AMOUNT';
+        value: number;
+        is_active: boolean;
+      }>;
+    };
   };
   updated_at: number;
 }

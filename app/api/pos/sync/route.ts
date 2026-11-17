@@ -92,6 +92,7 @@ export async function POST(request: NextRequest) {
       const resolvedPhone = phone && phone.length >= 7 ? phone : '0000000000';
       const tot = sale.total_primary ?? sale.total_usd ?? 0;
       const sub = sale.subtotal_primary ?? sale.subtotal_usd ?? tot;
+      const disc = sale.discount_primary ?? sale.discount_usd ?? 0;
 
       return {
         ...sale,
@@ -99,6 +100,8 @@ export async function POST(request: NextRequest) {
         total_usd: tot,
         subtotal_primary: sub,
         subtotal_usd: sub,
+        discount_primary: disc,
+        discount_usd: disc,
         store_id: resolvedStoreId,
         customer_phone: resolvedPhone,
         items: sale.items.map((i) => {

@@ -28,6 +28,16 @@ const settingsUpdateSchema = z.object({
     tax_rate: z.number().min(0).max(100),
     prices_include_tax: z.boolean(),
   }).optional(),
+  discounts: z.object({
+    allow_stacked: z.boolean().default(false),
+    presets: z.array(z.object({
+      id: z.string(),
+      name: z.string().min(1),
+      type: z.enum(['PERCENTAGE', 'FIXED_AMOUNT']),
+      value: z.number().min(0),
+      is_active: z.boolean().default(true),
+    })).default([]),
+  }).optional(),
 });
 
 export async function GET(
@@ -55,9 +65,10 @@ export async function GET(
       return NextResponse.json({ error: 'Configuración no encontrada' }, { status: 404 });
     }
 
-    // Aplanar social_media y taxes desde el JSONB 'value' para el frontend
+    // Aplanar social_media, taxes y discounts desde el JSONB 'value' para el frontend
     const socialMedia = settings.value?.social_media || {};
     const taxes = settings.value?.taxes || { tax_enabled: true, tax_rate: 16.0, prices_include_tax: false };
+    const discounts = settings.value?.discounts || { allow_stacked: false, presets: [] };
     const activePlugins = pluginsRes.rows.map((r: { plugin_id: string }) => r.plugin_id);
 
     return NextResponse.json({ 
@@ -65,6 +76,7 @@ export async function GET(
         ...settings,
         social_media: socialMedia,
         taxes,
+        discounts,
       },
       active_plugins: activePlugins,
     });
@@ -104,9 +116,10 @@ export async function PATCH(
     const jsonPatch: Record<string, any> = {};
     if (data.social_media !== undefined) jsonPatch.social_media = data.social_media;
     if (data.taxes !== undefined) jsonPatch.taxes = data.taxes;
+    if (data.discounts !== undefined) jsonPatch.discounts = data.discounts;
 
     for (const [key, value] of Object.entries(data)) {
-      if (value !== undefined && key !== 'social_media' && key !== 'taxes') {
+      if (value !== undefined && key !== 'social_media' && key !== 'taxes' && key !== 'discounts') {
         fields.push(`${key} = $${paramIndex}`);
         values.push(value);
         paramIndex++;

@@ -35,6 +35,7 @@ interface AdminMobileNavProps {
   role: string;
   logoUrl?: string | null;
   storefrontEnabled?: boolean;
+  activePlugins?: string[];
 }
 
 interface NavSection {
@@ -45,6 +46,7 @@ interface NavSection {
     icon: typeof LayoutDashboard;
     permission: TenantPermission;
     badgeColor: IconBadgeColor;
+    plugin?: string;
   }>;
 }
 
@@ -54,7 +56,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Dashboard', href: '', icon: LayoutDashboard, permission: 'dashboard', badgeColor: 'emerald' },
       { label: 'Pedidos', href: '/orders', icon: ShoppingCart, permission: 'orders', badgeColor: 'blue' },
-      { label: 'Delivery', href: '/delivery', icon: Bike, permission: 'orders', badgeColor: 'emerald' },
+      { label: 'Delivery', href: '/delivery', icon: Bike, permission: 'orders', badgeColor: 'emerald', plugin: 'delivery_fleet' },
       { label: 'Caja', href: '/pos', icon: Monitor, permission: 'pos', badgeColor: 'amber' },
     ],
   },
@@ -83,6 +85,7 @@ export function AdminMobileNav({
   role,
   logoUrl,
   storefrontEnabled = true,
+  activePlugins,
 }: AdminMobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
   const pendingOrders = usePendingOrdersBadge(slug);
@@ -140,9 +143,6 @@ export function AdminMobileNav({
                   <h2 className="font-extrabold text-sm text-stone-950 dark:text-white truncate group-hover:text-emerald-700 dark:group-hover:text-emerald-400 transition-colors">
                     {storeName}
                   </h2>
-                  <span className="text-[10px] font-mono uppercase font-bold text-stone-700 dark:text-zinc-300">
-                    Rol: {role}
-                  </span>
                 </div>
               </Link>
 
@@ -160,7 +160,8 @@ export function AdminMobileNav({
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {NAV_SECTIONS.map((section) => {
                 const visibleItems = section.items.filter((item) =>
-                  hasPermission(role, item.permission)
+                  hasPermission(role, item.permission) &&
+                  (!item.plugin || (activePlugins && activePlugins.includes(item.plugin)))
                 );
                 if (visibleItems.length === 0) return null;
 

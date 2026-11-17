@@ -118,7 +118,6 @@ export default function InventoryPage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   // Loading individual de fila (para stepper de stock o toggle activo)
-  const [stockUpdatingId, setStockUpdatingId] = useState<string | null>(null);
 
   // Carga inicial
   useEffect(() => {
@@ -535,42 +534,6 @@ export default function InventoryPage() {
     }
   }
 
-  // ===========================================================================
-  // ACCIONES: STEPPER DE STOCK RÁPIDO [- 25 +]
-  // ===========================================================================
-  async function handleQuickStockChange(prod: Product, delta: number) {
-    const current = Number(prod.current_stock || 0);
-    const newStock = Math.max(0, current + delta);
-    if (newStock === current) return;
-
-    // Actualización optimista inmediata
-    setProducts((prev) =>
-      prev.map((p) => (p.id === prod.id ? { ...p, current_stock: newStock } : p))
-    );
-
-    try {
-      setStockUpdatingId(prod.id);
-      const res = await fetch(`/api/admin/${slug}/products/${prod.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ current_stock: newStock }),
-      });
-      if (!res.ok) {
-        // Revertir si falló
-        setProducts((prev) =>
-          prev.map((p) => (p.id === prod.id ? { ...p, current_stock: current } : p))
-        );
-        toast.error('No se pudo guardar el stock');
-      }
-    } catch {
-      setProducts((prev) =>
-        prev.map((p) => (p.id === prod.id ? { ...p, current_stock: current } : p))
-      );
-      toast.error('Error de red al actualizar stock');
-    } finally {
-      setStockUpdatingId(null);
-    }
-  }
 
   // ===========================================================================
   // ACCIONES: TOGGLE ACTIVO / PAUSADO
@@ -771,14 +734,14 @@ export default function InventoryPage() {
                 <span>Categorías</span>
               </Link>
 
-              {/* + Nuevo Producto */}
+              {/* Nuevo Producto */}
               <Button
                 type="button"
                 onClick={openCreateModal}
                 className="h-9 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow-sm hover:shadow transition flex items-center gap-1.5 cursor-pointer shrink-0"
               >
                 <Plus className="w-4 h-4" />
-                <span>+ Nuevo Producto</span>
+                <span>Nuevo Producto</span>
               </Button>
             </div>
           </div>
@@ -1015,29 +978,18 @@ export default function InventoryPage() {
 
                 {/* Controles Inferiores Móviles */}
                 <div className="flex items-center justify-between pt-2 border-t border-stone-100 dark:border-zinc-800/80 gap-2">
-                  <div className="flex items-center gap-1 font-mono">
-                    <button
-                      type="button"
-                      onClick={() => handleQuickStockChange(prod, -1)}
-                      disabled={isArchived || stockNum <= 0}
-                      className="w-8 h-8 rounded-lg border border-stone-200 dark:border-zinc-800 bg-stone-50 dark:bg-zinc-800 text-stone-700 dark:text-zinc-200 font-bold text-sm flex items-center justify-center disabled:opacity-30 cursor-pointer"
-                    >
-                      -
-                    </button>
+                  <div className="flex items-center gap-1.5 font-mono">
+                    <span className="text-[11px] text-stone-500 font-sans">Stock:</span>
                     <span className={cn(
-                      'w-10 text-center font-extrabold text-sm',
-                      stockNum === 0 ? 'text-rose-600' : stockNum <= prod.min_stock_alert ? 'text-amber-600' : 'text-stone-900 dark:text-white'
+                      'px-2.5 py-0.5 rounded-md font-extrabold text-xs',
+                      stockNum === 0
+                        ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 border border-rose-200 dark:border-rose-900/40'
+                        : stockNum <= prod.min_stock_alert
+                        ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 border border-amber-200 dark:border-amber-900/40'
+                        : 'bg-stone-100 dark:bg-zinc-800 text-stone-800 dark:text-zinc-200 border border-stone-200/60 dark:border-zinc-700/60'
                     )}>
-                      {stockNum}
+                      {stockNum} uds.
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => handleQuickStockChange(prod, 1)}
-                      disabled={isArchived}
-                      className="w-8 h-8 rounded-lg border border-stone-200 dark:border-zinc-800 bg-stone-50 dark:bg-zinc-800 text-stone-700 dark:text-zinc-200 font-bold text-sm flex items-center justify-center disabled:opacity-30 cursor-pointer"
-                    >
-                      +
-                    </button>
                   </div>
 
                   <div className="flex items-center gap-1.5">
@@ -1194,40 +1146,20 @@ export default function InventoryPage() {
                           )}
                         </td>
 
-                        {/* STOCK / STEPPER INTERACTIVO [- 25 +] */}
-                        <td className="py-3 px-4">
-                          <div className="flex items-center justify-center gap-1.5 font-mono">
-                            <button
-                              type="button"
-                              onClick={() => handleQuickStockChange(prod, -1)}
-                              disabled={isArchived || stockNum <= 0}
-                              className="w-7 h-7 rounded-lg border border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 hover:bg-stone-100 dark:hover:bg-zinc-700 text-stone-700 dark:text-zinc-200 flex items-center justify-center font-bold text-xs cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed transition"
-                              title="Restar 1 existencia"
-                            >
-                              -
-                            </button>
-                            <span
-                              className={cn(
-                                'w-10 text-center font-extrabold text-sm',
-                                stockNum === 0
-                                  ? 'text-rose-600 dark:text-rose-400'
-                                  : stockNum <= prod.min_stock_alert
-                                  ? 'text-amber-600 dark:text-amber-400'
-                                  : 'text-stone-900 dark:text-white'
-                              )}
-                            >
-                              {stockNum}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => handleQuickStockChange(prod, 1)}
-                              disabled={isArchived}
-                              className="w-7 h-7 rounded-lg border border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 hover:bg-stone-100 dark:hover:bg-zinc-700 text-stone-700 dark:text-zinc-200 flex items-center justify-center font-bold text-xs cursor-pointer disabled:opacity-30 transition"
-                              title="Añadir 1 existencia"
-                            >
-                              +
-                            </button>
-                          </div>
+                        {/* STOCK */}
+                        <td className="py-3 px-4 text-center">
+                          <span
+                            className={cn(
+                              'inline-flex items-center justify-center px-2.5 py-1 rounded-lg font-mono font-extrabold text-xs',
+                              stockNum === 0
+                                ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/40'
+                                : stockNum <= prod.min_stock_alert
+                                ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900/40'
+                                : 'bg-stone-100 dark:bg-zinc-800 text-stone-900 dark:text-zinc-100 border border-stone-200/60 dark:border-zinc-700/60'
+                            )}
+                          >
+                            {stockNum} uds.
+                          </span>
                         </td>
 
                         {/* ESTADO */}
@@ -1383,26 +1315,19 @@ export default function InventoryPage() {
                       )}
                     </div>
 
-                    {/* Stepper */}
-                    <div className="flex items-center gap-1 font-mono">
-                      <button
-                        type="button"
-                        onClick={() => handleQuickStockChange(prod, -1)}
-                        disabled={isArchived || stockNum <= 0}
-                        className="w-6 h-6 rounded-md border border-stone-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-bold"
-                      >
-                        -
-                      </button>
-                      <span className="w-8 text-center font-bold text-xs">{stockNum}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleQuickStockChange(prod, 1)}
-                        disabled={isArchived}
-                        className="w-6 h-6 rounded-md border border-stone-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-bold"
-                      >
-                        +
-                      </button>
-                    </div>
+                    {/* Stock badge */}
+                    <span
+                      className={cn(
+                        'px-2 py-0.5 rounded-md font-mono font-bold text-xs',
+                        stockNum === 0
+                          ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/40'
+                          : stockNum <= prod.min_stock_alert
+                          ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900/40'
+                          : 'bg-stone-100 dark:bg-zinc-800 text-stone-800 dark:text-zinc-200 border border-stone-200/60 dark:border-zinc-700/60'
+                      )}
+                    >
+                      {stockNum} uds.
+                    </span>
                   </div>
                 </div>
 

@@ -15,8 +15,9 @@ import {
   ArrowLeft, ArrowRight, Search, Plus, Minus, Trash2, ShoppingCart, ShoppingBag,
   CreditCard, Banknote, CheckCircle2, RotateCcw,
   Package, Printer, Lock, Unlock, X, Calculator, ChevronDown,
-  Bike, MapPin, Store
+  Bike, MapPin, Store, Tag, Percent
 } from 'lucide-react';
+import { ModalPortal } from '@/components/ui/modal-portal';
 
 interface Product {
   id: string;
@@ -45,6 +46,16 @@ interface PosSettings {
   tax_enabled?: boolean;
   tax_rate?: number;
   prices_include_tax?: boolean;
+  discount_settings?: {
+    allow_stacked: boolean;
+    presets: Array<{
+      id: string;
+      name: string;
+      type: 'PERCENTAGE' | 'FIXED_AMOUNT';
+      value: number;
+      is_active: boolean;
+    }>;
+  };
 }
 
 interface TicketItem {
@@ -198,6 +209,19 @@ export default function PosPage({ params }: PosPageProps) {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<string>('CASH_USD');
   const [paymentRef, setPaymentRef] = useState('');
+
+  // Estado de descuentos aplicados al ticket (Core V4)
+  const [appliedDiscounts, setAppliedDiscounts] = useState<Array<{
+    id: string;
+    name: string;
+    type: 'PERCENTAGE' | 'FIXED_AMOUNT';
+    value: number;
+    amount_primary: number;
+  }>>([]);
+  const [isDiscountModalOpen, setIsDiscountModalOpen] = useState(false);
+  const [manualDiscountName, setManualDiscountName] = useState('');
+  const [manualDiscountType, setManualDiscountType] = useState<'PERCENTAGE' | 'FIXED_AMOUNT'>('PERCENTAGE');
+  const [manualDiscountValue, setManualDiscountValue] = useState('');
   const [tenderCurrency, setTenderCurrency] = useState<'BASE' | 'VES'>('BASE');
   const [tenderAmount, setTenderAmount] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -404,6 +428,10 @@ export default function PosPage({ params }: PosPageProps) {
           tax_enabled: data.tax_settings?.tax_enabled ?? true,
           tax_rate: typeof data.tax_settings?.tax_rate === 'number' ? data.tax_settings.tax_rate : 16.0,
           prices_include_tax: Boolean(data.tax_settings?.prices_include_tax),
+          discount_settings: data.discount_settings || {
+            allow_stacked: false,
+            presets: [],
+          },
         };
         setSettings(nextSettings);
         try {
@@ -479,30 +507,51 @@ export default function PosPage({ params }: PosPageProps) {
     }
 
     const subtotal = subtotalExempt + subtotalTaxable;
+
+    // Calcular montos de descuento según subtotal bruto
+    let totalDiscountAmount = 0;
+    for (const d of appliedDiscounts) {
+      if (d.type === 'PERCENTAGE') {
+        totalDiscountAmount += Number(((subtotal * d.value) / 100).toFixed(2));
+      } else {
+        totalDiscountAmount += Number(d.value);
+      }
+    }
+    const discountAmount = Number(Math.min(totalDiscountAmount, subtotal).toFixed(2));
+    const netSubtotal = Math.max(0, subtotal - discountAmount);
+
+    // Ajustar bases imponibles proporcionalmente
+    const taxableRatio = subtotal > 0 ? subtotalTaxable / subtotal : 0;
+    const netTaxable = Math.max(0, subtotalTaxable - (discountAmount * taxableRatio));
+    const netExempt = Math.max(0, subtotalExempt - (discountAmount * (1 - taxableRatio)));
+
     let vatAmount = 0;
     if (isTaxActive && taxRate > 0) {
       if (pricesIncludeTax) {
-        vatAmount = Number((subtotalTaxable - subtotalTaxable / (1 + taxRate)).toFixed(2));
+        vatAmount = Number((netTaxable - netTaxable / (1 + taxRate)).toFixed(2));
       } else {
-        vatAmount = Number((subtotalTaxable * taxRate).toFixed(2));
+        vatAmount = Number((netTaxable * taxRate).toFixed(2));
       }
     }
 
     // IGTF 3% (Regla del Plugin local_venezuela sobre pagos en divisas en efectivo - solo si modo fiscal activo)
     const isCashDivisas = paymentMethod === 'CASH_USD' || paymentMethod === 'CASH_EUR';
-    const baseForIgtf = pricesIncludeTax ? subtotal : subtotal + vatAmount;
+    const baseForIgtf = pricesIncludeTax ? netSubtotal : netSubtotal + vatAmount;
     const igtfAmount = (isTaxActive && isCashDivisas) ? Number((baseForIgtf * 0.03).toFixed(2)) : 0;
 
     const finalTotal = !isTaxActive
-      ? Number((subtotal + posDeliveryRate).toFixed(2))
+      ? Number((netSubtotal + posDeliveryRate).toFixed(2))
       : pricesIncludeTax
-        ? Number((subtotal + posDeliveryRate + igtfAmount).toFixed(2))
-        : Number((subtotal + vatAmount + igtfAmount + posDeliveryRate).toFixed(2));
+        ? Number((netSubtotal + posDeliveryRate + igtfAmount).toFixed(2))
+        : Number((netSubtotal + vatAmount + igtfAmount + posDeliveryRate).toFixed(2));
 
     return {
-      subtotalExempt: Number(subtotalExempt.toFixed(2)),
-      subtotalTaxable: Number(subtotalTaxable.toFixed(2)),
+      subtotalExempt: Number(netExempt.toFixed(2)),
+      subtotalTaxable: Number(netTaxable.toFixed(2)),
+      rawSubtotal: Number(subtotal.toFixed(2)),
       subtotal: Number(subtotal.toFixed(2)),
+      netSubtotal: Number(netSubtotal.toFixed(2)),
+      discountAmount,
       vatAmount: Number(vatAmount.toFixed(2)),
       igtfAmount: Number(igtfAmount.toFixed(2)),
       deliveryRate: posDeliveryRate,
@@ -511,9 +560,92 @@ export default function PosPage({ params }: PosPageProps) {
       pricesIncludeTax,
       isTaxActive,
     };
-  }, [ticket, settings, paymentMethod, posDeliveryRate]);
+  }, [ticket, settings, paymentMethod, posDeliveryRate, appliedDiscounts]);
 
   const totalUsd = taxCalculations.finalTotal;
+
+  function applyPresetDiscount(preset: { id: string; name: string; type: 'PERCENTAGE' | 'FIXED_AMOUNT'; value: number }) {
+    const rawSubtotal = taxCalculations.rawSubtotal;
+    if (rawSubtotal <= 0) {
+      toast.error('Agrega productos al ticket antes de aplicar un descuento');
+      return;
+    }
+
+    let calculatedAmount = 0;
+    if (preset.type === 'PERCENTAGE') {
+      calculatedAmount = Number(((rawSubtotal * preset.value) / 100).toFixed(2));
+    } else {
+      calculatedAmount = Number(Math.min(preset.value, rawSubtotal).toFixed(2));
+    }
+
+    const newDisc = {
+      id: preset.id || `disc_${Date.now()}`,
+      name: preset.name,
+      type: preset.type,
+      value: preset.value,
+      amount_primary: calculatedAmount,
+    };
+
+    const allowStacked = Boolean(settings.discount_settings?.allow_stacked);
+    if (allowStacked) {
+      setAppliedDiscounts((prev) => [...prev.filter((d) => d.id !== newDisc.id), newDisc]);
+    } else {
+      setAppliedDiscounts([newDisc]);
+    }
+    setIsDiscountModalOpen(false);
+    toast.success(`Descuento "${preset.name}" aplicado`);
+  }
+
+  function applyCustomDiscount(e: React.FormEvent) {
+    e.preventDefault();
+    const rawSubtotal = taxCalculations.rawSubtotal;
+    if (rawSubtotal <= 0) {
+      toast.error('Agrega productos al ticket antes de aplicar un descuento');
+      return;
+    }
+    const val = parseFloat(manualDiscountValue);
+    if (isNaN(val) || val <= 0) {
+      toast.error('Ingresa un valor de descuento válido');
+      return;
+    }
+    if (manualDiscountType === 'PERCENTAGE' && val > 100) {
+      toast.error('El porcentaje no puede ser mayor a 100%');
+      return;
+    }
+
+    const name = manualDiscountName.trim() || (manualDiscountType === 'PERCENTAGE' ? `Descuento ${val}%` : `Descuento -$${val.toFixed(2)}`);
+    let calculatedAmount = 0;
+    if (manualDiscountType === 'PERCENTAGE') {
+      calculatedAmount = Number(((rawSubtotal * val) / 100).toFixed(2));
+    } else {
+      calculatedAmount = Number(Math.min(val, rawSubtotal).toFixed(2));
+    }
+
+    const newDisc = {
+      id: `manual_${Date.now()}`,
+      name,
+      type: manualDiscountType,
+      value: val,
+      amount_primary: calculatedAmount,
+    };
+
+    const allowStacked = Boolean(settings.discount_settings?.allow_stacked);
+    if (allowStacked) {
+      setAppliedDiscounts((prev) => [...prev, newDisc]);
+    } else {
+      setAppliedDiscounts([newDisc]);
+    }
+
+    setManualDiscountName('');
+    setManualDiscountValue('');
+    setIsDiscountModalOpen(false);
+    toast.success(`Descuento "${name}" aplicado`);
+  }
+
+  function removeDiscount(id: string) {
+    setAppliedDiscounts((prev) => prev.filter((d) => d.id !== id));
+    toast.info('Descuento eliminado');
+  }
 
   // Acciones sobre el ticket
   function addToTicket(product: Product) {
@@ -561,6 +693,7 @@ export default function PosPage({ params }: PosPageProps) {
 
   function clearTicket() {
     setTicket([]);
+    setAppliedDiscounts([]);
   }
 
   // Procesar cobro y guardar en Dexie (Offline-First en USD)
@@ -581,6 +714,10 @@ export default function PosPage({ params }: PosPageProps) {
       const ticketRef = await generateOfflineTicketRef('POS-01');
 
       const safePhone = customerPhone.trim().length >= 7 ? customerPhone.trim() : '0000000000';
+      const discNote = appliedDiscounts.length > 0 
+        ? ` · Desc: ${appliedDiscounts.map(d => `${d.name} (-$${d.amount_primary.toFixed(2)})`).join(', ')}` 
+        : '';
+
       const saleRecord = {
         offline_ticket_ref: ticketRef,
         offline_timestamp: Date.now(),
@@ -593,15 +730,22 @@ export default function PosPage({ params }: PosPageProps) {
           quantity: i.quantity,
           unit_price_usd: parseFloat(i.product.price_usd),
           total_price_usd: Number((parseFloat(i.product.price_usd) * i.quantity).toFixed(2)),
+          unit_price_primary: parseFloat(i.product.price_usd),
+          total_price_primary: Number((parseFloat(i.product.price_usd) * i.quantity).toFixed(2)),
         })),
         subtotal_usd: taxCalculations.subtotal,
-        discount_usd: 0,
+        subtotal_primary: taxCalculations.subtotal,
+        discount_usd: taxCalculations.discountAmount,
+        discount_primary: taxCalculations.discountAmount,
         tax_usd: !taxCalculations.isTaxActive ? 0 : taxCalculations.pricesIncludeTax ? taxCalculations.igtfAmount : Number((taxCalculations.vatAmount + taxCalculations.igtfAmount).toFixed(2)),
+        tax_primary: !taxCalculations.isTaxActive ? 0 : taxCalculations.pricesIncludeTax ? taxCalculations.igtfAmount : Number((taxCalculations.vatAmount + taxCalculations.igtfAmount).toFixed(2)),
         shipping_usd: posDeliveryRate,
         shipping_primary: posDeliveryRate,
         total_usd: Number(totalUsd.toFixed(2)),
+        total_primary: Number(totalUsd.toFixed(2)),
         total_secondary: effectiveRate > 0 ? Number((totalUsd * effectiveRate).toFixed(2)) : null,
         exchange_rate_applied: effectiveRate > 0 ? effectiveRate : 1.0,
+        discounts_applied: appliedDiscounts,
         payment: {
           method: paymentMethod,
           amount: (paymentMethod === 'PAGO_MOVIL' || paymentMethod === 'CASH_LOCAL' || ((paymentMethod === 'BANK_TRANSFER' || paymentMethod === 'CARD') && effectiveRate > 1))
@@ -610,9 +754,9 @@ export default function PosPage({ params }: PosPageProps) {
           currency: (paymentMethod === 'PAGO_MOVIL' || paymentMethod === 'CASH_LOCAL' || ((paymentMethod === 'BANK_TRANSFER' || paymentMethod === 'CARD') && effectiveRate > 1)) ? 'VES' : 'USD',
           reference_number: paymentRef || undefined,
         },
-        notes: posDeliveryType === 'DELIVERY'
+        notes: (posDeliveryType === 'DELIVERY'
           ? `Delivery: ${selectedPosZone?.name || 'Zona'} · Dirección: ${posDeliveryAddress || customerName} · Cobrado en Mostrador POS-01`
-          : `Cobrado en Mostrador POS-01 · ${settings.business_name}${effectiveRate > 0 ? ` (Tasa: ${effectiveRate.toFixed(2)})` : ''}`,
+          : `Cobrado en Mostrador POS-01 · ${settings.business_name}${effectiveRate > 0 ? ` (Tasa: ${effectiveRate.toFixed(2)})` : ''}`) + discNote,
       };
 
       // 1. Guardar localmente en Dexie IndexedDB
@@ -660,6 +804,7 @@ export default function PosPage({ params }: PosPageProps) {
 
       // Limpiar ticket y estado de cobro
       setTicket([]);
+      setAppliedDiscounts([]);
       setIsCheckoutOpen(false);
       setPaymentRef('');
       setTenderAmount('');
@@ -1161,6 +1306,48 @@ export default function PosPage({ params }: PosPageProps) {
                     {currencySymbol}{taxCalculations.subtotal.toFixed(2)}
                   </span>
                 </div>
+
+                {/* Descuentos aplicados (Desktop) */}
+                {appliedDiscounts.length > 0 && (
+                  <div className="space-y-1 py-1 border-y border-dashed border-emerald-500/30 my-1">
+                    {appliedDiscounts.map((d) => (
+                      <div key={d.id} className="flex justify-between items-center text-emerald-700 dark:text-emerald-400 font-semibold">
+                        <span className="flex items-center gap-1 text-[11px] truncate max-w-[170px]" title={d.name}>
+                          <Tag className="w-3 h-3 shrink-0" />
+                          <span className="truncate">{d.name} {d.type === 'PERCENTAGE' ? `(${d.value}%)` : ''}</span>
+                        </span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="font-mono">-{currencySymbol}{d.amount_primary.toFixed(2)}</span>
+                          <button
+                            type="button"
+                            onClick={() => removeDiscount(d.id)}
+                            className="text-slate-400 hover:text-red-500 transition-colors p-0.5"
+                            title="Quitar descuento"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Botón trigger para aplicar/gestionar descuento */}
+                <button
+                  type="button"
+                  onClick={() => setIsDiscountModalOpen(true)}
+                  className="w-full flex items-center justify-between py-1 text-xs text-lime-600 dark:text-lime-400 hover:underline font-bold cursor-pointer"
+                >
+                  <span className="flex items-center gap-1">
+                    <Tag className="w-3.5 h-3.5" />
+                    <span>{appliedDiscounts.length > 0 ? '+ Gestionar Descuentos' : '+ Aplicar Descuento'}</span>
+                  </span>
+                  {taxCalculations.discountAmount > 0 && (
+                    <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                      Total desc: -{currencySymbol}{taxCalculations.discountAmount.toFixed(2)}
+                    </span>
+                  )}
+                </button>
                 {taxCalculations.isTaxActive && taxCalculations.subtotalExempt > 0 && taxCalculations.subtotalTaxable > 0 && (
                   <>
                     <div className="flex justify-between text-[11px] pl-2 text-slate-500">
@@ -1461,6 +1648,58 @@ export default function PosPage({ params }: PosPageProps) {
 
             {/* Resumen Fiscal y Botón de Cobro */}
             <div className="pt-3 border-t border-slate-200 dark:border-zinc-800 space-y-2.5">
+              {ticket.length > 0 && (
+                <div className="space-y-1 text-xs text-slate-600 dark:text-zinc-400">
+                  <div className="flex justify-between">
+                    <span>Subtotal</span>
+                    <span className="font-mono font-bold text-slate-900 dark:text-white">
+                      {currencySymbol}{taxCalculations.subtotal.toFixed(2)}
+                    </span>
+                  </div>
+
+                  {/* Descuentos aplicados (Móvil) */}
+                  {appliedDiscounts.length > 0 && (
+                    <div className="space-y-1 py-1 border-y border-dashed border-emerald-500/30 my-1">
+                      {appliedDiscounts.map((d) => (
+                        <div key={d.id} className="flex justify-between items-center text-emerald-700 dark:text-emerald-400 font-semibold">
+                          <span className="flex items-center gap-1 text-[11px] truncate max-w-[200px]" title={d.name}>
+                            <Tag className="w-3 h-3 shrink-0" />
+                            <span className="truncate">{d.name} {d.type === 'PERCENTAGE' ? `(${d.value}%)` : ''}</span>
+                          </span>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <span className="font-mono">-{currencySymbol}{d.amount_primary.toFixed(2)}</span>
+                            <button
+                              type="button"
+                              onClick={() => removeDiscount(d.id)}
+                              className="text-slate-400 hover:text-red-500 transition-colors p-0.5"
+                              title="Quitar descuento"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setIsDiscountModalOpen(true)}
+                    className="w-full flex items-center justify-between py-1 text-xs text-lime-600 dark:text-lime-400 hover:underline font-bold cursor-pointer"
+                  >
+                    <span className="flex items-center gap-1">
+                      <Tag className="w-3.5 h-3.5" />
+                      <span>{appliedDiscounts.length > 0 ? '+ Gestionar Descuentos' : '+ Aplicar Descuento'}</span>
+                    </span>
+                    {taxCalculations.discountAmount > 0 && (
+                      <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                        Total desc: -{currencySymbol}{taxCalculations.discountAmount.toFixed(2)}
+                      </span>
+                    )}
+                  </button>
+                </div>
+              )}
+
               {ticket.length > 0 && taxCalculations.isTaxActive && taxCalculations.vatAmount > 0 && (
                 <div className="flex justify-between text-xs text-slate-500 font-mono">
                   <span>IVA ({taxCalculations.taxRatePercent}%){taxCalculations.pricesIncludeTax ? ' (inc.)' : ''}</span>
@@ -1694,6 +1933,199 @@ export default function PosPage({ params }: PosPageProps) {
           </div>
         );
       })()}
+
+      {/* Modal de Descuentos (Core V4) */}
+      {isDiscountModalOpen && (
+        <ModalPortal isOpen={isDiscountModalOpen} onClose={() => setIsDiscountModalOpen(false)}>
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 print:hidden">
+            <div className="relative w-full max-w-md max-h-[90vh] flex flex-col bg-white dark:bg-[#121214] border border-slate-200 dark:border-zinc-800 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+              {/* Header */}
+              <div className="p-4 sm:p-5 flex items-center justify-between border-b border-slate-100 dark:border-zinc-800 shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-lime-500/10 text-lime-600 dark:text-lime-400 flex items-center justify-center">
+                    <Tag className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                      Descuentos en Mostrador
+                    </h3>
+                    <p className="text-[11px] text-slate-500 dark:text-zinc-400">
+                      Subtotal actual: <span className="font-mono font-bold">{currencySymbol}{taxCalculations.rawSubtotal.toFixed(2)}</span>
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsDiscountModalOpen(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-500 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Contenido scrolleable */}
+              <div className="p-4 sm:p-5 overflow-y-auto space-y-5">
+                {/* Descuentos actualmente activos en el ticket */}
+                {appliedDiscounts.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
+                        Aplicados ({appliedDiscounts.length})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setAppliedDiscounts([])}
+                        className="text-[11px] font-semibold text-red-600 hover:underline"
+                      >
+                        Quitar todos
+                      </button>
+                    </div>
+                    <div className="space-y-1.5">
+                      {appliedDiscounts.map((d) => (
+                        <div
+                          key={d.id}
+                          className="flex items-center justify-between p-2.5 rounded-xl border border-emerald-500/30 bg-emerald-50/50 dark:bg-emerald-950/20 text-xs"
+                        >
+                          <div className="flex items-center gap-2">
+                            <Tag className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                            <span className="font-semibold text-slate-900 dark:text-white">
+                              {d.name} {d.type === 'PERCENTAGE' ? `(${d.value}%)` : ''}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                              -{currencySymbol}{d.amount_primary.toFixed(2)}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => removeDiscount(d.id)}
+                              className="text-slate-400 hover:text-red-500 p-0.5"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Presets Rápidos */}
+                {settings.discount_settings?.presets && settings.discount_settings.presets.filter(p => p.is_active).length > 0 && (
+                  <div className="space-y-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
+                      Promociones Rápidas
+                    </span>
+                    <div className="grid grid-cols-2 gap-2">
+                      {settings.discount_settings.presets
+                        .filter((p) => p.is_active)
+                        .map((p) => {
+                          const isApplied = appliedDiscounts.some((ad) => ad.id === p.id);
+                          return (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => applyPresetDiscount(p)}
+                              className={`p-3 rounded-xl border text-left transition-all active:scale-95 flex flex-col justify-between min-h-[58px] ${
+                                isApplied
+                                  ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/30'
+                                  : 'border-slate-200 dark:border-zinc-800 hover:border-lime-500 bg-white dark:bg-zinc-900'
+                              }`}
+                            >
+                              <span className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                                {p.name}
+                              </span>
+                              <span className="text-xs font-black font-mono text-lime-600 dark:text-lime-400 mt-1">
+                                {p.type === 'PERCENTAGE' ? `${p.value}% OFF` : `-${currencySymbol}${p.value.toFixed(2)}`}
+                              </span>
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Descuento Manual / Personalizado */}
+                <div className="pt-3 border-t border-slate-100 dark:border-zinc-800 space-y-3">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
+                    Descuento Manual / Personalizado
+                  </span>
+                  <form onSubmit={applyCustomDiscount} className="space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">
+                        Motivo (Opcional)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ej. Cortesía, Detalle de Empaque, Amigo"
+                        value={manualDiscountName}
+                        onChange={(e) => setManualDiscountName(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white focus:outline-none focus:border-lime-500"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">
+                          Tipo
+                        </label>
+                        <div className="flex rounded-xl bg-slate-100 dark:bg-zinc-800 p-0.5 text-xs font-bold">
+                          <button
+                            type="button"
+                            onClick={() => setManualDiscountType('PERCENTAGE')}
+                            className={`flex-1 py-1.5 rounded-lg transition-all ${
+                              manualDiscountType === 'PERCENTAGE'
+                                ? 'bg-white dark:bg-zinc-900 text-slate-900 dark:text-white shadow-xs'
+                                : 'text-slate-500'
+                            }`}
+                          >
+                            % Porc.
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setManualDiscountType('FIXED_AMOUNT')}
+                            className={`flex-1 py-1.5 rounded-lg transition-all ${
+                              manualDiscountType === 'FIXED_AMOUNT'
+                                ? 'bg-white dark:bg-zinc-900 text-slate-900 dark:text-white shadow-xs'
+                                : 'text-slate-500'
+                            }`}
+                          >
+                            $ Fijo
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-semibold text-slate-700 dark:text-zinc-300">
+                          Valor {manualDiscountType === 'PERCENTAGE' ? '(%)' : '($)'}
+                        </label>
+                        <input
+                          type="number"
+                          step={manualDiscountType === 'PERCENTAGE' ? '1' : '0.01'}
+                          min="0.01"
+                          max={manualDiscountType === 'PERCENTAGE' ? '100' : '9999'}
+                          placeholder={manualDiscountType === 'PERCENTAGE' ? '10' : '5.00'}
+                          value={manualDiscountValue}
+                          onChange={(e) => setManualDiscountValue(e.target.value)}
+                          required
+                          className="w-full px-3 py-2 text-xs font-mono font-bold rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white focus:outline-none focus:border-lime-500"
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      className="w-full py-2.5 px-4 rounded-xl font-bold text-xs bg-lime-600 hover:bg-lime-700 text-white shadow-xs transition-all cursor-pointer active:scale-98"
+                    >
+                      Aplicar Descuento
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </div>
+        </ModalPortal>
+      )}
 
       {/* Modal de Cobro */}
       {isCheckoutOpen && (

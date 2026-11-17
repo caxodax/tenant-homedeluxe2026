@@ -45,11 +45,15 @@ interface OrderDetail {
   delivery_type: string;
   delivery_address: string | null;
   subtotal_usd: string;
+  subtotal_primary?: string | null;
   discount_usd: string;
+  discount_primary?: string | null;
   tax_usd: string;
+  tax_primary?: string | null;
   shipping_usd: string;
   shipping_primary?: string | null;
   total_usd: string;
+  total_primary?: string | null;
   total_secondary?: string | null;
   exchange_rate_applied?: string | null;
   is_offline_sale: boolean;
@@ -113,6 +117,24 @@ interface InventoryMovementRow {
 interface TenantPaymentMethod {
   code: string;
   name: string;
+  is_active: boolean;
+}
+
+interface DispatchInfo {
+  id: string;
+  driver_id: string | null;
+  driver_name: string | null;
+  driver_phone: string | null;
+  driver_plate: string | null;
+  driver_vehicle: string | null;
+  status: string;
+}
+
+interface DriverOption {
+  id: string;
+  full_name: string;
+  phone: string;
+  vehicle_type: string;
   is_active: boolean;
 }
 
@@ -228,6 +250,12 @@ export default function AdminOrderDetailPage() {
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [copiedHash, setCopiedHash] = useState(false);
 
+  // Dispatch & Driver Assignment state
+  const [dispatch, setDispatch] = useState<DispatchInfo | null>(null);
+  const [drivers, setDrivers] = useState<DriverOption[]>([]);
+  const [selectedDriverId, setSelectedDriverId] = useState<string>('');
+  const [assigningDriver, setAssigningDriver] = useState(false);
+
   // Thermal Ticket POS Modal
   const [showTicketModal, setShowTicketModal] = useState(false);
 
@@ -337,6 +365,7 @@ export default function AdminOrderDetailPage() {
     payments: PaymentRow[];
     audit_logs: AuditLogRow[];
     inventory_movements: InventoryMovementRow[];
+    dispatch?: DispatchInfo | null;
   }) => {
     setOrder(data.order);
     setSelectedStatus(data.order.status);
@@ -344,6 +373,14 @@ export default function AdminOrderDetailPage() {
     setPayments(data.payments || []);
     setAuditLogs(data.audit_logs || []);
     setMovements(data.inventory_movements || []);
+    if (data.dispatch) {
+      setDispatch(data.dispatch);
+      if (data.dispatch.driver_id) {
+        setSelectedDriverId(data.dispatch.driver_id);
+      }
+    } else {
+      setDispatch(null);
+    }
     if (data.payments?.[0]) {
       setAttachMethod(data.payments[0].method);
       setAttachRef(data.payments[0].reference_number || '');
@@ -376,6 +413,91 @@ export default function AdminOrderDetailPage() {
   useEffect(() => {
     loadOrder();
   }, [loadOrder]);
+
+  // Cargar motorizados activos para pedidos con entrega a domicilio
+  useEffect(() => {
+    if (!slug) return;
+    fetch(`/api/tenant/${slug}/delivery/drivers`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && Array.isArray(data.drivers)) {
+          setDrivers(data.drivers.filter((d: DriverOption) => d.is_active));
+        }
+      })
+      .catch((err) => console.error('Error fetching drivers for order:', err));
+  }, [slug]);
+
+  const handleAssignDriver = async () => {
+    if (!selectedDriverId) {
+      toast.error('Selecciona un repartidor');
+      return;
+    }
+    setAssigningDriver(true);
+    try {
+      const res = await fetch(`/api/admin/${slug}/orders/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'ASSIGN_DRIVER',
+          driver_id: selectedDriverId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Error al asignar repartidor');
+      }
+      toast.success('Repartidor asignado con éxito');
+      applyPayload(data);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Error al asignar repartidor');
+    } finally {
+      setAssigningDriver(false);
+    }
+  };
+
+  const getDriverWhatsAppHref = () => {
+    if (!order) return null;
+    const driver = drivers.find((d) => d.id === selectedDriverId) || (dispatch?.driver_phone ? { phone: dispatch.driver_phone, full_name: dispatch.driver_name } : null);
+    if (!driver || !driver.phone) return null;
+
+    const cleanPhone = driver.phone.replace(/\D/g, '');
+    const cleanCustomerPhone = order.customer_phone.replace(/\D/g, '');
+
+    const isPaid = order.status === 'DELIVERED' || payments.some((p) => p.status === 'VERIFIED');
+    const paymentNotice = isPaid
+      ? '✅ PAGADO - NO COBRAR AL CLIENTE'
+      : `💵 COBRAR AL CLIENTE: $${parseFloat(order.total_usd).toFixed(2)} USD${
+          order.total_secondary && parseFloat(order.total_secondary) > 0
+            ? ` (Bs. ${parseFloat(order.total_secondary).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`
+            : ''
+        }`;
+
+    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+      order.delivery_address || ''
+    )}`;
+
+    const itemsSummary = items
+      .map((item) => `• ${item.quantity}x ${item.product_name}`)
+      .join('\n');
+
+    const message = [
+      `🛵 *NUEVA ASIGNACIÓN DE DESPACHO* 🛵`,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      `*Orden:* #${order.order_number}`,
+      `*Cliente:* ${order.customer_name}`,
+      `*Teléfono:* ${order.customer_phone} (https://wa.me/${cleanCustomerPhone})`,
+      `*Dirección:* ${order.delivery_address || 'Sin dirección especificada'}`,
+      `*Ubicación Maps:* ${mapsUrl}`,
+      `*Estado de Cobro:* ${paymentNotice}`,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      `*Paquete a Entregar:*`,
+      itemsSummary,
+      `━━━━━━━━━━━━━━━━━━━━`,
+      `_Comercio: ${order.store_name || slug}_`,
+    ].join('\n');
+
+    return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+  };
 
   const sendPatch = async (payload: Record<string, unknown>, successMsg: string) => {
     setMutating(true);
@@ -526,6 +648,7 @@ export default function AdminOrderDetailPage() {
         `Hola ${order.customer_name}, te escribimos sobre tu pedido ${order.order_number} ($${parseFloat(order.total_usd).toFixed(2)} USD).`
       )}`
     : null;
+  const driverWaHref = getDriverWhatsAppHref();
 
   return (
     <div className="space-y-6">
@@ -672,11 +795,11 @@ export default function AdminOrderDetailPage() {
                   ${parseFloat(order.subtotal_usd || '0').toFixed(2)}
                 </span>
               </div>
-              {parseFloat(order.discount_usd || '0') > 0 && (
+              {parseFloat(order.discount_primary || order.discount_usd || '0') > 0 && (
                 <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
                   <span>Descuento</span>
                   <span className="font-mono font-semibold">
-                    -${parseFloat(order.discount_usd).toFixed(2)}
+                    -${parseFloat(order.discount_primary || order.discount_usd).toFixed(2)}
                   </span>
                 </div>
               )}
@@ -1266,6 +1389,78 @@ export default function AdminOrderDetailPage() {
               </a>
             )}
           </div>
+
+          {/* Card Despacho y Asignación de Repartidor */}
+          {order.delivery_type === 'DELIVERY' && (
+            <div className="bg-white dark:bg-[#121214] border border-emerald-200 dark:border-emerald-950/60 rounded-2xl p-5 space-y-4 shadow-sm">
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-extrabold text-slate-950 dark:text-white flex items-center gap-2">
+                  <Bike className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                  Asignación de Repartidor & Despacho
+                </h2>
+                {dispatch?.status && (
+                  <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                    {dispatch.status}
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                {dispatch?.driver_name && (
+                  <div className="p-3 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-900/40 text-xs space-y-1">
+                    <p className="font-bold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5" />
+                      Repartidor: <strong>{dispatch.driver_name}</strong>
+                    </p>
+                    <p className="text-emerald-700 dark:text-emerald-400 font-mono">
+                      {dispatch.driver_phone} {dispatch.driver_vehicle ? `· ${dispatch.driver_vehicle}` : ''} {dispatch.driver_plate ? `(${dispatch.driver_plate})` : ''}
+                    </p>
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-700 dark:text-zinc-300 block">
+                    Seleccionar Repartidor de la Flota
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={selectedDriverId}
+                      onChange={(e) => setSelectedDriverId(e.target.value)}
+                      className="flex-1 h-9 rounded-lg border border-slate-300 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900 px-3 text-xs font-semibold text-slate-950 dark:text-white"
+                    >
+                      <option value="">-- Seleccionar de la flota --</option>
+                      {drivers.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.full_name} ({d.vehicle_type || 'Moto'} - {d.phone})
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={assigningDriver || !selectedDriverId}
+                      onClick={handleAssignDriver}
+                      className="h-9 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs"
+                    >
+                      {assigningDriver ? 'Asignando...' : dispatch?.driver_id ? 'Cambiar' : 'Asignar'}
+                    </Button>
+                  </div>
+                </div>
+
+                {driverWaHref && (
+                  <a
+                    href={driverWaHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full h-10 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs flex items-center justify-center gap-2 transition-colors shadow-xs"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                    Enviar Comanda por WhatsApp al Chofer
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1431,10 +1626,10 @@ export default function AdminOrderDetailPage() {
                     <span>SUBTOTAL USD:</span>
                     <span>${parseFloat(order.subtotal_usd || '0').toFixed(2)}</span>
                   </div>
-                  {parseFloat(order.discount_usd || '0') > 0 && (
+                  {parseFloat(order.discount_primary || order.discount_usd || '0') > 0 && (
                     <div className="flex justify-between text-[10px]">
                       <span>DESCUENTO:</span>
-                      <span>-${parseFloat(order.discount_usd).toFixed(2)}</span>
+                      <span>-${parseFloat(order.discount_primary || order.discount_usd).toFixed(2)}</span>
                     </div>
                   )}
                   {parseFloat(order.tax_usd || '0') > 0 && (

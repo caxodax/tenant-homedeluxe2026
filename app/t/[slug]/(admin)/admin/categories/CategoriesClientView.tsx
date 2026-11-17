@@ -343,9 +343,6 @@ export function CategoriesClientView({ slug, initialCategories }: CategoriesClie
               Categorías de Productos
             </h1>
           </div>
-          <p className="text-xs sm:text-sm text-stone-500 dark:text-zinc-400 mt-1">
-            Organiza tu catálogo para filtrar en Vitrina Digital y terminal de Caja.
-          </p>
         </div>
 
         {/* Acciones de Cabecera y Resumen */}
