@@ -60,7 +60,7 @@ export default async function StorefrontLayout({
         secondaryColor={settings?.secondary_color}
         accentColor={settings?.accent_color}
       />
-      <div className="min-h-screen flex flex-col bg-stone-50/60 dark:bg-[#09090b] text-stone-900 dark:text-zinc-100 font-sans transition-colors duration-200 w-full max-w-full overflow-x-hidden">
+      <div className="min-h-screen flex flex-col bg-stone-50/60 dark:bg-[#09090b] text-stone-900 dark:text-zinc-100 font-sans w-full max-w-full overflow-x-hidden">
         {/* Banner de contingencia offline inteligente (inicializado desde SSR) */}
         <ContingencyBanner slug={slug} initialInContingency={inContingency} />
 

@@ -536,6 +536,88 @@ export default function SettingsPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* REDES SOCIALES & PRESENCIA DIGITAL (CORE) */}
+            <Card className="bg-white dark:bg-[#121214] border-slate-200 dark:border-zinc-800 shadow-xs">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-extrabold uppercase tracking-wider text-slate-950 dark:text-white flex items-center gap-2">
+                  <Share2 className="w-4 h-4 text-emerald-600 dark:text-emerald-500" />
+                  Redes Sociales & Presencia Digital
+                </CardTitle>
+                <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
+                  Configura tus perfiles oficiales. Se mostrarán como botones interactivos en el pie de página de la vitrina digital.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                      Instagram
+                    </Label>
+                    <Input
+                      placeholder="@tu_negocio o enlace completo"
+                      {...form.register('social_media.instagram')}
+                      className="bg-slate-50 dark:bg-zinc-900 border-slate-300 dark:border-zinc-800 text-slate-950 dark:text-white text-xs h-10"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                      Facebook
+                    </Label>
+                    <Input
+                      placeholder="facebook.com/tu_negocio"
+                      {...form.register('social_media.facebook')}
+                      className="bg-slate-50 dark:bg-zinc-900 border-slate-300 dark:border-zinc-800 text-slate-950 dark:text-white text-xs h-10"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                      TikTok
+                    </Label>
+                    <Input
+                      placeholder="@tu_negocio"
+                      {...form.register('social_media.tiktok')}
+                      className="bg-slate-50 dark:bg-zinc-900 border-slate-300 dark:border-zinc-800 text-slate-950 dark:text-white text-xs h-10"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                      Twitter / X
+                    </Label>
+                    <Input
+                      placeholder="@tu_negocio"
+                      {...form.register('social_media.twitter')}
+                      className="bg-slate-50 dark:bg-zinc-900 border-slate-300 dark:border-zinc-800 text-slate-950 dark:text-white text-xs h-10"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                      YouTube
+                    </Label>
+                    <Input
+                      placeholder="youtube.com/@tu_negocio"
+                      {...form.register('social_media.youtube')}
+                      className="bg-slate-50 dark:bg-zinc-900 border-slate-300 dark:border-zinc-800 text-slate-950 dark:text-white text-xs h-10"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                      WhatsApp Comercial
+                    </Label>
+                    <Input
+                      placeholder="Ej: +58 412 1234567"
+                      {...form.register('whatsapp_number')}
+                      className="bg-slate-50 dark:bg-zinc-900 border-slate-300 dark:border-zinc-800 text-slate-950 dark:text-white text-xs h-10"
+                    />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           {/* TAB 2: BRANDING (LOGO Y PALETA) */}
@@ -884,13 +966,24 @@ export default function SettingsPage() {
                     />
                   </div>
 
-                  <div className="space-y-1 sm:col-span-2">
+                  <div className="space-y-1">
                     <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
                       YouTube
                     </Label>
                     <Input
                       placeholder="youtube.com/@tu_negocio"
                       {...form.register('social_media.youtube')}
+                      className="bg-slate-50 dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white text-xs h-10"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                      WhatsApp Comercial
+                    </Label>
+                    <Input
+                      placeholder="Ej: +58 412 1234567"
+                      {...form.register('whatsapp_number')}
                       className="bg-slate-50 dark:bg-zinc-900 border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-white text-xs h-10"
                     />
                   </div>

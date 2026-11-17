@@ -12,6 +12,13 @@
 }
 
 @layer base {
+  html.dark {
+    color-scheme: dark;
+  }
+  html:not(.dark) {
+    color-scheme: light;
+  }
+
   body {
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
@@ -20,8 +27,8 @@
     color: #1c1917;
   }
 
-  .dark body,
-  body:where(.dark *) {
+  html.dark body,
+  .dark body {
     background-color: var(--color-canvas-dark);
     color: #f4f4f5;
   }

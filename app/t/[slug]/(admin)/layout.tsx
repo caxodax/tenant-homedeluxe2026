@@ -83,9 +83,9 @@ export default async function TenantAdminLayout({
         secondaryColor={settings?.secondary_color}
         accentColor={settings?.accent_color}
       />
-      <div className="flex min-h-screen bg-[#FAF8F5] dark:bg-[#0D0D0E] text-stone-900 dark:text-zinc-100 font-sans transition-colors duration-200 overflow-x-clip print:block print:min-h-0 print:overflow-visible print:bg-white print:text-black">
+      <div className="flex min-h-screen bg-[#FAF8F5] dark:bg-[#0D0D0E] text-stone-900 dark:text-zinc-100 font-sans overflow-x-clip print:block print:min-h-0 print:overflow-visible print:bg-white print:text-black">
       {/* Sidebar Izquierdo Fijo con Metodología Visual Limpia */}
-      <aside className="hidden md:flex w-64 border-r border-stone-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#141416] flex-col fixed h-screen z-20 transition-colors duration-200 print:hidden">
+      <aside className="hidden md:flex w-64 border-r border-stone-200/80 dark:border-zinc-800/80 bg-white dark:bg-[#141416] flex-col fixed h-screen z-20 print:hidden">
         <div
           className="p-4 border-b border-stone-200/80 dark:border-zinc-800/80"
           style={{ borderTop: `3px solid ${primaryColor}` }}
@@ -153,7 +153,7 @@ export default async function TenantAdminLayout({
       <div className="flex-1 md:ml-64 flex flex-col min-h-screen min-w-0 print:ml-0 print:min-h-0 print:block">
         {/* Header superior */}
         <header
-          className="h-16 border-b border-stone-200/80 dark:border-zinc-800/80 bg-white/90 dark:bg-[#141416]/90 backdrop-blur-md px-4 md:px-8 flex items-center justify-between gap-4 sticky top-0 z-10 transition-colors duration-200 print:hidden"
+          className="h-16 border-b border-stone-200/80 dark:border-zinc-800/80 bg-white/90 dark:bg-[#141416]/90 backdrop-blur-md px-4 md:px-8 flex items-center justify-between gap-4 sticky top-0 z-10 print:hidden"
           style={{ borderTop: `3px solid ${primaryColor}` }}
         >
           <div className="flex items-center gap-2.5 min-w-0">

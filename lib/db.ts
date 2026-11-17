@@ -53,8 +53,7 @@ export async function withTenantDb<T>(
     await client.query('ROLLBACK');
     throw error;
   } finally {
-    // Limpieza de estado temporal antes de devolver el cliente al pool
-    await client.query('DISCARD ALL').catch(() => {});
+    // Liberación inmediata al pool (SET LOCAL search_path y app.current_user_id expiran en COMMIT/ROLLBACK)
     client.release();
   }
 }
