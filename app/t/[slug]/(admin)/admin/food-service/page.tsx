@@ -21,8 +21,8 @@ import {
   Percent,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { FsZone, FsTable } from '@/lib/plugins/food-service';
-import { calculateSplitBillEqual, calculateTipOrServiceCharge } from '@/lib/plugins/food-service';
+import type { FsZone, FsTable } from '@/lib/plugins/food-service-shared';
+import { calculateSplitBillEqual, calculateTipOrServiceCharge } from '@/lib/plugins/food-service-shared';
 
 export default function FoodServiceAdminPage() {
   const params = useParams();

@@ -19,8 +19,8 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
-import type { FsKitchenTicket } from '@/lib/plugins/food-service';
-import { getKdsTimeStatus } from '@/lib/plugins/food-service';
+import type { FsKitchenTicket } from '@/lib/plugins/food-service-shared';
+import { getKdsTimeStatus } from '@/lib/plugins/food-service-shared';
 
 export default function KitchenDisplayPage() {
   const params = useParams();
