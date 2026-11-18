@@ -4,7 +4,8 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { 
   Bike, Coins, CheckCircle2, XCircle, ArrowRight, 
-  Settings2, Loader2, ShieldCheck, Sparkles, MapPin, Compass
+  Settings2, Loader2, ShieldCheck, Sparkles, MapPin, Compass,
+  UtensilsCrossed, ChefHat
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -24,6 +25,43 @@ export function PluginsManager({ slug, activePlugins: initialActive, onPluginTog
 
   const isDeliveryActive = activePlugins.includes('delivery_fleet');
   const isVenezuelaActive = activePlugins.includes('local_venezuela');
+  const isFoodServiceActive = activePlugins.includes('food_service');
+
+  const handleToggleFoodService = async () => {
+    const nextState = !isFoodServiceActive;
+    setLoadingPlugin('food_service');
+
+    try {
+      const res = await fetch(`/api/admin/${slug}/plugins/food-service`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_active: nextState }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'No se pudo actualizar el estado del plugin');
+      }
+
+      if (nextState) {
+        setActivePlugins((prev) => [...prev.filter((p) => p !== 'food_service'), 'food_service']);
+        toast.success('Plugin Food Service Activado', {
+          description: 'Acceso a Sala, Mesas, Pantalla KDS en vivo y Escandallo de Recetas.',
+        });
+      } else {
+        setActivePlugins((prev) => prev.filter((p) => p !== 'food_service'));
+        toast.info('Plugin Food Service Desactivado', {
+          description: 'Se ha deshabilitado el módulo de salón y cocina.',
+        });
+      }
+
+      onPluginToggled?.('food_service', nextState);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al cambiar estado del plugin');
+    } finally {
+      setLoadingPlugin(null);
+    }
+  };
 
   const handleToggleDelivery = async () => {
     const nextState = !isDeliveryActive;
@@ -295,6 +333,107 @@ export function PluginsManager({ slug, activePlugins: initialActive, onPluginTog
                 <span>Ver Tasas & BCV</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </Link>
+            )}
+          </div>
+        </div>
+
+        {/* Card: Food Service & KDS */}
+        <div className={`p-5 rounded-2xl border transition-all duration-200 flex flex-col justify-between ${
+          isFoodServiceActive
+            ? 'bg-white dark:bg-zinc-900 border-orange-500/40 shadow-sm ring-1 ring-orange-500/20'
+            : 'bg-stone-50/60 dark:bg-zinc-900/40 border-stone-200 dark:border-zinc-800'
+        }`}>
+          <div>
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="flex items-center gap-3">
+                <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-xs ${
+                  isFoodServiceActive
+                    ? 'bg-orange-500/15 text-orange-600 dark:text-orange-400'
+                    : 'bg-stone-200 dark:bg-zinc-800 text-stone-500 dark:text-zinc-400'
+                }`}>
+                  <UtensilsCrossed className="w-6 h-6 stroke-[2.2]" />
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-extrabold text-stone-950 dark:text-white flex items-center gap-1.5">
+                    Restaurantes & Cocina (KDS)
+                  </h3>
+                  <span className="text-[10px] font-mono font-bold text-stone-400 uppercase">
+                    plugin_id: food_service
+                  </span>
+                </div>
+              </div>
+
+              {/* Toggle Switch */}
+              <button
+                type="button"
+                role="switch"
+                aria-checked={isFoodServiceActive}
+                disabled={loadingPlugin === 'food_service'}
+                onClick={handleToggleFoodService}
+                className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 disabled:opacity-50 ${
+                  isFoodServiceActive ? 'bg-orange-500' : 'bg-stone-300 dark:bg-zinc-700'
+                }`}
+              >
+                {loadingPlugin === 'food_service' ? (
+                  <span className="absolute inset-0 flex items-center justify-center text-white">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  </span>
+                ) : (
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-lg ring-0 transition duration-200 ease-in-out ${
+                      isFoodServiceActive ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                )}
+              </button>
+            </div>
+
+            <p className="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed mb-4">
+              Módulo integral para gastronomía y hostelería: gestión de salones y mesas con cuentas abiertas, comanda de cocina en vivo (KDS) en tiempo real con semáforo de demora, división de cuentas bimonetarias (Split Bill), escandallo de recetas con consumo automático de materias primas y control de platos agotados (86).
+            </p>
+
+            <div className="space-y-1.5 pt-2 border-t border-stone-100 dark:border-zinc-800/80 text-[11px] text-stone-600 dark:text-zinc-400">
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                <span>Comandera KDS en tiempo real con Supabase Realtime</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                <span>División de cuentas (Split Bill) en partes iguales o por comensal</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-3.5 h-3.5 text-orange-500 shrink-0" />
+                <span>Escandallo con merma y tolerancia a stock negativo</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 pt-3 border-t border-stone-200/80 dark:border-zinc-800 flex items-center justify-between gap-2">
+            <span className={`text-xs font-bold font-mono px-2.5 py-1 rounded-lg ${
+              isFoodServiceActive
+                ? 'bg-orange-500/10 text-orange-700 dark:text-orange-400 border border-orange-500/20'
+                : 'bg-stone-200/70 text-stone-600 dark:bg-zinc-800 dark:text-zinc-400'
+            }`}>
+              {isFoodServiceActive ? '● Activo en Tienda' : '○ Desactivado'}
+            </span>
+
+            {isFoodServiceActive && (
+              <div className="flex items-center gap-2">
+                <Link
+                  href={`/t/${slug}/admin/kds`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-extrabold text-xs transition-all shadow-xs active:scale-95"
+                >
+                  <ChefHat className="w-3.5 h-3.5" />
+                  <span>Pantalla KDS</span>
+                </Link>
+                <Link
+                  href={`/t/${slug}/admin/food-service`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-900 hover:bg-stone-800 dark:bg-white dark:hover:bg-stone-100 text-white dark:text-black font-extrabold text-xs transition-all shadow-xs active:scale-95"
+                >
+                  <span>Salón & Mesas</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
             )}
           </div>
         </div>

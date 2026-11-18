@@ -1,0 +1,47 @@
+{
+  "id": "food_service",
+  "name": "Restaurantes y Cocina",
+  "category": "vertical",
+  "version": "1.0.0",
+  "description": "Gestión integral de salones, mesas, comanda de cocina KDS en vivo, división de cuentas bimonetarias (Split Bill) y escandallo de recetas.",
+  "is_core_addon": true,
+  "pricing_tier": "ENTERPRISE",
+  "price_usd_monthly": 29.00,
+  "dependencies": [],
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "service_charge_mode": {
+        "type": "string",
+        "enum": ["NONE", "TIP_VOLUNTARY", "SERVICE_CHARGE_FIXED"],
+        "default": "TIP_VOLUNTARY"
+      },
+      "service_charge_pct": {
+        "type": "number",
+        "default": 10
+      },
+      "kitchen_output": {
+        "type": "string",
+        "enum": ["KDS", "PRINT", "BOTH"],
+        "default": "BOTH"
+      },
+      "hidden_category_slugs": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": ["adicionales", "ingredientes"]
+      },
+      "kds_sound": {
+        "type": "boolean",
+        "default": true
+      },
+      "kds_warn_minutes": {
+        "type": "number",
+        "default": 12
+      }
+    }
+  },
+  "hooks": {
+    "pos_delivery_types": ["DINE_IN"],
+    "staff_roles": ["WAITER", "KITCHEN"]
+  }
+}

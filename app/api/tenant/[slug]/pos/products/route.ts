@@ -83,6 +83,14 @@ export async function GET(
         estimated_time: string;
       }> = [];
 
+      let fsTables: Array<{
+        id: string;
+        label: string;
+        status: string;
+        seats: number;
+      }> = [];
+      let daily86Ids: string[] = [];
+
       if (activePlugins.includes('delivery_fleet')) {
         const dzRes = await client.query(`
           SELECT id, name, description, rate_primary, estimated_time
@@ -93,6 +101,24 @@ export async function GET(
         deliveryZones = dzRes.rows;
       }
 
+      if (activePlugins.includes('food_service')) {
+        const [tablesRes, d86Res] = await Promise.all([
+          client.query(`
+            SELECT id, label, status, seats
+            FROM fs_tables
+            WHERE is_active = true
+            ORDER BY label ASC
+          `),
+          client.query(`
+            SELECT product_id
+            FROM fs_daily_86
+            WHERE service_date = CURRENT_DATE AND is_86 = true
+          `),
+        ]);
+        fsTables = tablesRes.rows;
+        daily86Ids = d86Res.rows.map((r: { product_id: string }) => r.product_id);
+      }
+
       return {
         products: pRes.rows,
         settings: sRes.rows[0] ?? null,
@@ -101,6 +127,9 @@ export async function GET(
         categories: catRes.rows,
         delivery_zones: deliveryZones,
         is_delivery_active: activePlugins.includes('delivery_fleet'),
+        is_food_service_active: activePlugins.includes('food_service'),
+        food_service_tables: fsTables,
+        daily_86_ids: daily86Ids,
       };
     });
 
@@ -110,6 +139,9 @@ export async function GET(
       payment_methods: data.payment_methods,
       delivery_zones: data.delivery_zones,
       is_delivery_active: data.is_delivery_active,
+      is_food_service_active: data.is_food_service_active,
+      food_service_tables: data.food_service_tables,
+      daily_86_ids: data.daily_86_ids,
       store_id: data.store_id,
       business_name: data.settings?.business_name || name || 'Comercio',
       logo_url: data.settings?.logo_url || null,

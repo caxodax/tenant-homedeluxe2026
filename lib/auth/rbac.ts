@@ -1,4 +1,11 @@
-export type StaffRole = 'OWNER' | 'MANAGER' | 'CASHIER' | 'INVENTORY' | 'DELIVERY';
+export type StaffRole =
+  | 'OWNER'
+  | 'MANAGER'
+  | 'CASHIER'
+  | 'INVENTORY'
+  | 'DELIVERY'
+  | 'WAITER'
+  | 'KITCHEN';
 
 export type TenantPermission =
   | 'dashboard'
@@ -16,6 +23,8 @@ export const STAFF_ROLES: StaffRole[] = [
   'CASHIER',
   'INVENTORY',
   'DELIVERY',
+  'WAITER',
+  'KITCHEN',
 ];
 
 export const ROLE_LABELS_ES: Record<StaffRole, string> = {
@@ -24,6 +33,8 @@ export const ROLE_LABELS_ES: Record<StaffRole, string> = {
   CASHIER: 'Cajero POS',
   INVENTORY: 'Inventario / Almacén',
   DELIVERY: 'Despacho / Delivery',
+  WAITER: 'Mesero / Sala',
+  KITCHEN: 'Cocina / KDS',
 };
 
 export const ROLE_PERMISSIONS: Record<StaffRole, TenantPermission[]> = {
@@ -32,6 +43,8 @@ export const ROLE_PERMISSIONS: Record<StaffRole, TenantPermission[]> = {
   CASHIER: ['orders', 'pos', 'customers'],
   INVENTORY: ['dashboard', 'inventory', 'orders'],
   DELIVERY: ['orders'],
+  WAITER: ['pos', 'orders'],
+  KITCHEN: ['orders'],
 };
 
 export function hasPermission(role: string, permission: TenantPermission): boolean {
@@ -41,7 +54,8 @@ export function hasPermission(role: string, permission: TenantPermission): boole
 }
 
 export function getDefaultLandingPath(slug: string, role: string): string {
-  if (role === 'CASHIER') return `/t/${slug}/pos`;
+  if (role === 'CASHIER' || role === 'WAITER') return `/t/${slug}/pos`;
+  if (role === 'KITCHEN') return `/t/${slug}/admin/kds`;
   if (role === 'DELIVERY') return `/t/${slug}/admin/orders`;
   if (role === 'INVENTORY') return `/t/${slug}/admin/inventory`;
   return `/t/${slug}/admin`;

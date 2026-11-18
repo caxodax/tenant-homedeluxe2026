@@ -15,7 +15,7 @@ import {
   ArrowLeft, ArrowRight, Search, Plus, Minus, Trash2, ShoppingCart, ShoppingBag,
   CreditCard, Banknote, CheckCircle2, RotateCcw,
   Package, Printer, Lock, Unlock, X, Calculator, ChevronDown,
-  Bike, MapPin, Store, Tag, Percent
+  Bike, MapPin, Store, Tag, Percent, UtensilsCrossed
 } from 'lucide-react';
 import { ModalPortal } from '@/components/ui/modal-portal';
 
@@ -231,10 +231,14 @@ export default function PosPage({ params }: PosPageProps) {
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
 
-  // Plugin Delivery Fleet en POS
+  // Plugins Delivery Fleet y Food Service en POS
   const [isDeliveryActive, setIsDeliveryActive] = useState(false);
   const [deliveryZones, setDeliveryZones] = useState<Array<{ id: string; name: string; rate_primary: number; estimated_time?: string }>>([]);
-  const [posDeliveryType, setPosDeliveryType] = useState<'PICKUP' | 'DELIVERY'>('PICKUP');
+  const [isFoodServiceActive, setIsFoodServiceActive] = useState(false);
+  const [foodServiceTables, setFoodServiceTables] = useState<Array<{ id: string; label: string; status: string; seats: number }>>([]);
+  const [selectedTableId, setSelectedTableId] = useState<string>('');
+  const [daily86Ids, setDaily86Ids] = useState<string[]>([]);
+  const [posDeliveryType, setPosDeliveryType] = useState<'PICKUP' | 'DELIVERY' | 'DINE_IN'>('PICKUP');
   const [selectedPosZoneId, setSelectedPosZoneId] = useState<string>('');
   const [posDeliveryAddress, setPosDeliveryAddress] = useState<string>('');
 
@@ -243,6 +247,7 @@ export default function PosPage({ params }: PosPageProps) {
   const effectiveRate = Number(settings.exchange_rate || 0);
 
   const selectedPosZone = deliveryZones.find((z) => z.id === selectedPosZoneId) || deliveryZones[0] || null;
+  const selectedTable = foodServiceTables.find((t) => t.id === selectedTableId) || foodServiceTables[0] || null;
   const posDeliveryRate = posDeliveryType === 'DELIVERY' ? Number(selectedPosZone?.rate_primary || 0) : 0;
 
   const [completedSale, setCompletedSale] = useState<{
@@ -252,10 +257,11 @@ export default function PosPage({ params }: PosPageProps) {
     itemsCount: number;
     customerName: string;
     paymentMethod: string;
-    deliveryType?: 'PICKUP' | 'DELIVERY';
+    deliveryType?: 'PICKUP' | 'DELIVERY' | 'DINE_IN';
     deliveryRate?: number;
     deliveryZoneName?: string;
     deliveryAddress?: string;
+    tableLabel?: string;
     items: { name: string; quantity: number; unitPrice: number; subtotal: number }[];
     timestamp: string;
     syncStatus: 'synced' | 'pending' | 'error';
@@ -408,6 +414,18 @@ export default function PosPage({ params }: PosPageProps) {
         }
         if (typeof data.is_delivery_active === 'boolean') {
           setIsDeliveryActive(data.is_delivery_active);
+        }
+        if (typeof data.is_food_service_active === 'boolean') {
+          setIsFoodServiceActive(data.is_food_service_active);
+        }
+        if (Array.isArray(data.food_service_tables)) {
+          setFoodServiceTables(data.food_service_tables);
+          if (data.food_service_tables.length > 0) {
+            setSelectedTableId((prev) => prev || data.food_service_tables[0].id);
+          }
+        }
+        if (Array.isArray(data.daily_86_ids)) {
+          setDaily86Ids(data.daily_86_ids);
         }
         if (Array.isArray(data.delivery_zones)) {
           setDeliveryZones(data.delivery_zones);
@@ -649,6 +667,12 @@ export default function PosPage({ params }: PosPageProps) {
 
   // Acciones sobre el ticket
   function addToTicket(product: Product) {
+    if (daily86Ids.includes(product.id)) {
+      toast.error(`"${product.name}" está marcado como AGOTADO (86) hoy en cocina`, {
+        icon: '🚫',
+      });
+      return;
+    }
     setTicket((prev) => {
       const existing = prev.find((item) => item.product.id === product.id);
       if (existing) {
@@ -792,6 +816,7 @@ export default function PosPage({ params }: PosPageProps) {
         deliveryRate: posDeliveryRate,
         deliveryZoneName: selectedPosZone?.name,
         deliveryAddress: posDeliveryAddress,
+        tableLabel: selectedTable?.label,
         items: ticket.map((i) => ({
           name: i.product.name,
           quantity: i.quantity,
@@ -1040,7 +1065,9 @@ export default function PosPage({ params }: PosPageProps) {
                       setDetailQuantity(inT ? inT.quantity : 1);
                     }}
                     className={`flex flex-col justify-between text-left p-3 sm:p-3.5 rounded-2xl bg-white dark:bg-[#121214] border transition-all group active:scale-[0.98] cursor-pointer select-none ${
-                      inTicket
+                      daily86Ids.includes(product.id)
+                        ? 'opacity-60 grayscale-[40%] border-rose-300 dark:border-rose-900/60'
+                        : inTicket
                         ? 'border-lime-500 ring-1 ring-lime-500/30 shadow-sm'
                         : 'border-slate-200 dark:border-zinc-800/80 hover:border-lime-500/50 hover:shadow-md dark:hover:border-lime-500/40'
                     }`}
@@ -1048,6 +1075,11 @@ export default function PosPage({ params }: PosPageProps) {
                     <div>
                       {/* Imagen o Placeholder */}
                       <div className="w-full aspect-square rounded-xl bg-slate-100 dark:bg-zinc-800/60 overflow-hidden mb-2.5 flex items-center justify-center relative">
+                        {daily86Ids.includes(product.id) && (
+                          <span className="absolute top-2 left-2 z-10 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-rose-600 text-white shadow-xs">
+                            AGOTADO (86)
+                          </span>
+                        )}
                         {product.image_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img 
@@ -1247,8 +1279,8 @@ export default function PosPage({ params }: PosPageProps) {
 
           {/* Footer del Ticket y Botón de Cobro */}
           <div className="p-4 border-t border-slate-200 dark:border-zinc-800 bg-slate-50/80 dark:bg-zinc-900/40 space-y-3">
-            {/* Selector de Modo de Entrega (Mostrador vs Delivery) */}
-            {isDeliveryActive && ticket.length > 0 && (
+            {/* Selector de Modo de Entrega (Mostrador vs Mesa vs Delivery) */}
+            {(isDeliveryActive || isFoodServiceActive) && ticket.length > 0 && (
               <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-zinc-800/80 space-y-2 border border-slate-200 dark:border-zinc-700">
                 <div className="flex items-center gap-1 p-0.5 rounded-lg bg-slate-200 dark:bg-zinc-700 text-xs font-bold">
                   <button
@@ -1261,17 +1293,54 @@ export default function PosPage({ params }: PosPageProps) {
                     <Store className="w-3.5 h-3.5" />
                     <span>Mostrador</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setPosDeliveryType('DELIVERY')}
-                    className={`flex-1 py-1 px-2 rounded-md text-center transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                      posDeliveryType === 'DELIVERY' ? 'bg-emerald-500 text-white shadow-xs font-black' : 'text-slate-500'
-                    }`}
-                  >
-                    <Bike className="w-3.5 h-3.5" />
-                    <span>Delivery</span>
-                  </button>
+                  {isFoodServiceActive && (
+                    <button
+                      type="button"
+                      onClick={() => setPosDeliveryType('DINE_IN')}
+                      className={`flex-1 py-1 px-2 rounded-md text-center transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                        posDeliveryType === 'DINE_IN' ? 'bg-orange-600 text-white shadow-xs font-black' : 'text-slate-500'
+                      }`}
+                    >
+                      <UtensilsCrossed className="w-3.5 h-3.5" />
+                      <span>Mesa</span>
+                    </button>
+                  )}
+                  {isDeliveryActive && (
+                    <button
+                      type="button"
+                      onClick={() => setPosDeliveryType('DELIVERY')}
+                      className={`flex-1 py-1 px-2 rounded-md text-center transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                        posDeliveryType === 'DELIVERY' ? 'bg-emerald-500 text-white shadow-xs font-black' : 'text-slate-500'
+                      }`}
+                    >
+                      <Bike className="w-3.5 h-3.5" />
+                      <span>Delivery</span>
+                    </button>
+                  )}
                 </div>
+
+                {posDeliveryType === 'DINE_IN' && (
+                  <div className="space-y-1.5 pt-1 animate-in fade-in duration-150">
+                    <label className="block text-[10px] font-bold text-slate-600 dark:text-zinc-400 uppercase">
+                      Mesa de Sala:
+                    </label>
+                    <select
+                      value={selectedTableId}
+                      onChange={(e) => setSelectedTableId(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 text-xs font-semibold text-slate-950 dark:text-white focus:outline-none"
+                    >
+                      {foodServiceTables.length === 0 ? (
+                        <option value="">Sin mesas configuradas</option>
+                      ) : (
+                        foodServiceTables.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            Mesa {t.label} ({t.status === 'OCCUPIED' ? 'Ocupada' : 'Libre'} · {t.seats} puestos)
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                )}
 
                 {posDeliveryType === 'DELIVERY' && (
                   <div className="space-y-1.5 pt-1 animate-in fade-in duration-150">
@@ -1596,7 +1665,8 @@ export default function PosPage({ params }: PosPageProps) {
             </div>
 
             {/* Selector de Modo de Entrega Móvil (Mostrador vs Delivery) */}
-            {isDeliveryActive && ticket.length > 0 && (
+            {/* Selector de Modo de Entrega Móvil (Mostrador vs Mesa vs Delivery) */}
+            {(isDeliveryActive || isFoodServiceActive) && ticket.length > 0 && (
               <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-zinc-800/80 space-y-2 border border-slate-200 dark:border-zinc-700">
                 <div className="flex items-center gap-1 p-0.5 rounded-lg bg-slate-200 dark:bg-zinc-700 text-xs font-bold">
                   <button
@@ -1609,17 +1679,54 @@ export default function PosPage({ params }: PosPageProps) {
                     <Store className="w-3.5 h-3.5" />
                     <span>Mostrador</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setPosDeliveryType('DELIVERY')}
-                    className={`flex-1 py-1 px-2 rounded-md text-center transition cursor-pointer flex items-center justify-center gap-1.5 ${
-                      posDeliveryType === 'DELIVERY' ? 'bg-emerald-500 text-white shadow-xs font-black' : 'text-slate-500'
-                    }`}
-                  >
-                    <Bike className="w-3.5 h-3.5" />
-                    <span>Delivery</span>
-                  </button>
+                  {isFoodServiceActive && (
+                    <button
+                      type="button"
+                      onClick={() => setPosDeliveryType('DINE_IN')}
+                      className={`flex-1 py-1 px-2 rounded-md text-center transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                        posDeliveryType === 'DINE_IN' ? 'bg-orange-600 text-white shadow-xs font-black' : 'text-slate-500'
+                      }`}
+                    >
+                      <UtensilsCrossed className="w-3.5 h-3.5" />
+                      <span>Mesa</span>
+                    </button>
+                  )}
+                  {isDeliveryActive && (
+                    <button
+                      type="button"
+                      onClick={() => setPosDeliveryType('DELIVERY')}
+                      className={`flex-1 py-1 px-2 rounded-md text-center transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                        posDeliveryType === 'DELIVERY' ? 'bg-emerald-500 text-white shadow-xs font-black' : 'text-slate-500'
+                      }`}
+                    >
+                      <Bike className="w-3.5 h-3.5" />
+                      <span>Delivery</span>
+                    </button>
+                  )}
                 </div>
+
+                {posDeliveryType === 'DINE_IN' && (
+                  <div className="space-y-1.5 pt-1 animate-in fade-in duration-150">
+                    <label className="block text-[10px] font-bold text-slate-600 dark:text-zinc-400 uppercase">
+                      Mesa de Sala:
+                    </label>
+                    <select
+                      value={selectedTableId}
+                      onChange={(e) => setSelectedTableId(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-700 text-xs font-semibold text-slate-950 dark:text-white focus:outline-none"
+                    >
+                      {foodServiceTables.length === 0 ? (
+                        <option value="">Sin mesas configuradas</option>
+                      ) : (
+                        foodServiceTables.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            Mesa {t.label} ({t.status === 'OCCUPIED' ? 'Ocupada' : 'Libre'} · {t.seats} puestos)
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                )}
 
                 {posDeliveryType === 'DELIVERY' && (
                   <div className="space-y-1.5 pt-1 animate-in fade-in duration-150">
@@ -2519,6 +2626,15 @@ export default function PosPage({ params }: PosPageProps) {
                   <span className="font-mono">+${Number(completedSale.deliveryRate || 0).toFixed(2)}</span>
                 </div>
               )}
+              {completedSale.deliveryType === 'DINE_IN' && (
+                <div className="flex justify-between text-orange-600 dark:text-orange-400 font-bold">
+                  <span className="flex items-center gap-1">
+                    <UtensilsCrossed className="w-3.5 h-3.5" />
+                    <span>Consumo en Sala:</span>
+                  </span>
+                  <span className="font-mono">Mesa {completedSale.tableLabel || 'General'}</span>
+                </div>
+              )}
               <div className="flex justify-between border-t border-slate-200 dark:border-zinc-800 pt-1.5">
                 <span className="font-bold text-slate-900 dark:text-white">Total USD:</span>
                 <span className="font-mono font-black text-lime-600 dark:text-lime-400 text-sm">
@@ -2590,6 +2706,9 @@ export default function PosPage({ params }: PosPageProps) {
           <div className="py-2 border-b border-dashed border-black text-[10px] space-y-0.5">
             <p><strong>Ticket:</strong> {completedSale.ticketRef}</p>
             <p><strong>Cliente:</strong> {completedSale.customerName}</p>
+            {completedSale.deliveryType === 'DINE_IN' && (
+              <p><strong>MESA / SALÓN:</strong> {completedSale.tableLabel || 'GENERAL'}</p>
+            )}
             <p><strong>Pago:</strong> {posPaymentMethods.find((m) => m.code === completedSale.paymentMethod)?.name || completedSale.paymentMethod}</p>
           </div>
           <div className="py-2 border-b border-black space-y-1.5">
