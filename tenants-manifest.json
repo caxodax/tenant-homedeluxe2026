@@ -20,6 +20,12 @@
       "slug": "homedeluxe2026",
       "channel": "stable",
       "enabled": true
+    },
+    {
+      "repo": "tenant-machatexmex",
+      "slug": "machatexmex",
+      "channel": "stable",
+      "enabled": true
     }
   ]
 }
