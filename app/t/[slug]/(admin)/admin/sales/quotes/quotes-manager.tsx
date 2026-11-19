@@ -20,6 +20,7 @@ import {
   ArrowRight, 
   AlertCircle,
   Eye,
+  Edit3,
   Check,
   Send,
   MoreVertical
@@ -426,6 +427,19 @@ export function QuotesManager({
                             >
                               <Copy className="w-3.5 h-3.5" />
                             </Button>
+
+                            {(q.status === 'DRAFT' || q.status === 'SENT') && (
+                              <Link href={`/t/${slug}/admin/sales/quotes/${q.id}/edit`}>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-8 px-2 text-xs text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+                                  title="Editar Cotización"
+                                >
+                                  <Edit3 className="w-3.5 h-3.5" />
+                                </Button>
+                              </Link>
+                            )}
 
                             {!isClosed && (
                               <Button

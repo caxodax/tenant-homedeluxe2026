@@ -51,6 +51,8 @@ export function QuoteBuilder({
   primaryCurrency,
   secondaryCurrency,
   exchangeRate,
+  initialQuote = null,
+  initialItems = [],
 }: {
   slug: string;
   currentUser: { id: string; role: string; full_name: string };
@@ -64,20 +66,45 @@ export function QuoteBuilder({
   primaryCurrency: string;
   secondaryCurrency: string;
   exchangeRate: number;
+  initialQuote?: {
+    id: string;
+    quote_number: string;
+    sales_rep_id?: string | null;
+    customer_name?: string | null;
+    customer_whatsapp?: string | null;
+    customer_id_number?: string | null;
+    customer_email?: string | null;
+    additional_services_primary?: string | number | null;
+    additional_services_note?: string | null;
+    discount_primary?: string | number | null;
+    customer_notes?: string | null;
+    internal_notes?: string | null;
+    expires_at?: string | null;
+  } | null;
+  initialItems?: Array<{
+    product_id: string;
+    product_name: string;
+    quantity: number | string;
+    unit_price_primary: number | string;
+    notes?: string | null;
+  }>;
 }) {
   const router = useRouter();
 
   // Cliente
-  const [customerName, setCustomerName] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
-  const [customerIdNum, setCustomerIdNum] = useState('');
-  const [customerEmail, setCustomerEmail] = useState('');
+  const [customerName, setCustomerName] = useState(initialQuote?.customer_name || '');
+  const [customerPhone, setCustomerPhone] = useState(initialQuote?.customer_whatsapp || '');
+  const [customerIdNum, setCustomerIdNum] = useState(initialQuote?.customer_id_number || '');
+  const [customerEmail, setCustomerEmail] = useState(initialQuote?.customer_email || '');
 
   const isUuid = (val?: string | null) =>
     Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
 
   // Vendedor asignado (Blindado para que nunca tome 'super_admin' como UUID)
   const [salesRepId, setSalesRepId] = useState(() => {
+    if (initialQuote?.sales_rep_id && isUuid(initialQuote.sales_rep_id)) {
+      return initialQuote.sales_rep_id;
+    }
     if (currentUser.role === 'SALES_REP' && isUuid(currentUser.id)) {
       return currentUser.id;
     }
@@ -86,18 +113,33 @@ export function QuoteBuilder({
   });
 
   // Renglones
-  const [items, setItems] = useState<QuoteItemLine[]>([]);
+  const [items, setItems] = useState<QuoteItemLine[]>(() => {
+    if (initialItems && initialItems.length > 0) {
+      return initialItems.map((it) => ({
+        product_id: it.product_id,
+        product_name: it.product_name,
+        quantity: parseFloat(String(it.quantity)) || 1,
+        unit_price_primary: parseFloat(String(it.unit_price_primary)) || 0,
+        notes: it.notes || '',
+      }));
+    }
+    return [];
+  });
   const [searchProd, setSearchProd] = useState('');
 
   // Servicios adicionales
-  const [additionalServices, setAdditionalServices] = useState('0');
-  const [additionalNote, setAdditionalNote] = useState('');
+  const [additionalServices, setAdditionalServices] = useState(
+    initialQuote?.additional_services_primary ? String(initialQuote.additional_services_primary) : '0'
+  );
+  const [additionalNote, setAdditionalNote] = useState(initialQuote?.additional_services_note || '');
 
   // Descuento y Notas
-  const [discountAmount, setDiscountAmount] = useState('0');
+  const [discountAmount, setDiscountAmount] = useState(
+    initialQuote?.discount_primary ? String(initialQuote.discount_primary) : '0'
+  );
   const [validityDays, setValidityDays] = useState('7');
-  const [customerNotes, setCustomerNotes] = useState('');
-  const [internalNotes, setInternalNotes] = useState('');
+  const [customerNotes, setCustomerNotes] = useState(initialQuote?.customer_notes || '');
+  const [internalNotes, setInternalNotes] = useState(initialQuote?.internal_notes || '');
 
   const [saving, setSaving] = useState(false);
 
@@ -199,6 +241,7 @@ export function QuoteBuilder({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          id: initialQuote?.id || null,
           sales_rep_id: isUuid(salesRepId) ? salesRepId : null,
           customer_name: customerName,
           customer_whatsapp: customerPhone,
@@ -217,8 +260,13 @@ export function QuoteBuilder({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al guardar cotización');
 
-      toast.success(`¡Cotización ${data.quote_number} generada con éxito!`);
-      router.push(`/t/${slug}/admin/sales/quotes/${data.quote_id}`);
+      const targetId = data.quote_id || initialQuote?.id;
+      toast.success(
+        initialQuote
+          ? `¡Cotización ${data.quote_number || initialQuote.quote_number} actualizada con éxito!`
+          : `¡Cotización ${data.quote_number} generada con éxito!`
+      );
+      router.push(`/t/${slug}/admin/sales/quotes/${targetId}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al guardar');
     } finally {
@@ -231,7 +279,7 @@ export function QuoteBuilder({
       {/* Barra Superior */}
       <div className="flex items-center justify-between border-b border-stone-200/80 dark:border-zinc-800/80 pb-4">
         <div className="flex items-center gap-3">
-          <Link href={`/t/${slug}/admin/sales/quotes`}>
+          <Link href={initialQuote ? `/t/${slug}/admin/sales/quotes/${initialQuote.id}` : `/t/${slug}/admin/sales/quotes`}>
             <Button type="button" variant="outline" size="sm" className="h-9 px-2.5">
               <ArrowLeft className="w-4 h-4 mr-1" />
               Volver
@@ -239,10 +287,12 @@ export function QuoteBuilder({
           </Link>
           <div>
             <h1 className="text-xl sm:text-2xl font-extrabold text-stone-950 dark:text-white">
-              Nueva Cotización Comercial
+              {initialQuote ? `Editar Cotización ${initialQuote.quote_number}` : 'Nueva Cotización Comercial'}
             </h1>
             <p className="text-xs text-stone-500 dark:text-zinc-400">
-              Registra los productos solicitados y genera el presupuesto instantáneo.
+              {initialQuote
+                ? 'Modifica renglones, servicios adicionales o términos mientras permanezca en Borrador.'
+                : 'Registra los productos solicitados y genera el presupuesto instantáneo.'}
             </p>
           </div>
         </div>
@@ -252,7 +302,7 @@ export function QuoteBuilder({
           disabled={saving || discountExceeded}
           className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs px-5 shadow-xs"
         >
-          {saving ? 'Guardando...' : 'Generar Cotización'}
+          {saving ? 'Guardando...' : (initialQuote ? 'Guardar Cambios' : 'Generar Cotización')}
         </Button>
       </div>
 
@@ -633,7 +683,7 @@ export function QuoteBuilder({
               disabled={saving || discountExceeded}
               className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-2.5 shadow-sm"
             >
-              {saving ? 'Guardando...' : 'Crear Cotización'}
+              {saving ? 'Guardando...' : (initialQuote ? 'Guardar Cambios' : 'Crear Cotización')}
             </Button>
           </div>
         </div>

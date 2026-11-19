@@ -8,6 +8,7 @@ import {
   Printer, 
   Share2, 
   Copy, 
+  Edit3,
   Check, 
   X, 
   Clock, 
@@ -263,6 +264,21 @@ export function QuoteDetailView({
             <Copy className="w-4 h-4 mr-1.5" />
             Duplicar
           </Button>
+
+          {/* Editar Cotización mientras esté en Borrador o Enviada */}
+          {(quote.status === 'DRAFT' || quote.status === 'SENT') && (
+            <Link href={`/t/${slug}/admin/sales/quotes/${quote.id}/edit`}>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="text-xs font-bold text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+              >
+                <Edit3 className="w-4 h-4 mr-1.5" />
+                Editar Cotización
+              </Button>
+            </Link>
+          )}
 
           {!isClosed && (
             <>

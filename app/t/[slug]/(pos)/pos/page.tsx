@@ -269,6 +269,17 @@ export default function PosPage({ params }: PosPageProps) {
   const [selectedSalesRepId, setSelectedSalesRepId] = useState<string>('');
   const [activeQuoteId, setActiveQuoteId] = useState<string | null>(null);
   const [activeQuoteNumber, setActiveQuoteNumber] = useState<string | null>(null);
+  const [activeQuoteDetails, setActiveQuoteDetails] = useState<{
+    customer_name?: string;
+    customer_whatsapp?: string;
+    customer_id_number?: string;
+    sales_rep_name?: string;
+    customer_notes?: string;
+    internal_notes?: string;
+    additional_services_primary?: number;
+    additional_services_note?: string;
+  } | null>(null);
+  const [posNotes, setPosNotes] = useState<string>('');
   const [isPreordersModalOpen, setIsPreordersModalOpen] = useState<boolean>(false);
 
   const baseCurrency = settings.primary_currency || 'USD';
@@ -702,13 +713,30 @@ export default function PosPage({ params }: PosPageProps) {
   }
 
   function handleLoadQuote(quoteData: any, quoteItems: any[]) {
-    setCustomerName(quoteData.customer_name || '');
-    setCustomerPhone(quoteData.customer_whatsapp || '');
+    const cName = quoteData.customer_name || 'Cliente Mostrador';
+    const cPhone = quoteData.customer_whatsapp || '';
+    setCustomerName(cName);
+    setCustomerPhone(cPhone);
     setActiveQuoteId(quoteData.id);
     setActiveQuoteNumber(quoteData.quote_number);
     if (quoteData.sales_rep_id) {
       setSelectedSalesRepId(quoteData.sales_rep_id);
     }
+
+    const repName = quoteData.sales_rep_name || salesReps.find((r) => r.id === quoteData.sales_rep_id)?.full_name || 'Asesor Asignado';
+    setActiveQuoteDetails({
+      customer_name: cName,
+      customer_whatsapp: cPhone,
+      customer_id_number: quoteData.customer_id_number || '',
+      sales_rep_name: repName,
+      customer_notes: quoteData.customer_notes || '',
+      internal_notes: quoteData.internal_notes || '',
+      additional_services_primary: parseFloat(String(quoteData.additional_services_primary || 0)),
+      additional_services_note: quoteData.additional_services_note || '',
+    });
+
+    const combinedNotes = [quoteData.customer_notes, quoteData.internal_notes].filter(Boolean).join(' · ');
+    setPosNotes(combinedNotes);
 
     const newTicketItems = quoteItems.map((qi: any) => {
       const prodMatch = products.find((p) => p.id === qi.product_id);
@@ -730,6 +758,26 @@ export default function PosPage({ params }: PosPageProps) {
       };
     });
 
+    // Cargar servicios adicionales de la cotización si existen (ej. flete, instalación, almohadas)
+    const additionalAmt = parseFloat(String(quoteData.additional_services_primary || 0));
+    if (additionalAmt > 0) {
+      newTicketItems.push({
+        product: {
+          id: 'servicios-adicionales-st',
+          name: quoteData.additional_services_note || 'Servicios Adicionales (Transporte / Instalación)',
+          sku: 'SERV-ST',
+          price_usd: String(additionalAmt),
+          current_stock: '999',
+          min_stock_alert: '0',
+          category_id: '',
+          is_tax_exempt: false,
+        },
+        quantity: 1,
+        unit_price: additionalAmt,
+        prep_notes: quoteData.additional_services_note || 'Servicio cotizado',
+      });
+    }
+
     setTicket(newTicketItems);
 
     const discPrimary = parseFloat(String(quoteData.discount_primary || 0));
@@ -747,7 +795,7 @@ export default function PosPage({ params }: PosPageProps) {
       setAppliedDiscounts([]);
     }
 
-    toast.success(`Preorden ${quoteData.quote_number} cargada con ${newTicketItems.length} producto(s)`);
+    toast.success(`Preorden ${quoteData.quote_number} cargada con ${newTicketItems.length} ítem(s)`);
   }
 
   // Acciones sobre el ticket
@@ -879,6 +927,18 @@ export default function PosPage({ params }: PosPageProps) {
   function clearTicket() {
     setTicket([]);
     setAppliedDiscounts([]);
+    setActiveQuoteId(null);
+    setActiveQuoteNumber(null);
+    setActiveQuoteDetails(null);
+    setSelectedSalesRepId('');
+    setCustomerName('Cliente Mostrador');
+    setCustomerPhone('');
+    setPosNotes('');
+  }
+
+  function handleUnlinkQuote() {
+    clearTicket();
+    toast.info('Ticket limpiado y preorden desvinculada exitosamente');
   }
 
   // Procesar cobro y guardar en Dexie (Offline-First en USD)
@@ -950,9 +1010,13 @@ export default function PosPage({ params }: PosPageProps) {
           currency: (paymentMethod === 'PAGO_MOVIL' || paymentMethod === 'CASH_LOCAL' || ((paymentMethod === 'BANK_TRANSFER' || paymentMethod === 'CARD') && effectiveRate > 1)) ? 'VES' : 'USD',
           reference_number: paymentRef || undefined,
         },
-        notes: (posDeliveryType === 'DELIVERY'
-          ? `Delivery: ${selectedPosZone?.name || 'Zona'} · Dirección: ${posDeliveryAddress || customerName} · Cobrado en Mostrador POS-01`
-          : `Cobrado en Mostrador POS-01 · ${settings.business_name}${effectiveRate > 0 ? ` (Tasa: ${effectiveRate.toFixed(2)})` : ''}`) + discNote,
+        notes: [
+          posDeliveryType === 'DELIVERY'
+            ? `Delivery: ${selectedPosZone?.name || 'Zona'} · Dirección: ${posDeliveryAddress || customerName} · Cobrado en Mostrador POS-01`
+            : `Cobrado en Mostrador POS-01 · ${settings.business_name}${effectiveRate > 0 ? ` (Tasa: ${effectiveRate.toFixed(2)})` : ''}`,
+          discNote ? discNote.replace(/^ · /, '') : null,
+          posNotes.trim() ? `Observaciones: ${posNotes.trim()}` : null,
+        ].filter(Boolean).join(' · '),
         sales_rep_id: selectedSalesRepId || null,
         quote_id: activeQuoteId || null,
       };
@@ -1459,23 +1523,44 @@ export default function PosPage({ params }: PosPageProps) {
           </div>
 
           {activeQuoteNumber && (
-            <div className="px-4 py-2 bg-purple-50 dark:bg-purple-950/40 border-b border-purple-200 dark:border-purple-800 flex items-center justify-between text-xs text-purple-900 dark:text-purple-200">
-              <span className="font-bold flex items-center gap-1.5 truncate">
-                <FileText className="w-3.5 h-3.5 text-purple-600 shrink-0" />
-                Preorden: <strong className="font-mono">{activeQuoteNumber}</strong>
-              </span>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveQuoteId(null);
-                  setActiveQuoteNumber(null);
-                  setSelectedSalesRepId('');
-                  toast.info('Preorden desvinculada del ticket');
-                }}
-                className="text-[10px] text-purple-600 dark:text-purple-400 hover:underline font-bold shrink-0 cursor-pointer"
-              >
-                Desvincular
-              </button>
+            <div className="px-4 py-2.5 bg-purple-50 dark:bg-purple-950/40 border-b border-purple-200 dark:border-purple-800 space-y-1.5 text-xs text-purple-950 dark:text-purple-100 animate-in fade-in">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-extrabold flex items-center gap-1.5 truncate text-purple-900 dark:text-purple-200">
+                  <FileText className="w-4 h-4 text-purple-600 shrink-0" />
+                  Preorden: <strong className="font-mono text-xs">{activeQuoteNumber}</strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={handleUnlinkQuote}
+                  className="px-2 py-0.5 rounded bg-purple-200/70 hover:bg-red-100 hover:text-red-700 dark:bg-purple-900/60 dark:hover:bg-red-900/40 text-[10px] font-bold text-purple-800 dark:text-purple-200 transition cursor-pointer shrink-0"
+                  title="Desvincular cotización y limpiar el ticket por completo"
+                >
+                  ✕ Desvincular
+                </button>
+              </div>
+
+              {activeQuoteDetails && (
+                <div className="text-[11px] space-y-0.5 text-purple-800/90 dark:text-purple-300/90 border-t border-purple-200/60 dark:border-purple-800/60 pt-1.5">
+                  {activeQuoteDetails.customer_name && (
+                    <p className="truncate">
+                      👤 <span className="font-bold">{activeQuoteDetails.customer_name}</span>
+                      {activeQuoteDetails.customer_whatsapp && (
+                        <span className="ml-1 opacity-80">({activeQuoteDetails.customer_whatsapp})</span>
+                      )}
+                    </p>
+                  )}
+                  {activeQuoteDetails.sales_rep_name && (
+                    <p className="truncate">
+                      💼 Asesor: <span className="font-semibold">{activeQuoteDetails.sales_rep_name}</span>
+                    </p>
+                  )}
+                  {activeQuoteDetails.additional_services_primary && activeQuoteDetails.additional_services_primary > 0 ? (
+                    <p className="text-[10px] text-purple-700 dark:text-purple-300">
+                      ✨ Serv. Adicional: {activeQuoteDetails.additional_services_note || 'Servicios'} (+${Number(activeQuoteDetails.additional_services_primary).toFixed(2)})
+                    </p>
+                  ) : null}
+                </div>
+              )}
             </div>
           )}
 
@@ -1523,6 +1608,11 @@ export default function PosPage({ params }: PosPageProps) {
                       {item.selected_modifiers && item.selected_modifiers.length > 0 && (
                         <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate">
                           + {item.selected_modifiers.map((m) => m.name).join(', ')}
+                        </p>
+                      )}
+                      {item.prep_notes && (
+                        <p className="text-[10px] text-purple-700 dark:text-purple-300 font-medium italic truncate max-w-[200px]" title={item.prep_notes}>
+                          📝 {item.prep_notes}
                         </p>
                       )}
                       <p className="text-xs font-mono font-semibold text-slate-700 dark:text-zinc-300">
@@ -1759,6 +1849,31 @@ export default function PosPage({ params }: PosPageProps) {
               </div>
             )}
 
+            {/* Notas / Observaciones de Venta */}
+            {ticket.length > 0 && (
+              <div className="space-y-1 pt-1 border-t border-slate-200/80 dark:border-zinc-800/80">
+                <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400">
+                  <span>Observaciones / Notas</span>
+                  {posNotes && (
+                    <button 
+                      type="button" 
+                      onClick={() => setPosNotes('')} 
+                      className="text-[9px] text-slate-400 hover:text-red-500 lowercase cursor-pointer"
+                    >
+                      limpiar
+                    </button>
+                  )}
+                </div>
+                <textarea
+                  value={posNotes}
+                  onChange={(e) => setPosNotes(e.target.value)}
+                  placeholder="Escribe notas de despacho, especificaciones, términos..."
+                  rows={2}
+                  className="w-full text-xs p-2 rounded-xl bg-white dark:bg-zinc-800 border border-slate-300 dark:border-zinc-700 focus:outline-none focus:ring-1 focus:ring-lime-500 text-slate-900 dark:text-white resize-none"
+                />
+              </div>
+            )}
+
             <div className="space-y-1">
               <div className="flex justify-between items-baseline pt-1">
                 <span className="text-base font-extrabold text-slate-950 dark:text-white">
@@ -1907,6 +2022,30 @@ export default function PosPage({ params }: PosPageProps) {
               </div>
             </div>
 
+            {activeQuoteNumber && (
+              <div className="p-2.5 my-2 bg-purple-50 dark:bg-purple-950/40 rounded-xl border border-purple-200 dark:border-purple-800 space-y-1 text-xs text-purple-950 dark:text-purple-100">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-extrabold flex items-center gap-1.5 truncate text-purple-900 dark:text-purple-200">
+                    <FileText className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                    Preorden: <strong className="font-mono">{activeQuoteNumber}</strong>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleUnlinkQuote}
+                    className="px-2 py-0.5 rounded bg-purple-200/70 hover:bg-red-100 hover:text-red-700 text-[10px] font-bold text-purple-800 transition cursor-pointer shrink-0"
+                    title="Desvincular cotización y limpiar el ticket por completo"
+                  >
+                    ✕ Desvincular
+                  </button>
+                </div>
+                {activeQuoteDetails?.customer_name && (
+                  <p className="text-[10px] truncate text-purple-800 dark:text-purple-300">
+                    👤 {activeQuoteDetails.customer_name} {activeQuoteDetails.sales_rep_name ? `· 💼 ${activeQuoteDetails.sales_rep_name}` : ''}
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Lista de productos del ticket */}
             <div className="flex-1 overflow-y-auto divide-y divide-slate-200/80 dark:divide-zinc-800/60 py-2">
               {ticket.length === 0 ? (
@@ -1915,14 +2054,19 @@ export default function PosPage({ params }: PosPageProps) {
                 </div>
               ) : (
                 ticket.map((item) => {
-                  const unitPrice = parseFloat(item.product.price_usd);
+                  const unitPrice = item.unit_price ?? parseFloat(item.product.price_usd);
                   const subtotal = unitPrice * item.quantity;
                   return (
-                    <div key={item.product.id} className="py-2.5 flex items-center justify-between gap-2">
+                    <div key={item.ticket_item_id || item.product.id} className="py-2.5 flex items-center justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <h4 className="text-xs sm:text-sm font-bold text-slate-950 dark:text-white truncate">
                           {item.product.name}
                         </h4>
+                        {item.prep_notes && (
+                          <p className="text-[10px] text-purple-700 dark:text-purple-300 font-medium italic truncate max-w-[180px]" title={item.prep_notes}>
+                            📝 {item.prep_notes}
+                          </p>
+                        )}
                         <p className="text-[11px] font-mono text-slate-600 dark:text-zinc-400">
                           {currencySymbol}{unitPrice.toFixed(2)} c/u
                         </p>
@@ -2135,6 +2279,27 @@ export default function PosPage({ params }: PosPageProps) {
                     <span>Flete Delivery ({selectedPosZone?.name})</span>
                   </span>
                   <span className="font-mono">+{currencySymbol}{posDeliveryRate.toFixed(2)}</span>
+                </div>
+              )}
+
+              {/* Notas / Observaciones de Venta Móvil */}
+              {ticket.length > 0 && (
+                <div className="space-y-1 py-1">
+                  <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    <span>Observaciones / Notas</span>
+                    {posNotes && (
+                      <button type="button" onClick={() => setPosNotes('')} className="text-[9px] text-slate-400 hover:text-red-500 lowercase cursor-pointer">
+                        limpiar
+                      </button>
+                    )}
+                  </div>
+                  <textarea
+                    value={posNotes}
+                    onChange={(e) => setPosNotes(e.target.value)}
+                    placeholder="Notas de entrega o especificaciones..."
+                    rows={1}
+                    className="w-full text-xs p-2 rounded-xl bg-slate-100 dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-slate-900 dark:text-white resize-none"
+                  />
                 </div>
               )}
 
