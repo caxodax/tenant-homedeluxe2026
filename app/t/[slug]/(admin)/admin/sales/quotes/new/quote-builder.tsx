@@ -73,10 +73,17 @@ export function QuoteBuilder({
   const [customerIdNum, setCustomerIdNum] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
 
-  // Vendedor asignado
-  const [salesRepId, setSalesRepId] = useState(
-    currentUser.role === 'SALES_REP' ? currentUser.id : (salesReps[0]?.id || currentUser.id)
-  );
+  const isUuid = (val?: string | null) =>
+    Boolean(val && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val));
+
+  // Vendedor asignado (Blindado para que nunca tome 'super_admin' como UUID)
+  const [salesRepId, setSalesRepId] = useState(() => {
+    if (currentUser.role === 'SALES_REP' && isUuid(currentUser.id)) {
+      return currentUser.id;
+    }
+    const firstValidRep = salesReps.find((r) => isUuid(r.id));
+    return firstValidRep?.id || (isUuid(currentUser.id) ? currentUser.id : '');
+  });
 
   // Renglones
   const [items, setItems] = useState<QuoteItemLine[]>([]);
@@ -137,15 +144,6 @@ export function QuoteBuilder({
     });
   };
 
-  const handleUpdateItemPrice = (index: number, newPrice: number) => {
-    if (!canAdjustPrices || newPrice < 0) return;
-    setItems((prev) => {
-      const copy = [...prev];
-      copy[index].unit_price_primary = newPrice;
-      return copy;
-    });
-  };
-
   const handleUpdateItemNotes = (index: number, note: string) => {
     setItems((prev) => {
       const copy = [...prev];
@@ -201,7 +199,7 @@ export function QuoteBuilder({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sales_rep_id: salesRepId,
+          sales_rep_id: isUuid(salesRepId) ? salesRepId : null,
           customer_name: customerName,
           customer_whatsapp: customerPhone,
           customer_id_number: customerIdNum,
@@ -434,18 +432,12 @@ export function QuoteBuilder({
                           />
                         </div>
 
-                        {/* Precio Unitario */}
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <Label className="text-[10px] text-stone-500">P. Unit:</Label>
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            disabled={!canAdjustPrices}
-                            value={item.unit_price_primary}
-                            onChange={(e) => handleUpdateItemPrice(idx, parseFloat(e.target.value) || 0)}
-                            className="w-20 h-8 text-right text-xs font-mono font-bold"
-                          />
+                        {/* Precio Unitario de Catálogo (Fijo - Modificaciones solo vía Descuentos) */}
+                        <div className="flex items-center gap-1.5 shrink-0 px-2.5 py-1.5 rounded-lg bg-stone-100 dark:bg-zinc-800/80 border border-stone-200/80 dark:border-zinc-700/80">
+                          <span className="text-[10px] text-stone-500 dark:text-zinc-400 font-medium">P. Unit:</span>
+                          <span className="text-xs font-mono font-bold text-stone-900 dark:text-white">
+                            ${Number(item.unit_price_primary).toFixed(2)}
+                          </span>
                         </div>
 
                         {/* Total Renglón */}

@@ -33,6 +33,7 @@ const ASSIGNABLE_ROLES: StaffRole[] = [
   'CASHIER',
   'INVENTORY',
   'DELIVERY',
+  'SALES_REP',
 ];
 
 export function StaffManager({
@@ -196,7 +197,7 @@ export function StaffManager({
       </div>
 
       {/* Roles Legend */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
         {ASSIGNABLE_ROLES.map((r) => (
           <div
             key={r}

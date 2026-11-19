@@ -106,6 +106,16 @@ export async function POST(
         [d.email, d.full_name, d.phone || null, d.role, passwordHash]
       );
 
+      if (d.role === 'SALES_REP') {
+        try {
+          await client.query(`
+            INSERT INTO sales_rep_profiles (staff_id, zone_or_route, monthly_target_primary, default_commission_percent, default_commission_fixed_primary)
+            VALUES ($1, 'General', 0.00, 0.00, 0.00)
+            ON CONFLICT (staff_id) DO NOTHING
+          `, [ins.rows[0].id]);
+        } catch (_) {}
+      }
+
       await writeTenantAuditLog(client, {
         actorId: actor.id,
         actorName: actor.full_name,
@@ -194,6 +204,16 @@ export async function PATCH(
           d.id,
         ]
       );
+
+      if (upd.rows[0].role === 'SALES_REP') {
+        try {
+          await client.query(`
+            INSERT INTO sales_rep_profiles (staff_id, zone_or_route, monthly_target_primary, default_commission_percent, default_commission_fixed_primary)
+            VALUES ($1, 'General', 0.00, 0.00, 0.00)
+            ON CONFLICT (staff_id) DO NOTHING
+          `, [d.id]);
+        } catch (_) {}
+      }
 
       await writeTenantAuditLog(client, {
         actorId: actor.id,

@@ -170,12 +170,24 @@ export async function POST(
     const data = saveQuoteSchema.parse(json);
 
     return await withTenantDb(tenant.db_schema_name, null, async (client) => {
+      let actorId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(staff.id) ? staff.id : null;
+      if (!actorId) {
+        const ownerRes = await client.query(
+          `SELECT id FROM ${tenant.db_schema_name}.staff_profiles WHERE role = 'OWNER' LIMIT 1`
+        );
+        actorId = ownerRes.rows[0]?.id || null;
+      }
+
+      if (!data.sales_rep_id && actorId) {
+        data.sales_rep_id = actorId;
+      }
+
       const res = await client.query(
         `SELECT platform.rpc_st_save_quote($1, $2, $3, $4, $5) AS result`,
         [
           tenant.db_schema_name,
           data.id || null,
-          staff.id,
+          actorId,
           staff.role,
           JSON.stringify(data),
         ]

@@ -122,10 +122,17 @@ export async function POST(
       ]);
 
       // Auditoría
+      let actorUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(staff.id) ? staff.id : null;
+      if (!actorUuid) {
+        const ownerRes = await client.query(
+          `SELECT id FROM ${tenant.db_schema_name}.staff_profiles WHERE role = 'OWNER' LIMIT 1`
+        );
+        actorUuid = ownerRes.rows[0]?.id || null;
+      }
       await client.query(`
-        INSERT INTO ${tenant.db_schema_name}.audit_logs (user_id, action, entity, entity_id, new_data)
-        VALUES ($1, 'SALES_REP_PROFILE_UPDATE', 'sales_rep_profiles', $2, $3)
-      `, [staff.id, data.staff_id, JSON.stringify(data)]);
+        INSERT INTO ${tenant.db_schema_name}.audit_logs (actor_id, actor_role, action, entity, entity_id, new_data)
+        VALUES ($1, $2, 'SALES_REP_PROFILE_UPDATE', 'sales_rep_profiles', $3, $4)
+      `, [actorUuid, staff.role, data.staff_id, JSON.stringify(data)]);
 
       return NextResponse.json({ success: true });
     });

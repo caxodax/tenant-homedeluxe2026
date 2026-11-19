@@ -21,9 +21,17 @@ export async function POST(
     const { status, reason } = statusSchema.parse(json);
 
     return await withTenantDb(tenant.db_schema_name, null, async (client) => {
+      let actorId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(staff.id) ? staff.id : null;
+      if (!actorId) {
+        const ownerRes = await client.query(
+          `SELECT id FROM ${tenant.db_schema_name}.staff_profiles WHERE role = 'OWNER' LIMIT 1`
+        );
+        actorId = ownerRes.rows[0]?.id || null;
+      }
+
       const res = await client.query(
         `SELECT platform.rpc_st_set_quote_status($1, $2, $3, $4, $5, $6) AS result`,
-        [tenant.db_schema_name, id, status, staff.id, staff.role, reason || null]
+        [tenant.db_schema_name, id, status, actorId, staff.role, reason || null]
       );
       return NextResponse.json(res.rows[0]?.result);
     });
