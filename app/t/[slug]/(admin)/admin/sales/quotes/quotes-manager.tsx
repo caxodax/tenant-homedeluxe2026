@@ -23,7 +23,8 @@ import {
   Edit3,
   Check,
   Send,
-  MoreVertical
+  MoreVertical,
+  ShoppingBag
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -453,7 +454,7 @@ export function QuotesManager({
                                 className="w-8 h-8 p-0 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 hover:bg-purple-600 hover:text-white transition"
                                 title="Convertir a Pedido"
                               >
-                                <Check className="w-4 h-4" />
+                                <ShoppingBag className="w-4 h-4" />
                               </Button>
                             )}
                           </div>
@@ -558,7 +559,7 @@ export function QuotesManager({
                         className="h-9 px-3 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shrink-0 gap-1.5"
                         title="Convertir a Pedido"
                       >
-                        <Check className="w-3.5 h-3.5" />
+                        <ShoppingBag className="w-3.5 h-3.5" />
                         <span>Convertir</span>
                       </Button>
                     )}

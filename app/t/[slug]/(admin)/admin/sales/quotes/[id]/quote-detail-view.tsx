@@ -18,7 +18,9 @@ import {
   Phone, 
   User, 
   Calendar,
-  AlertCircle
+  AlertCircle,
+  SendHorizontal,
+  ShoppingBag
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -230,40 +232,42 @@ export function QuoteDetailView({
           </div>
         </div>
 
-        {/* Botonera de Acción Impeccable */}
-        <div className="flex flex-wrap items-center gap-1.5">
-          {/* Grupo de Utilidades (Iconos uniformes de 36x36px con Tooltip) */}
+        {/* Botonera de Acción Impeccable (Barra de Iconos Simétricos 36x36px) */}
+        <div className="flex items-center gap-1.5 flex-nowrap shrink-0">
           <div className="flex items-center gap-1 bg-stone-100 dark:bg-zinc-800/80 p-0.5 rounded-xl border border-stone-200/80 dark:border-zinc-700/80">
+            {/* 1. Imprimir / PDF */}
             <Button
               type="button"
               variant="ghost"
               size="sm"
               onClick={() => window.print()}
-              className="w-9 h-9 p-0 rounded-lg text-stone-700 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-700 shadow-none"
+              className="w-9 h-9 p-0 rounded-lg text-stone-700 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-700 shadow-none cursor-pointer"
               title="Imprimir o Descargar PDF"
               aria-label="Imprimir o Descargar PDF"
             >
               <Printer className="w-4 h-4" />
             </Button>
 
+            {/* 2. Enviar por WhatsApp */}
             <a
               href={buildWhatsAppLink()}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-9 h-9 rounded-lg inline-flex items-center justify-center text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500 hover:text-white dark:hover:bg-emerald-600 transition"
+              className="w-9 h-9 rounded-lg inline-flex items-center justify-center text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500 hover:text-white dark:hover:bg-emerald-600 transition cursor-pointer"
               title="Enviar Cotización por WhatsApp"
               aria-label="Enviar Cotización por WhatsApp"
             >
               <Share2 className="w-4 h-4" />
             </a>
 
+            {/* 3. Editar Cotización (Borrador / Enviada) */}
             {(quote.status === 'DRAFT' || quote.status === 'SENT') && (
               <Link href={`/t/${slug}/admin/sales/quotes/${quote.id}/edit`}>
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="w-9 h-9 p-0 rounded-lg text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/50 shadow-none"
+                  className="w-9 h-9 p-0 rounded-lg text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/50 shadow-none cursor-pointer"
                   title="Editar Cotización"
                   aria-label="Editar Cotización"
                 >
@@ -272,63 +276,66 @@ export function QuoteDetailView({
               </Link>
             )}
 
+            {/* 4. Duplicar */}
             <Button
               type="button"
               variant="ghost"
               size="sm"
               onClick={handleDuplicate}
               disabled={acting}
-              className="w-9 h-9 p-0 rounded-lg text-stone-700 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-700 shadow-none"
+              className="w-9 h-9 p-0 rounded-lg text-stone-700 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-700 shadow-none cursor-pointer"
               title="Duplicar Cotización"
               aria-label="Duplicar Cotización"
             >
               <Copy className="w-4 h-4" />
             </Button>
+
+            {/* 5. Transición de Estado (Marcar Enviada / Aceptada) */}
+            {!isClosed && quote.status === 'DRAFT' && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => handleStatusChange('SENT')}
+                disabled={acting}
+                className="w-9 h-9 p-0 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-950/50 shadow-none cursor-pointer"
+                title="Marcar como Enviada al Cliente"
+                aria-label="Marcar como Enviada"
+              >
+                <SendHorizontal className="w-4 h-4" />
+              </Button>
+            )}
+
+            {!isClosed && quote.status === 'SENT' && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => handleStatusChange('ACCEPTED')}
+                disabled={acting}
+                className="w-9 h-9 p-0 rounded-lg text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-950/50 shadow-none cursor-pointer"
+                title="Marcar como Aceptada por el Cliente"
+                aria-label="Marcar como Aceptada"
+              >
+                <CheckCircle2 className="w-4 h-4" />
+              </Button>
+            )}
+
+            {/* 6. Convertir a Pedido */}
+            {!isClosed && (
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleConvertToOrder}
+                disabled={acting}
+                className="w-9 h-9 p-0 rounded-lg bg-purple-600 hover:bg-purple-700 text-white shadow-xs transition cursor-pointer"
+                title="Convertir a Pedido (Crear Orden y Descontar Inventario)"
+                aria-label="Convertir a Pedido"
+              >
+                <ShoppingBag className="w-4 h-4" />
+              </Button>
+            )}
           </div>
-
-          {/* Transición de Estado Simple (1 sola palabra) */}
-          {!isClosed && quote.status === 'DRAFT' && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => handleStatusChange('SENT')}
-              disabled={acting}
-              className="h-9 px-3 rounded-xl text-xs font-semibold text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900/60 hover:bg-blue-50 dark:hover:bg-blue-950/40"
-              title="Marcar como enviada al cliente"
-            >
-              Marcar Enviada
-            </Button>
-          )}
-
-          {!isClosed && quote.status === 'SENT' && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => handleStatusChange('ACCEPTED')}
-              disabled={acting}
-              className="h-9 px-3 rounded-xl text-xs font-semibold text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/60 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
-              title="Marcar como aceptada por el cliente"
-            >
-              Marcar Aceptada
-            </Button>
-          )}
-
-          {/* Acción Primaria Destacada */}
-          {!isClosed && (
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleConvertToOrder}
-              disabled={acting}
-              className="h-9 px-3.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-xs transition inline-flex items-center gap-1.5"
-              title="Convertir esta cotización en un pedido formal y reservar inventario"
-            >
-              <Check className="w-4 h-4" />
-              <span>Convertir a Pedido</span>
-            </Button>
-          )}
         </div>
       </div>
 
