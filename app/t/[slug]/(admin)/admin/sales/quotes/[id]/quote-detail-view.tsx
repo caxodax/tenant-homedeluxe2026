@@ -230,95 +230,104 @@ export function QuoteDetailView({
           </div>
         </div>
 
-        {/* Botonera de Acción */}
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => window.print()}
-            className="text-xs font-bold"
-          >
-            <Printer className="w-4 h-4 mr-1.5" />
-            Imprimir / PDF
-          </Button>
+        {/* Botonera de Acción Impeccable */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {/* Grupo de Utilidades (Iconos uniformes de 36x36px con Tooltip) */}
+          <div className="flex items-center gap-1 bg-stone-100 dark:bg-zinc-800/80 p-0.5 rounded-xl border border-stone-200/80 dark:border-zinc-700/80">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => window.print()}
+              className="w-9 h-9 p-0 rounded-lg text-stone-700 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-700 shadow-none"
+              title="Imprimir o Descargar PDF"
+              aria-label="Imprimir o Descargar PDF"
+            >
+              <Printer className="w-4 h-4" />
+            </Button>
 
-          <a
-            href={buildWhatsAppLink()}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center justify-center h-9 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition shadow-xs"
-          >
-            <Share2 className="w-4 h-4 mr-1.5" />
-            Enviar WhatsApp
-          </a>
+            <a
+              href={buildWhatsAppLink()}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-9 h-9 rounded-lg inline-flex items-center justify-center text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500 hover:text-white dark:hover:bg-emerald-600 transition"
+              title="Enviar Cotización por WhatsApp"
+              aria-label="Enviar Cotización por WhatsApp"
+            >
+              <Share2 className="w-4 h-4" />
+            </a>
 
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={handleDuplicate}
-            disabled={acting}
-            className="text-xs font-bold"
-          >
-            <Copy className="w-4 h-4 mr-1.5" />
-            Duplicar
-          </Button>
+            {(quote.status === 'DRAFT' || quote.status === 'SENT') && (
+              <Link href={`/t/${slug}/admin/sales/quotes/${quote.id}/edit`}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="w-9 h-9 p-0 rounded-lg text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-950/50 shadow-none"
+                  title="Editar Cotización"
+                  aria-label="Editar Cotización"
+                >
+                  <Edit3 className="w-4 h-4" />
+                </Button>
+              </Link>
+            )}
 
-          {/* Editar Cotización mientras esté en Borrador o Enviada */}
-          {(quote.status === 'DRAFT' || quote.status === 'SENT') && (
-            <Link href={`/t/${slug}/admin/sales/quotes/${quote.id}/edit`}>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="text-xs font-bold text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/40"
-              >
-                <Edit3 className="w-4 h-4 mr-1.5" />
-                Editar Cotización
-              </Button>
-            </Link>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleDuplicate}
+              disabled={acting}
+              className="w-9 h-9 p-0 rounded-lg text-stone-700 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-700 shadow-none"
+              title="Duplicar Cotización"
+              aria-label="Duplicar Cotización"
+            >
+              <Copy className="w-4 h-4" />
+            </Button>
+          </div>
+
+          {/* Transición de Estado Simple (1 sola palabra) */}
+          {!isClosed && quote.status === 'DRAFT' && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => handleStatusChange('SENT')}
+              disabled={acting}
+              className="h-9 px-3 rounded-xl text-xs font-semibold text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900/60 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+              title="Marcar como enviada al cliente"
+            >
+              Marcar Enviada
+            </Button>
           )}
 
+          {!isClosed && quote.status === 'SENT' && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => handleStatusChange('ACCEPTED')}
+              disabled={acting}
+              className="h-9 px-3 rounded-xl text-xs font-semibold text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/60 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+              title="Marcar como aceptada por el cliente"
+            >
+              Marcar Aceptada
+            </Button>
+          )}
+
+          {/* Acción Primaria Destacada */}
           {!isClosed && (
-            <>
-              {quote.status === 'DRAFT' && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleStatusChange('SENT')}
-                  disabled={acting}
-                  className="text-xs font-bold text-blue-600"
-                >
-                  Marcar Enviada
-                </Button>
-              )}
-
-              {quote.status === 'SENT' && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleStatusChange('ACCEPTED')}
-                  disabled={acting}
-                  className="text-xs font-bold text-emerald-600"
-                >
-                  Marcar Aceptada
-                </Button>
-              )}
-
-              <Button
-                type="button"
-                size="sm"
-                onClick={handleConvertToOrder}
-                disabled={acting}
-                className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-xs"
-              >
-                <Check className="w-4 h-4 mr-1.5" />
-                Convertir a Pedido
-              </Button>
-            </>
+            <Button
+              type="button"
+              size="sm"
+              onClick={handleConvertToOrder}
+              disabled={acting}
+              className="h-9 px-3.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shadow-xs transition inline-flex items-center gap-1.5"
+              title="Convertir esta cotización en un pedido formal y reservar inventario"
+            >
+              <Check className="w-4 h-4" />
+              <span>Convertir a Pedido</span>
+            </Button>
           )}
         </div>
       </div>

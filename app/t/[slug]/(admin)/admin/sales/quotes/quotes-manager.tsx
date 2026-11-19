@@ -400,10 +400,15 @@ export function QuotesManager({
                         </td>
 
                         <td className="py-3 px-4 text-right">
-                          <div className="flex items-center justify-end gap-1.5">
+                          <div className="flex items-center justify-end gap-1">
                             <Link href={`/t/${slug}/admin/sales/quotes/${q.id}`}>
-                              <Button variant="outline" size="sm" className="h-8 px-2 text-xs" title="Ver Comprobante">
-                                <Eye className="w-3.5 h-3.5" />
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-8 h-8 p-0 text-stone-600 dark:text-zinc-400 hover:text-stone-900 dark:hover:text-white hover:bg-stone-100 dark:hover:bg-zinc-800"
+                                title="Ver Comprobante"
+                              >
+                                <Eye className="w-4 h-4" />
                               </Button>
                             </Link>
 
@@ -411,45 +416,44 @@ export function QuotesManager({
                               href={buildWhatsAppLink(q)}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center justify-center h-8 px-2.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition shadow-2xs"
-                              title="Compartir por WhatsApp"
+                              className="w-8 h-8 rounded-lg border border-emerald-300 dark:border-emerald-700/60 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500 hover:text-white dark:hover:bg-emerald-600 transition inline-flex items-center justify-center shrink-0"
+                              title="Enviar Cotización por WhatsApp"
+                              aria-label="Enviar Cotización por WhatsApp"
                             >
-                              <Share2 className="w-3.5 h-3.5 mr-1" />
-                              WhatsApp
+                              <Share2 className="w-4 h-4" />
                             </a>
-
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDuplicate(q.id)}
-                              className="h-8 px-2 text-xs"
-                              title="Duplicar Cotización"
-                            >
-                              <Copy className="w-3.5 h-3.5" />
-                            </Button>
 
                             {(q.status === 'DRAFT' || q.status === 'SENT') && (
                               <Link href={`/t/${slug}/admin/sales/quotes/${q.id}/edit`}>
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="h-8 px-2 text-xs text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/40"
+                                  className="w-8 h-8 p-0 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800 hover:bg-amber-50 dark:hover:bg-amber-950/40"
                                   title="Editar Cotización"
                                 >
-                                  <Edit3 className="w-3.5 h-3.5" />
+                                  <Edit3 className="w-4 h-4" />
                                 </Button>
                               </Link>
                             )}
+
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDuplicate(q.id)}
+                              className="w-8 h-8 p-0 text-stone-600 dark:text-zinc-400 hover:text-stone-900 dark:hover:text-white"
+                              title="Duplicar Cotización"
+                            >
+                              <Copy className="w-4 h-4" />
+                            </Button>
 
                             {!isClosed && (
                               <Button
                                 size="sm"
                                 onClick={() => handleConvertToOrder(q.id, q.quote_number)}
-                                className="h-8 px-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold"
-                                title="Convertir a Pedido en POS"
+                                className="w-8 h-8 p-0 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-purple-700 dark:text-purple-300 hover:bg-purple-600 hover:text-white transition"
+                                title="Convertir a Pedido"
                               >
-                                <Check className="w-3.5 h-3.5 mr-1" />
-                                Convertir
+                                <Check className="w-4 h-4" />
                               </Button>
                             )}
                           </div>
@@ -505,11 +509,11 @@ export function QuotesManager({
                     <span>{q.items_count} producto(s)</span>
                   </div>
 
-                  <div className="flex items-center gap-2 pt-2 border-t border-stone-100 dark:border-zinc-800/60">
+                  <div className="flex items-center gap-1.5 pt-2.5 border-t border-stone-100 dark:border-zinc-800/60">
                     <Link href={`/t/${slug}/admin/sales/quotes/${q.id}`} className="flex-1">
-                      <Button variant="outline" size="sm" className="w-full text-xs font-semibold">
-                        <Eye className="w-3.5 h-3.5 mr-1" />
-                        Ver Detalle
+                      <Button variant="outline" size="sm" className="w-full h-9 text-xs font-semibold gap-1.5">
+                        <Eye className="w-3.5 h-3.5" />
+                        <span>Ver</span>
                       </Button>
                     </Link>
 
@@ -517,19 +521,45 @@ export function QuotesManager({
                       href={buildWhatsAppLink(q)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex-1 inline-flex items-center justify-center h-8 px-3 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-bold transition text-center"
+                      className="inline-flex items-center justify-center h-9 px-3 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500 hover:text-white text-xs font-bold transition gap-1.5"
+                      title="Enviar por WhatsApp"
                     >
-                      <Share2 className="w-3.5 h-3.5 mr-1" />
-                      WhatsApp
+                      <Share2 className="w-3.5 h-3.5" />
+                      <span>WhatsApp</span>
                     </a>
+
+                    {(q.status === 'DRAFT' || q.status === 'SENT') && (
+                      <Link href={`/t/${slug}/admin/sales/quotes/${q.id}/edit`}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-9 h-9 p-0 text-amber-600 border-amber-200 dark:border-amber-800 shrink-0"
+                          title="Editar Cotización"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </Button>
+                      </Link>
+                    )}
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleDuplicate(q.id)}
+                      className="w-9 h-9 p-0 shrink-0"
+                      title="Duplicar Cotización"
+                    >
+                      <Copy className="w-4 h-4" />
+                    </Button>
 
                     {!isClosed && (
                       <Button
                         size="sm"
                         onClick={() => handleConvertToOrder(q.id, q.quote_number)}
-                        className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold"
+                        className="h-9 px-3 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold shrink-0 gap-1.5"
+                        title="Convertir a Pedido"
                       >
-                        Convertir
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Convertir</span>
                       </Button>
                     )}
                   </div>
