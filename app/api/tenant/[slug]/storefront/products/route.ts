@@ -60,11 +60,56 @@ export async function GET(
       values.push(offset);
       const offsetIdx = idx++;
 
+      // Verificar plugins activos del tenant
+      const pluginsRes = await client.query(
+        `SELECT plugin_id FROM platform.tenant_plugins WHERE tenant_id = $1 AND is_active = true`,
+        [shell.tenant.id]
+      );
+      const activePlugins = pluginsRes.rows.map((r: { plugin_id: string }) => r.plugin_id);
+      const isFoodService = activePlugins.includes('food_service');
+
+      const modifierGroupsSql = isFoodService
+        ? `, COALESCE(
+             (SELECT jsonb_agg(jsonb_build_object(
+               'group_id', mg.id,
+               'group_name', mg.name,
+               'min_select', mg.min_select,
+               'max_select', mg.max_select,
+               'required', mg.required,
+               'options', (
+                 SELECT jsonb_agg(jsonb_build_object(
+                   'product_id', opt.id,
+                   'name', opt.name,
+                   'price_primary', opt.price_primary
+                 ))
+                 FROM fs_group_modifiers gm
+                 JOIN products opt ON opt.id = gm.product_id
+                 WHERE gm.group_id = mg.id AND opt.is_active = true
+               )
+             ))
+             FROM fs_product_groups pg
+             JOIN fs_modifier_groups mg ON mg.id = pg.group_id
+             WHERE pg.product_id = p.id AND mg.is_active = true),
+             '[]'::jsonb
+           ) as modifier_groups`
+        : `, '[]'::jsonb as modifier_groups`;
+
       const productsRes = await client.query(
         `SELECT p.id, p.name, p.slug, p.description, p.barcode, p.sku,
                 COALESCE(p.price_primary, 0) AS price_usd,
                 p.current_stock, p.min_stock_alert, p.image_url, p.is_tax_exempt,
-                c.name AS category_name
+                c.name AS category_name,
+                COALESCE(
+                  (SELECT jsonb_agg(jsonb_build_object(
+                    'id', pv.id,
+                    'name', pv.name,
+                    'sku', pv.sku,
+                    'attributes', pv.attributes,
+                    'price_adjustment_primary', pv.price_adjustment_primary
+                  )) FROM product_variants pv WHERE pv.product_id = p.id AND pv.is_active = true),
+                  '[]'::jsonb
+                ) as variants
+                ${modifierGroupsSql}
          FROM products p
          LEFT JOIN categories c ON p.category_id = c.id
          WHERE ${whereClause}

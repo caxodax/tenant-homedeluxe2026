@@ -12,6 +12,8 @@ const CartItemSchema = z.object({
   product_name: z.string(),
   quantity: z.number().int().positive(),
   unit_price_usd: z.number().positive(),
+  variant_id: z.string().uuid().optional().nullable(),
+  metadata: z.record(z.string(), z.any()).optional().nullable(),
 });
 
 const CheckoutSchema = z.object({
@@ -275,6 +277,15 @@ export async function createStorefrontOrder(data: CheckoutFormData) {
         product_id: i.product_id,
         product_name: i.product_name,
         quantity: i.quantity,
+        variant_id: i.variant_id || (i.metadata?.variant_id as string) || undefined,
+        metadata: {
+          ...(i.metadata || {}),
+          variant_id: i.variant_id || (i.metadata?.variant_id as string) || undefined,
+          is_custom_quote: Boolean(
+            i.metadata?.is_custom_quote ||
+            (Array.isArray(i.metadata?.modifiers) && i.metadata.modifiers.length > 0)
+          ),
+        },
         unit_price_primary: i.unit_price_usd,
         unit_price_usd: i.unit_price_usd,
         total_price_primary: Number((i.unit_price_usd * i.quantity).toFixed(2)),

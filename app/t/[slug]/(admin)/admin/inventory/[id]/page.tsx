@@ -35,12 +35,12 @@ const productSchema = z.object({
   sku: z.string().optional().nullable(),
   barcode: z.string().optional().nullable(),
   category_id: z.string().optional().nullable(),
-  price_usd: z.number().min(0, 'Precio debe ser >= 0'),
-  cost_price: z.number().min(0).optional().nullable(),
+  price_usd: z.number().positive('El precio debe ser un número positivo mayor a 0'),
+  cost_price: z.number().nonnegative('El costo no puede ser negativo').optional().nullable(),
   is_tax_exempt: z.boolean(),
   track_inventory: z.boolean(),
-  current_stock: z.number().min(0),
-  min_stock_alert: z.number().min(0),
+  current_stock: z.number().nonnegative('El stock no puede ser negativo'),
+  min_stock_alert: z.number().nonnegative('El stock mínimo no puede ser negativo'),
   is_active: z.boolean(),
   image_url: z.string().optional().nullable(),
 });
@@ -230,12 +230,26 @@ export default function ProductFormPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="description">Descripción</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="description">Descripción / Ficha del Producto</Label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const current = form.getValues('description') || '';
+                        const prefix = current && !current.endsWith('\n') ? '\n' : '';
+                        form.setValue('description', `${current}${prefix}• `, { shouldDirty: true });
+                      }}
+                      className="text-[11px] font-bold text-lime-700 dark:text-lime-400 hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      + Insertar viñeta (•)
+                    </button>
+                  </div>
                   <Textarea
                     id="description"
                     {...form.register('description')}
-                    rows={3}
-                    placeholder="Descripción visible para clientes en la vitrina digital..."
+                    rows={4}
+                    placeholder="Descripción con formato... Escribe '• Ítem' o '- Ítem' para listas con viñetas, o **negrita** para resaltar."
+                    className="leading-relaxed"
                   />
                 </div>
 
@@ -328,6 +342,7 @@ export default function ProductFormPage() {
                       id="price_usd"
                       type="number"
                       step="0.01"
+                      min="0.01"
                       {...form.register('price_usd', { valueAsNumber: true })}
                       className="text-xs h-10 rounded-xl font-mono font-bold"
                     />
@@ -342,6 +357,7 @@ export default function ProductFormPage() {
                       id="cost_price"
                       type="number"
                       step="0.01"
+                      min="0"
                       {...form.register('cost_price', { valueAsNumber: true })}
                       className="text-xs h-10 rounded-xl font-mono"
                     />
@@ -389,6 +405,7 @@ export default function ProductFormPage() {
                       id="current_stock"
                       type="number"
                       step="0.001"
+                      min="0"
                       {...form.register('current_stock', { valueAsNumber: true })}
                       className="text-xs h-10 rounded-xl font-mono font-bold"
                     />
@@ -400,6 +417,7 @@ export default function ProductFormPage() {
                       id="min_stock_alert"
                       type="number"
                       step="0.001"
+                      min="0"
                       {...form.register('min_stock_alert', { valueAsNumber: true })}
                       className="text-xs h-10 rounded-xl font-mono"
                     />

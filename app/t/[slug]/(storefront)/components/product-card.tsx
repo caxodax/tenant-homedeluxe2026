@@ -4,8 +4,15 @@ import { useState } from 'react';
 import { useCart } from '@/lib/cart/cart-store';
 import { useFavorites } from '@/lib/favorites/favorites-store';
 import { toast } from 'sonner';
-import { Plus, Minus, Package, ShoppingBag, X, Heart } from 'lucide-react';
+import { Plus, Minus, Package, ShoppingBag, X, Heart, SlidersHorizontal } from 'lucide-react';
 import { ModalPortal } from '@/components/ui/modal-portal';
+import { FormattedDescription } from '@/components/ui/formatted-description';
+import {
+  FoodProductCustomizerModal,
+  type ProductVariant,
+  type ModifierGroup,
+  type CustomizerResult,
+} from '@/components/food-service/food-product-customizer-modal';
 
 export interface StorefrontProduct {
   id: string;
@@ -20,6 +27,8 @@ export interface StorefrontProduct {
   category_name?: string;
   image_url?: string;
   is_tax_exempt?: boolean;
+  variants?: ProductVariant[];
+  modifier_groups?: ModifierGroup[];
 }
 
 export function ProductCard({
@@ -35,13 +44,15 @@ export function ProductCard({
 }) {
   const [isAdded, setIsAdded] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCustomizerOpen, setIsCustomizerOpen] = useState(false);
   const [modalQuantity, setModalQuantity] = useState(1);
   const addItem = useCart((state) => state.addItem);
+  const cartItems = useCart((state) => state.items);
   const { isFavorite, toggleFavorite } = useFavorites();
 
-  const price = parseFloat(product.price_usd);
-  const stock = parseFloat(product.current_stock || '0');
-  const minAlert = parseFloat(product.min_stock_alert || '5');
+  const price = Math.max(0, parseFloat(product.price_usd || '0'));
+  const stock = Math.max(0, parseFloat(product.current_stock || '0'));
+  const minAlert = Math.max(0, parseFloat(product.min_stock_alert || '5'));
   const isOutOfStock = stock <= 0;
   const isLowStock = !isOutOfStock && stock <= minAlert;
   const effectiveRate = Number(exchangeRate || 0);
@@ -49,9 +60,42 @@ export function ProductCard({
   const currencySymbol = primaryCurrency === 'EUR' ? '€' : '$';
   const favorited = isFavorite(product.id);
 
+  // Unidades actualmente en el carrito para respetar estrictamente el tope
+  const cartItem = cartItems.find((i) => i.product_id === product.id);
+  const inCartCount = cartItem ? cartItem.quantity : 0;
+  const availableToAdd = Math.max(0, stock - inCartCount);
+  const isMaxInCart = !isOutOfStock && inCartCount >= stock;
+
+  const hasCustomization = Boolean(
+    (product.variants && product.variants.length > 0) ||
+    (product.modifier_groups && product.modifier_groups.length > 0)
+  );
+
+  function handleCardClick() {
+    if (isOutOfStock) return;
+    if (hasCustomization) {
+      setIsCustomizerOpen(true);
+    } else {
+      setModalQuantity(Math.min(1, Math.max(1, availableToAdd)));
+      setIsModalOpen(true);
+    }
+  }
+
   function handleQuickAdd(e: React.MouseEvent) {
     e.stopPropagation();
     if (isOutOfStock) return;
+
+    if (hasCustomization) {
+      setIsCustomizerOpen(true);
+      return;
+    }
+
+    if (availableToAdd <= 0) {
+      toast.warning(`Tope alcanzado: Solo hay ${stock} uds disponibles de "${product.name}".`, {
+        duration: 2500,
+      });
+      return;
+    }
 
     addItem({
       product_id: product.id,
@@ -73,22 +117,57 @@ export function ProductCard({
     setTimeout(() => setIsAdded(false), 1200);
   }
 
+  function handleCustomizerConfirm(res: CustomizerResult) {
+    const qtyToAdd = Math.min(Math.max(1, res.quantity), Math.max(1, availableToAdd));
+    if (availableToAdd <= 0) {
+      toast.warning(`Tope alcanzado: Solo hay ${stock} unidades disponibles.`);
+      return;
+    }
+
+    addItem({
+      product_id: product.id,
+      product_name: product.name,
+      product_slug: product.slug || product.sku || product.id,
+      price_usd: Math.max(0, res.unit_price),
+      quantity: qtyToAdd,
+      max_stock: stock,
+      image_url: product.image_url,
+      is_tax_exempt: Boolean(product.is_tax_exempt),
+      variant_id: res.variant_id,
+      variant_name: res.variant_name,
+      selected_modifiers: res.selected_modifiers,
+      prep_notes: res.prep_notes,
+    });
+
+    toast.success(`${qtyToAdd}x ${product.name} agregado`, {
+      description: res.variant_name
+        ? `${res.variant_name} · Total: ${currencySymbol}${(res.unit_price * qtyToAdd).toFixed(2)}`
+        : `Total: ${currencySymbol}${(res.unit_price * qtyToAdd).toFixed(2)}`,
+      duration: 2500,
+    });
+  }
+
   function handleModalAdd() {
-    if (isOutOfStock) return;
+    if (isOutOfStock || availableToAdd <= 0) {
+      toast.warning(`No puedes agregar más unidades que las disponibles (${stock}).`);
+      return;
+    }
+
+    const finalAddQty = Math.min(modalQuantity, availableToAdd);
 
     addItem({
       product_id: product.id,
       product_name: product.name,
       product_slug: product.slug || product.sku || product.id,
       price_usd: price,
-      quantity: modalQuantity,
+      quantity: finalAddQty,
       max_stock: stock,
       image_url: product.image_url,
       is_tax_exempt: Boolean(product.is_tax_exempt),
     });
 
-    toast.success(`${modalQuantity}x ${product.name} agregados`, {
-      description: `Total: ${currencySymbol}${(price * modalQuantity).toFixed(2)} ${primaryCurrency}`,
+    toast.success(`${finalAddQty}x ${product.name} agregados`, {
+      description: `Total: ${currencySymbol}${(price * finalAddQty).toFixed(2)} ${primaryCurrency}`,
       duration: 2000,
     });
 
@@ -99,7 +178,7 @@ export function ProductCard({
   return (
     <>
       <div 
-        onClick={() => !isOutOfStock && setIsModalOpen(true)}
+        onClick={handleCardClick}
         className={`group rounded-2xl border p-3.5 sm:p-4 flex flex-col justify-between transition-all duration-300 relative text-left select-none ${
           isOutOfStock
             ? 'bg-stone-50/80 dark:bg-zinc-900/40 border-stone-200/50 dark:border-zinc-800/40 opacity-60 grayscale-[35%] cursor-not-allowed'
@@ -178,6 +257,11 @@ export function ProductCard({
 
         {/* Sección de Precios y Botón de Acción */}
         <div className="mt-3 pt-2.5 border-t border-stone-100 dark:border-zinc-800/80">
+          {hasCustomization && (
+            <span className="text-[10px] font-bold text-orange-600 dark:text-orange-400 uppercase tracking-wider block mb-0.5">
+              Desde
+            </span>
+          )}
           <div className="flex items-baseline gap-1 font-mono">
             <span 
               className="text-base sm:text-lg font-black tracking-tight"
@@ -196,7 +280,7 @@ export function ProductCard({
             </p>
           )}
 
-          {/* Botón + Agregar / Agotado */}
+          {/* Botón + Agregar / Agotado / Máximo en Carrito */}
           <div className="mt-2.5">
             {isOutOfStock ? (
               <button
@@ -205,6 +289,15 @@ export function ProductCard({
                 className="w-full h-9 rounded-xl bg-stone-100 dark:bg-zinc-800 text-stone-400 dark:text-zinc-500 font-extrabold text-xs cursor-not-allowed text-center select-none"
               >
                 Agotado
+              </button>
+            ) : isMaxInCart ? (
+              <button
+                type="button"
+                disabled
+                className="w-full h-9 rounded-xl bg-amber-500/10 dark:bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/20 font-extrabold text-xs cursor-not-allowed text-center select-none"
+                title="Ya tienes todas las existencias disponibles en tu carrito"
+              >
+                En Carrito (Máximo: {stock})
               </button>
             ) : (
               <button
@@ -216,8 +309,22 @@ export function ProductCard({
                     : 'bg-stone-100 hover:bg-stone-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-stone-800 dark:text-zinc-100'
                 }`}
               >
-                <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-                <span>{isAdded ? 'Agregado' : 'Agregar'}</span>
+                {isAdded ? (
+                  <>
+                    <ShoppingBag className="w-3.5 h-3.5" />
+                    <span>¡Agregado!</span>
+                  </>
+                ) : hasCustomization ? (
+                  <>
+                    <SlidersHorizontal className="w-3.5 h-3.5 text-orange-500" />
+                    <span>Personalizar</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
+                    <span>Agregar</span>
+                  </>
+                )}
               </button>
             )}
           </div>
@@ -257,14 +364,21 @@ export function ProductCard({
             )}
           </div>
 
-          <div>
+          <div className="space-y-1.5">
             <h4 className="font-extrabold text-base text-stone-900 dark:text-white leading-snug">
               {product.name}
             </h4>
-            {product.description && (
-              <p className="text-xs text-stone-500 dark:text-zinc-400 mt-1 line-clamp-2">
-                {product.description}
+
+            {inCartCount > 0 && (
+              <p className="text-[11px] font-mono font-bold text-amber-600 dark:text-amber-400">
+                Ya tienes {inCartCount} de {stock} uds en el carrito
               </p>
+            )}
+
+            {product.description && (
+              <div className="pt-2 border-t border-stone-100 dark:border-zinc-800/80 max-h-44 overflow-y-auto overscroll-contain pr-1">
+                <FormattedDescription description={product.description} />
+              </div>
             )}
           </div>
 
@@ -280,12 +394,13 @@ export function ProductCard({
               )}
             </div>
 
-            {/* Stepper de cantidad */}
+            {/* Stepper de cantidad acotado al stock disponible */}
             <div className="flex items-center gap-2 border border-stone-200 dark:border-zinc-800 rounded-xl p-1 bg-stone-50 dark:bg-zinc-900 font-mono">
               <button
                 type="button"
                 onClick={() => setModalQuantity((q) => Math.max(1, q - 1))}
-                className="w-7 h-7 rounded-lg bg-white dark:bg-zinc-800 text-stone-700 dark:text-zinc-200 font-bold text-sm flex items-center justify-center shadow-2xs cursor-pointer"
+                disabled={modalQuantity <= 1}
+                className="w-7 h-7 rounded-lg bg-white dark:bg-zinc-800 text-stone-700 dark:text-zinc-200 font-bold text-sm flex items-center justify-center shadow-2xs cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 <Minus className="w-3.5 h-3.5" />
               </button>
@@ -294,26 +409,49 @@ export function ProductCard({
               </span>
               <button
                 type="button"
-                onClick={() => setModalQuantity((q) => Math.min(stock, q + 1))}
-                className="w-7 h-7 rounded-lg bg-white dark:bg-zinc-800 text-stone-700 dark:text-zinc-200 font-bold text-sm flex items-center justify-center shadow-2xs cursor-pointer"
+                onClick={() => setModalQuantity((q) => Math.min(availableToAdd, q + 1))}
+                disabled={modalQuantity >= availableToAdd || availableToAdd <= 0}
+                className="w-7 h-7 rounded-lg bg-white dark:bg-zinc-800 text-stone-700 dark:text-zinc-200 font-bold text-sm flex items-center justify-center shadow-2xs cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 <Plus className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={handleModalAdd}
-            className="w-full py-3 rounded-xl tenant-primary-bg text-white font-extrabold text-sm shadow-md hover:brightness-105 active:scale-[0.99] transition cursor-pointer flex items-center justify-center gap-2"
-          >
-            <ShoppingBag className="w-4 h-4" />
-            <span>
-              Agregar al Carrito · {currencySymbol}{(price * modalQuantity).toFixed(2)}
-            </span>
-          </button>
+          {availableToAdd <= 0 ? (
+            <button
+              type="button"
+              disabled
+              className="w-full py-3 rounded-xl bg-stone-100 dark:bg-zinc-800 text-stone-400 dark:text-zinc-500 font-extrabold text-xs cursor-not-allowed text-center select-none"
+            >
+              Tope de Stock en Carrito ({stock} uds)
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleModalAdd}
+              className="w-full py-3 rounded-xl tenant-primary-bg text-white font-extrabold text-sm shadow-md hover:brightness-105 active:scale-[0.99] transition cursor-pointer flex items-center justify-center gap-2"
+            >
+              <ShoppingBag className="w-4 h-4" />
+              <span>
+                Agregar al Carrito · {currencySymbol}{(price * modalQuantity).toFixed(2)}
+              </span>
+            </button>
+          )}
         </div>
       </ModalPortal>
+
+      {/* Modal Gastronómico Avanzado para Restaurantes (Tamaños, Proteína y Extras) */}
+      {hasCustomization && (
+        <FoodProductCustomizerModal
+          product={product}
+          isOpen={isCustomizerOpen}
+          onClose={() => setIsCustomizerOpen(false)}
+          onConfirm={handleCustomizerConfirm}
+          primaryCurrency={primaryCurrency}
+          exchangeRate={exchangeRate}
+        />
+      )}
     </>
   );
 }

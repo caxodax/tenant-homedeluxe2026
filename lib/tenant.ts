@@ -58,6 +58,25 @@ export interface StorefrontCatalogItem {
   category_name?: string;
   image_url?: string;
   is_tax_exempt?: boolean;
+  variants?: Array<{
+    id: string;
+    name: string;
+    sku: string;
+    attributes: Record<string, any>;
+    price_adjustment_primary: number | string;
+  }>;
+  modifier_groups?: Array<{
+    group_id: string;
+    group_name: string;
+    min_select: number;
+    max_select: number;
+    required: boolean;
+    options: Array<{
+      product_id: string;
+      name: string;
+      price_primary: number | string;
+    }>;
+  }>;
 }
 
 export interface StorefrontCatalogCategory {
@@ -196,6 +215,40 @@ export const getCachedStorefrontCatalog = cache(
     return unstable_cache(
       async () => {
         const raw = await withTenantDb(dbSchemaName, null, async (client) => {
+          const pluginsRes = await pool.query(
+            `SELECT 1 FROM platform.tenant_plugins tp
+             JOIN platform.tenants t ON t.id = tp.tenant_id
+             WHERE t.db_schema_name = $1 AND tp.plugin_id = 'food_service' AND tp.is_active = true`,
+            [dbSchemaName]
+          );
+          const hasFoodService = (pluginsRes.rowCount ?? 0) > 0;
+
+          const modifierGroupsSql = hasFoodService
+            ? `, COALESCE(
+                 (SELECT jsonb_agg(jsonb_build_object(
+                   'group_id', mg.id,
+                   'group_name', mg.name,
+                   'min_select', mg.min_select,
+                   'max_select', mg.max_select,
+                   'required', mg.required,
+                   'options', (
+                     SELECT COALESCE(jsonb_agg(jsonb_build_object(
+                       'product_id', opt.id,
+                       'name', opt.name,
+                       'price_primary', COALESCE(opt.price_primary, 0)
+                     )), '[]'::jsonb)
+                     FROM fs_group_modifiers gm
+                     JOIN products opt ON opt.id = gm.product_id
+                     WHERE gm.group_id = mg.id AND opt.is_active = true
+                   )
+                 ))
+                 FROM fs_product_groups pg
+                 JOIN fs_modifier_groups mg ON mg.id = pg.group_id
+                 WHERE pg.product_id = p.id AND mg.is_active = true),
+                 '[]'::jsonb
+               ) as modifier_groups`
+            : `, '[]'::jsonb as modifier_groups`;
+
           const productsRes = await client.query(`
             SELECT
               p.id,
@@ -209,7 +262,18 @@ export const getCachedStorefrontCatalog = cache(
               p.min_stock_alert,
               p.image_url,
               p.is_tax_exempt,
-              c.name AS category_name
+              c.name AS category_name,
+              COALESCE(
+                (SELECT jsonb_agg(jsonb_build_object(
+                  'id', pv.id,
+                  'name', pv.name,
+                  'sku', pv.sku,
+                  'attributes', pv.attributes,
+                  'price_adjustment_primary', pv.price_adjustment_primary
+                )) FROM product_variants pv WHERE pv.product_id = p.id AND pv.is_active = true),
+                '[]'::jsonb
+              ) as variants
+              ${modifierGroupsSql}
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
             WHERE p.is_active = true
@@ -245,6 +309,8 @@ export const getCachedStorefrontCatalog = cache(
             category_name: p.category_name || undefined,
             image_url: p.image_url || undefined,
             is_tax_exempt: Boolean(p.is_tax_exempt),
+            variants: p.variants || [],
+            modifier_groups: p.modifier_groups || [],
           };
         });
 

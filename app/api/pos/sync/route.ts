@@ -40,6 +40,9 @@ const saleSchema = z.object({
     currency: z.string().default('USD'),
     reference_number: z.string().optional(),
   }),
+  sales_rep_id: z.string().uuid().optional().nullable(),
+  quote_id: z.string().uuid().optional().nullable(),
+  internal_notes: z.string().optional().nullable(),
   notes: z.string().optional(),
 });
 

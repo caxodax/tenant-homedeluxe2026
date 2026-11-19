@@ -5,7 +5,8 @@ export type StaffRole =
   | 'INVENTORY'
   | 'DELIVERY'
   | 'WAITER'
-  | 'KITCHEN';
+  | 'KITCHEN'
+  | 'SALES_REP';
 
 export type TenantPermission =
   | 'dashboard'
@@ -25,6 +26,7 @@ export const STAFF_ROLES: StaffRole[] = [
   'DELIVERY',
   'WAITER',
   'KITCHEN',
+  'SALES_REP',
 ];
 
 export const ROLE_LABELS_ES: Record<StaffRole, string> = {
@@ -35,6 +37,7 @@ export const ROLE_LABELS_ES: Record<StaffRole, string> = {
   DELIVERY: 'Despacho / Delivery',
   WAITER: 'Mesero / Sala',
   KITCHEN: 'Cocina / KDS',
+  SALES_REP: 'Vendedor / Asesor',
 };
 
 export const ROLE_PERMISSIONS: Record<StaffRole, TenantPermission[]> = {
@@ -45,6 +48,7 @@ export const ROLE_PERMISSIONS: Record<StaffRole, TenantPermission[]> = {
   DELIVERY: ['orders'],
   WAITER: ['pos', 'orders'],
   KITCHEN: ['orders'],
+  SALES_REP: ['orders', 'customers'],
 };
 
 export function hasPermission(role: string, permission: TenantPermission): boolean {
@@ -58,5 +62,6 @@ export function getDefaultLandingPath(slug: string, role: string): string {
   if (role === 'KITCHEN') return `/t/${slug}/admin/kds`;
   if (role === 'DELIVERY') return `/t/${slug}/admin/orders`;
   if (role === 'INVENTORY') return `/t/${slug}/admin/inventory`;
+  if (role === 'SALES_REP') return `/t/${slug}/admin/sales/quotes`;
   return `/t/${slug}/admin`;
 }

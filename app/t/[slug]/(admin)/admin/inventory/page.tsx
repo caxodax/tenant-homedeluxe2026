@@ -38,6 +38,10 @@ import Link from 'next/link';
 import { uploadTenantMedia } from '@/lib/media-client';
 import { CategoryCombobox } from '@/components/admin/category-combobox';
 import { ModalPortal } from '@/components/ui/modal-portal';
+import {
+  FoodServiceProductSection,
+  type AdminVariantItem,
+} from '@/components/admin/food-service-product-section';
 
 export interface Product {
   id: string;
@@ -57,6 +61,9 @@ export interface Product {
   category_name: string | null;
   image_url: string | null;
   description?: string | null;
+  variants?: any[];
+  modifier_group_ids?: string[];
+  has_recipe?: boolean;
 }
 
 interface TenantPlanInfo {
@@ -107,6 +114,25 @@ export default function InventoryPage() {
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isSavingProduct, setIsSavingProduct] = useState(false);
 
+  // Estados Gastronómicos (Food Service Plugin)
+  const [foodServiceData, setFoodServiceData] = useState<{
+    isActive: boolean;
+    config: Record<string, any>;
+    modifierGroups: Array<{ id: string; name: string; min_select: number; max_select: number }>;
+    rawMaterials: Array<{ id: string; name: string; unit: string; cost_per_unit_primary: number; current_stock: number }>;
+    recipes: any[];
+  }>({
+    isActive: false,
+    config: { stock_control_mode: 'SIMPLE' },
+    modifierGroups: [],
+    rawMaterials: [],
+    recipes: [],
+  });
+  const [isDishMode, setIsDishMode] = useState(false);
+  const [formStockControlMode, setFormStockControlMode] = useState<'SIMPLE' | 'UNLIMITED' | 'RAW_MATERIAL'>('SIMPLE');
+  const [formVariants, setFormVariants] = useState<AdminVariantItem[]>([]);
+  const [formModifierGroupIds, setFormModifierGroupIds] = useState<string[]>([]);
+
   // Modal de Importación Masiva (Excel / CSV)
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [importRows, setImportRows] = useState<Array<Record<string, unknown>>>([]);
@@ -152,6 +178,12 @@ export default function InventoryPage() {
           plan_name: data.plan.plan_name || 'PRO COMERCIAL',
           max_products: Number(data.plan.max_products) || 300,
         });
+      }
+      if (data.foodService) {
+        setFoodServiceData(data.foodService);
+        if (data.foodService.config?.stock_control_mode) {
+          setFormStockControlMode(data.foodService.config.stock_control_mode);
+        }
       }
     } catch {
       toast.error('Error al sincronizar inventario con el servidor');
@@ -425,6 +457,10 @@ export default function InventoryPage() {
     setFormDescription('');
     setFormIsTaxExempt(false);
     setFormImageUrl('');
+    setIsDishMode(false);
+    setFormStockControlMode(foodServiceData.config?.stock_control_mode || 'SIMPLE');
+    setFormVariants([]);
+    setFormModifierGroupIds([]);
     setIsModalOpen(true);
   }
 
@@ -442,6 +478,36 @@ export default function InventoryPage() {
     setFormDescription(prod.description || '');
     setFormIsTaxExempt(Boolean(prod.is_tax_exempt));
     setFormImageUrl(prod.image_url || '');
+
+    const hasVars = Boolean(prod.variants && prod.variants.length > 0);
+    setIsDishMode(hasVars);
+    if (hasVars && prod.variants) {
+      const baseP = priceNum;
+      setFormVariants(
+        prod.variants.map((v: any) => {
+          const adj = typeof v.price_adjustment_primary === 'number'
+            ? v.price_adjustment_primary
+            : parseFloat(v.price_adjustment_primary || '0');
+          const finalVPrice = baseP + adj;
+          const attrs = (v.attributes || {}) as Record<string, any>;
+          return {
+            id: v.id,
+            name: v.name,
+            size: attrs.size || '',
+            protein: attrs.protein || '',
+            price: finalVPrice.toFixed(2),
+            stock: String(v.current_stock ?? 0),
+            is_default: Boolean(attrs.is_default),
+          };
+        })
+      );
+      const firstAttr = (prod.variants[0].attributes || {}) as Record<string, any>;
+      setFormStockControlMode(firstAttr.stock_control_mode || foodServiceData.config?.stock_control_mode || 'SIMPLE');
+    } else {
+      setFormVariants([]);
+      setFormStockControlMode(foodServiceData.config?.stock_control_mode || 'SIMPLE');
+    }
+    setFormModifierGroupIds(prod.modifier_group_ids || []);
     setIsModalOpen(true);
   }
 
@@ -470,16 +536,36 @@ export default function InventoryPage() {
       return;
     }
 
-    const price = parseFloat(formPriceUsd.replace(',', '.'));
-    if (isNaN(price) || price < 0) {
-      toast.error('Ingresa un precio válido en USD');
-      return;
-    }
+    let price = parseFloat(formPriceUsd.replace(',', '.'));
+    let stock = parseInt(formCurrentStock, 10);
 
-    const stock = parseInt(formCurrentStock, 10);
-    if (isNaN(stock) || stock < 0) {
-      toast.error('Ingresa un stock válido');
-      return;
+    if (isDishMode) {
+      if (formVariants.length === 0) {
+        toast.error('Agrega al menos una variante (ej: Pequeño o Grande) con su precio');
+        return;
+      }
+      for (const v of formVariants) {
+        const vPrice = parseFloat(v.price.replace(',', '.'));
+        if (isNaN(vPrice) || vPrice <= 0) {
+          toast.error(`Ingresa un precio válido para la variante "${v.name || 'Sin nombre'}"`);
+          return;
+        }
+      }
+      price = Math.min(...formVariants.map((v) => parseFloat(v.price.replace(',', '.'))));
+      if (formStockControlMode === 'SIMPLE') {
+        stock = formVariants.reduce((sum, v) => sum + (parseInt(v.stock, 10) || 0), 0);
+      } else {
+        stock = 500;
+      }
+    } else {
+      if (isNaN(price) || price < 0) {
+        toast.error('Ingresa un precio válido en USD');
+        return;
+      }
+      if (isNaN(stock) || stock < 0) {
+        toast.error('Ingresa un stock válido');
+        return;
+      }
     }
 
     try {
@@ -487,7 +573,7 @@ export default function InventoryPage() {
       const cost = formCostPrice ? parseFloat(formCostPrice.replace(',', '.')) : null;
       const minStock = parseFloat(formMinStockAlert) || 5;
 
-      const payload = {
+      const payload: Record<string, any> = {
         name: trimmedName,
         category_id: formCategoryId || null,
         price_primary: price,
@@ -501,6 +587,21 @@ export default function InventoryPage() {
         is_tax_exempt: formIsTaxExempt,
         image_url: formImageUrl || null,
       };
+
+      if (isDishMode) {
+        payload.is_dish = true;
+        payload.stock_control_mode = formStockControlMode;
+        payload.variants = formVariants.map((v, idx) => ({
+          id: v.id,
+          name: v.name.trim() || `Variante ${idx + 1}`,
+          size: v.size?.trim() || undefined,
+          protein: v.protein?.trim() || undefined,
+          price: parseFloat(v.price.replace(',', '.')),
+          stock: formStockControlMode === 'SIMPLE' ? (parseInt(v.stock, 10) || 0) : 500,
+          is_default: Boolean(v.is_default || idx === 0),
+        }));
+        payload.modifier_group_ids = formModifierGroupIds;
+      }
 
       if (editingProduct) {
         // Actualizar
@@ -1499,19 +1600,37 @@ export default function InventoryPage() {
                 </div>
               </div>
 
+              {/* Sección Condicional de Restaurante / Food Service */}
+              {foodServiceData.isActive && (
+                <FoodServiceProductSection
+                  isDishMode={isDishMode}
+                  setIsDishMode={setIsDishMode}
+                  stockControlMode={formStockControlMode}
+                  setStockControlMode={setFormStockControlMode}
+                  variants={formVariants}
+                  setVariants={setFormVariants}
+                  selectedModifierGroupIds={formModifierGroupIds}
+                  setSelectedModifierGroupIds={setFormModifierGroupIds}
+                  modifierGroups={foodServiceData.modifierGroups}
+                  rawMaterials={foodServiceData.rawMaterials}
+                  currencySymbol={currencySymbol}
+                  primaryCurrency={primaryCurrency}
+                />
+              )}
+
               {/* Grid de 2 Columnas (Campos Principales) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 {/* Nombre */}
                 <div>
                   <label className="text-xs font-bold text-stone-700 dark:text-zinc-300 block mb-1">
-                    Nombre del Producto *
+                    {isDishMode ? 'Nombre del Platillo *' : 'Nombre del Producto *'}
                   </label>
                   <Input
                     required
                     type="text"
                     value={formName}
                     onChange={(e) => setFormName(e.target.value)}
-                    placeholder="Ej. Harina PAN 1kg"
+                    placeholder={isDishMode ? 'Ej. Desnudo (Bowl), Pizza Margarita...' : 'Ej. Harina PAN 1kg'}
                     className="h-10 text-xs sm:text-sm rounded-xl font-medium"
                     disabled={isSavingProduct}
                   />
@@ -1540,112 +1659,117 @@ export default function InventoryPage() {
                   />
                 </div>
 
-                {/* Precio de Venta */}
-                <div>
-                  <label className="text-xs font-bold text-stone-700 dark:text-zinc-300 block mb-1">
-                    Precio {primaryCurrency} ({currencySymbol}) *
-                  </label>
-                  <div className="relative">
-                    <span className="text-xs font-bold text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 font-mono">
-                      {currencySymbol}
-                    </span>
-                    <Input
-                      required
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formPriceUsd}
-                      onChange={(e) => setFormPriceUsd(e.target.value)}
-                      placeholder="1.25"
-                      className="pl-8 h-10 text-xs sm:text-sm rounded-xl font-mono font-bold"
-                      disabled={isSavingProduct}
-                    />
-                  </div>
-                </div>
+                {/* Campos de Precio y Stock Estándar (Ocultos en Modo Platillo con Variantes) */}
+                {!isDishMode && (
+                  <>
+                    {/* Precio de Venta */}
+                    <div>
+                      <label className="text-xs font-bold text-stone-700 dark:text-zinc-300 block mb-1">
+                        Precio {primaryCurrency} ({currencySymbol}) *
+                      </label>
+                      <div className="relative">
+                        <span className="text-xs font-bold text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 font-mono">
+                          {currencySymbol}
+                        </span>
+                        <Input
+                          required
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={formPriceUsd}
+                          onChange={(e) => setFormPriceUsd(e.target.value)}
+                          placeholder="1.25"
+                          className="pl-8 h-10 text-xs sm:text-sm rounded-xl font-mono font-bold"
+                          disabled={isSavingProduct}
+                        />
+                      </div>
+                    </div>
 
-                {/* Costo del Producto (con cálculo dinámico de ganancia) */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs font-bold text-stone-700 dark:text-zinc-300">
-                      Costo {primaryCurrency} (opcional)
-                    </label>
-                    {(() => {
-                      const cp = parseFloat(formPriceUsd.replace(',', '.')) || 0;
-                      const cc = parseFloat(formCostPrice.replace(',', '.')) || 0;
-                      if (cc > 0 && cp > 0) {
-                        const prof = cp - cc;
-                        const pct = ((prof / cc) * 100).toFixed(1);
-                        return (
-                          <span
-                            className={cn(
-                              'text-[10px] font-mono font-bold px-1.5 py-0.5 rounded',
-                              prof >= 0
-                                ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60'
-                                : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border border-rose-200/60'
-                            )}
-                          >
-                            Margen: {prof >= 0 ? `+${pct}%` : `${pct}%`} ({currencySymbol}{prof.toFixed(2)})
-                          </span>
-                        );
-                      }
-                      return null;
-                    })()}
-                  </div>
-                  <div className="relative">
-                    <span className="text-xs font-bold text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 font-mono">
-                      {currencySymbol}
-                    </span>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={formCostPrice}
-                      onChange={(e) => setFormCostPrice(e.target.value)}
-                      placeholder="0.85"
-                      className="pl-8 h-10 text-xs sm:text-sm rounded-xl font-mono font-medium"
-                      disabled={isSavingProduct}
-                    />
-                  </div>
-                </div>
+                    {/* Costo del Producto (con cálculo dinámico de ganancia) */}
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-bold text-stone-700 dark:text-zinc-300">
+                          Costo {primaryCurrency} (opcional)
+                        </label>
+                        {(() => {
+                          const cp = parseFloat(formPriceUsd.replace(',', '.')) || 0;
+                          const cc = parseFloat(formCostPrice.replace(',', '.')) || 0;
+                          if (cc > 0 && cp > 0) {
+                            const prof = cp - cc;
+                            const pct = ((prof / cc) * 100).toFixed(1);
+                            return (
+                              <span
+                                className={cn(
+                                  'text-[10px] font-mono font-bold px-1.5 py-0.5 rounded',
+                                  prof >= 0
+                                    ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200/60'
+                                    : 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-400 border border-rose-200/60'
+                                )}
+                              >
+                                Margen: {prof >= 0 ? `+${pct}%` : `${pct}%`} ({currencySymbol}{prof.toFixed(2)})
+                              </span>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </div>
+                      <div className="relative">
+                        <span className="text-xs font-bold text-stone-400 absolute left-3 top-1/2 -translate-y-1/2 font-mono">
+                          {currencySymbol}
+                        </span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={formCostPrice}
+                          onChange={(e) => setFormCostPrice(e.target.value)}
+                          placeholder="0.85"
+                          className="pl-8 h-10 text-xs sm:text-sm rounded-xl font-mono font-medium"
+                          disabled={isSavingProduct}
+                        />
+                      </div>
+                    </div>
 
-                {/* Stock en Tienda */}
-                <div>
-                  <label className="text-xs font-bold text-stone-700 dark:text-zinc-300 block mb-1">
-                    Stock en Tienda *
-                  </label>
-                  <div className="relative">
-                    <Package className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <Input
-                      required
-                      type="number"
-                      min="0"
-                      value={formCurrentStock}
-                      onChange={(e) => setFormCurrentStock(e.target.value)}
-                      placeholder="20"
-                      className="pl-9 h-10 text-xs sm:text-sm rounded-xl font-mono"
-                      disabled={isSavingProduct}
-                    />
-                  </div>
-                </div>
+                    {/* Stock en Tienda */}
+                    <div>
+                      <label className="text-xs font-bold text-stone-700 dark:text-zinc-300 block mb-1">
+                        Stock en Tienda *
+                      </label>
+                      <div className="relative">
+                        <Package className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <Input
+                          required
+                          type="number"
+                          min="0"
+                          value={formCurrentStock}
+                          onChange={(e) => setFormCurrentStock(e.target.value)}
+                          placeholder="20"
+                          className="pl-9 h-10 text-xs sm:text-sm rounded-xl font-mono"
+                          disabled={isSavingProduct}
+                        />
+                      </div>
+                    </div>
 
-                {/* Stock Mínimo (Alerta) */}
-                <div>
-                  <label className="text-xs font-bold text-stone-700 dark:text-zinc-300 block mb-1">
-                    Stock Mínimo (Alerta)
-                  </label>
-                  <div className="relative">
-                    <AlertTriangle className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <Input
-                      type="number"
-                      min="0"
-                      value={formMinStockAlert}
-                      onChange={(e) => setFormMinStockAlert(e.target.value)}
-                      placeholder="5"
-                      className="pl-9 h-10 text-xs sm:text-sm rounded-xl font-mono"
-                      disabled={isSavingProduct}
-                    />
-                  </div>
-                </div>
+                    {/* Stock Mínimo (Alerta) */}
+                    <div>
+                      <label className="text-xs font-bold text-stone-700 dark:text-zinc-300 block mb-1">
+                        Stock Mínimo (Alerta)
+                      </label>
+                      <div className="relative">
+                        <AlertTriangle className="w-4 h-4 text-stone-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                        <Input
+                          type="number"
+                          min="0"
+                          value={formMinStockAlert}
+                          onChange={(e) => setFormMinStockAlert(e.target.value)}
+                          placeholder="5"
+                          className="pl-9 h-10 text-xs sm:text-sm rounded-xl font-mono"
+                          disabled={isSavingProduct}
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
 
                 {/* SKU */}
                 <div>

@@ -40,6 +40,8 @@ export interface OfflineSale {
     currency: string;
     reference_number?: string;
   };
+  sales_rep_id?: string | null;
+  quote_id?: string | null;
   notes?: string;
   sync_status: 'pending' | 'syncing' | 'synced' | 'failed';
   sync_attempts: number;

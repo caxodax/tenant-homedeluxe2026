@@ -97,10 +97,11 @@ export function CartView({ slug, pickupAddress, exchangeRate, primaryCurrency = 
         <div className="lg:col-span-7 xl:col-span-8 space-y-3">
           {items.map((item) => {
             const subtotal = item.price_usd * item.quantity;
+            const itemKey = item.item_key || item.product_id;
 
             return (
               <div
-                key={item.product_id}
+                key={itemKey}
                 className="p-4 rounded-2xl bg-white dark:bg-[#121214] border border-slate-200/80 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs"
               >
                 <div className="flex items-center gap-3.5 min-w-0">
@@ -116,6 +117,16 @@ export function CartView({ slug, pickupAddress, exchangeRate, primaryCurrency = 
                     <h3 className="text-sm font-bold text-slate-900 dark:text-white truncate">
                       {item.product_name}
                     </h3>
+                    {item.variant_name && (
+                      <p className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 mt-0.5">
+                        {item.variant_name}
+                      </p>
+                    )}
+                    {item.selected_modifiers && item.selected_modifiers.length > 0 && (
+                      <p className="text-[11px] text-slate-500 dark:text-zinc-400 line-clamp-1 mt-0.5">
+                        + {item.selected_modifiers.map((m) => m.name).join(', ')}
+                      </p>
+                    )}
                     <p className="text-xs font-mono text-slate-400 dark:text-zinc-500 mt-0.5">
                       {currencySymbol}{item.price_usd.toFixed(2)} {primaryCurrency} c/u
                     </p>
@@ -126,7 +137,7 @@ export function CartView({ slug, pickupAddress, exchangeRate, primaryCurrency = 
                   {/* Selector de Cantidad */}
                   <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-zinc-800/80 p-1 rounded-xl">
                     <button
-                      onClick={() => updateQuantity(item.product_id, item.quantity - 1)}
+                      onClick={() => updateQuantity(itemKey, item.quantity - 1)}
                       className="w-7 h-7 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-zinc-200 flex items-center justify-center hover:bg-slate-200 transition cursor-pointer"
                     >
                       <Minus className="w-3.5 h-3.5" />
@@ -135,9 +146,10 @@ export function CartView({ slug, pickupAddress, exchangeRate, primaryCurrency = 
                       {item.quantity}
                     </span>
                     <button
-                      onClick={() => updateQuantity(item.product_id, item.quantity + 1)}
-                      disabled={item.quantity >= item.max_stock}
-                      className="w-7 h-7 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-zinc-200 flex items-center justify-center hover:bg-slate-200 transition cursor-pointer disabled:opacity-40"
+                      onClick={() => updateQuantity(itemKey, item.quantity + 1)}
+                      disabled={item.max_stock <= 0 || item.quantity >= item.max_stock}
+                      title={item.quantity >= item.max_stock ? `Tope de stock alcanzado (${item.max_stock} uds)` : 'Sumar 1 unidad'}
+                      className="w-7 h-7 rounded-lg bg-white dark:bg-zinc-700 text-slate-700 dark:text-zinc-200 flex items-center justify-center hover:bg-slate-200 transition cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                     >
                       <Plus className="w-3.5 h-3.5" />
                     </button>
@@ -154,7 +166,7 @@ export function CartView({ slug, pickupAddress, exchangeRate, primaryCurrency = 
                       </p>
                     )}
                     <button
-                      onClick={() => removeItem(item.product_id)}
+                      onClick={() => removeItem(itemKey)}
                       className="text-[11px] text-red-500 hover:text-red-700 dark:hover:text-red-400 mt-0.5 cursor-pointer"
                     >
                       Eliminar

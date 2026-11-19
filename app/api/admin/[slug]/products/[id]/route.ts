@@ -6,6 +6,22 @@ import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
 
+const productVariantInputSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1, 'Nombre de variante requerido'),
+  sku: z.string().optional().nullable(),
+  size: z.string().optional().nullable(),
+  protein: z.string().optional().nullable(),
+  price: z.number().positive('El precio de la variante debe ser mayor a 0'),
+  stock: z.number().nonnegative().optional().default(0),
+  is_default: z.boolean().optional().default(false),
+  recipe_items: z.array(z.object({
+    raw_material_id: z.string(),
+    quantity: z.number().positive(),
+    waste_pct: z.number().min(0).max(100).optional().default(0),
+  })).optional(),
+});
+
 const updateProductSchema = z.object({
   name: z.string().min(2).max(200).optional(),
   slug: z.string().min(2).max(200).regex(/^[a-z0-9-]+$/).optional(),
@@ -13,15 +29,25 @@ const updateProductSchema = z.object({
   sku: z.string().optional().nullable(),
   barcode: z.string().optional().nullable(),
   category_id: z.string().optional().nullable(),
-  price_primary: z.number().min(0).optional(),
-  price_usd: z.number().min(0).optional(),
-  cost_price: z.number().min(0).optional().nullable(),
+  price_primary: z.number().nonnegative('El precio no puede ser negativo').optional(),
+  price_usd: z.number().nonnegative('El precio no puede ser negativo').optional(),
+  cost_price: z.number().nonnegative('El costo no puede ser negativo').optional().nullable(),
   is_tax_exempt: z.boolean().optional(),
   track_inventory: z.boolean().optional(),
-  current_stock: z.number().min(0).optional(),
-  min_stock_alert: z.number().min(0).optional(),
+  current_stock: z.number().nonnegative('El stock no puede ser negativo').optional(),
+  min_stock_alert: z.number().nonnegative('El stock mínimo no puede ser negativo').optional(),
   is_active: z.boolean().optional(),
   image_url: z.string().optional().nullable(),
+  // Campos gastronómicos (Plugin Food Service)
+  is_dish: z.boolean().optional(),
+  stock_control_mode: z.enum(['UNLIMITED', 'SIMPLE', 'RAW_MATERIAL']).optional(),
+  variants: z.array(productVariantInputSchema).optional(),
+  modifier_group_ids: z.array(z.string()).optional(),
+  recipe_items: z.array(z.object({
+    raw_material_id: z.string(),
+    quantity: z.number().positive(),
+    waste_pct: z.number().min(0).max(100).optional().default(0),
+  })).optional(),
 });
 
 export async function GET(
@@ -95,17 +121,44 @@ export async function PATCH(
     }
 
     const data = parsed.data;
-    const finalData = { ...data };
-    if (finalData.price_primary === undefined && finalData.price_usd !== undefined) {
-      finalData.price_primary = finalData.price_usd;
+    const {
+      variants,
+      modifier_group_ids,
+      recipe_items,
+      is_dish,
+      stock_control_mode,
+      price_usd,
+      ...rawProductFields
+    } = data;
+
+    const productFields: Record<string, any> = { ...rawProductFields };
+    if (productFields.price_primary === undefined && price_usd !== undefined) {
+      productFields.price_primary = price_usd;
     }
-    delete (finalData as Record<string, unknown>).price_usd;
+
+    const hasVariants = Boolean(variants && variants.length > 0);
+    if (hasVariants && variants) {
+      const basePrice = Math.min(...variants.map((v) => v.price));
+      productFields.price_primary = basePrice;
+      if (is_dish) {
+        if (stock_control_mode === 'UNLIMITED') {
+          productFields.track_inventory = false;
+          productFields.current_stock = 999;
+        } else if (stock_control_mode === 'RAW_MATERIAL') {
+          productFields.track_inventory = false;
+          productFields.current_stock = 500;
+        } else if (stock_control_mode === 'SIMPLE') {
+          productFields.track_inventory = true;
+          productFields.current_stock = variants.reduce((sum, v) => sum + (v.stock || 0), 0);
+        }
+      }
+    }
 
     const fields: string[] = [];
     const values: any[] = [];
     let paramIndex = 1;
 
-    for (const [key, value] of Object.entries(finalData)) {
+    for (const [key, value] of Object.entries(productFields)) {
       if (value !== undefined) {
         fields.push(`${key} = $${paramIndex}`);
         values.push(value);
@@ -113,20 +166,18 @@ export async function PATCH(
       }
     }
 
-    if (fields.length === 0) {
-      return NextResponse.json({ error: 'No hay campos para actualizar' }, { status: 400 });
-    }
-
     values.push(id);
 
     await withTenantDb(schema, null, async (client) => {
-      await client.query(
-        `UPDATE products SET ${fields.join(', ')}, updated_at = now() WHERE id = $${paramIndex}`,
-        values
-      );
+      if (fields.length > 0) {
+        await client.query(
+          `UPDATE products SET ${fields.join(', ')}, updated_at = now() WHERE id = $${paramIndex}`,
+          values
+        );
+      }
 
       // Si se actualizó current_stock o min_stock_alert, sincronizar inventory
-      if (data.current_stock !== undefined || data.min_stock_alert !== undefined) {
+      if (productFields.current_stock !== undefined || productFields.min_stock_alert !== undefined) {
         const storeRes = await client.query(`SELECT id FROM stores WHERE is_active = true LIMIT 1`);
         if (storeRes.rowCount && storeRes.rowCount > 0) {
           const storeId = storeRes.rows[0].id;
@@ -136,8 +187,87 @@ export async function PATCH(
                  min_quantity = COALESCE($2, min_quantity), 
                  updated_at = now()
              WHERE product_id = $3 AND store_id = $4`,
-            [data.current_stock ?? null, data.min_stock_alert ?? null, id, storeId]
+            [productFields.current_stock ?? null, productFields.min_stock_alert ?? null, id, storeId]
           );
+        }
+      }
+
+      // 1. Sincronizar Variantes de Plato (Tamaño / Proteína) si se enviaron
+      if (variants !== undefined) {
+        await client.query(`DELETE FROM product_variants WHERE product_id = $1`, [id]);
+        if (variants.length > 0) {
+          const effectiveBasePrice = Number(productFields.price_primary || 0);
+          for (let i = 0; i < variants.length; i++) {
+            const v = variants[i];
+            const priceAdj = Math.max(0, Number((v.price - effectiveBasePrice).toFixed(2)));
+            const vSku = v.sku || `VAR-${id.slice(0, 4)}-${i + 1}`;
+            const vAttributes = {
+              size: v.size || '',
+              size_label: v.size || '',
+              protein: v.protein || '',
+              protein_label: v.protein || '',
+              is_default: Boolean(v.is_default || i === 0),
+              stock_control_mode: stock_control_mode || 'SIMPLE',
+            };
+
+            const vRes = await client.query(
+              `INSERT INTO product_variants (
+                id, product_id, sku, name, attributes, price_adjustment_primary, current_stock, is_active
+              ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, true) RETURNING id`,
+              [id, vSku, v.name, JSON.stringify(vAttributes), priceAdj, v.stock || 0]
+            );
+            const variantId = vRes.rows[0].id;
+
+            if (v.recipe_items && v.recipe_items.length > 0) {
+              const recRes = await client.query(
+                `INSERT INTO fs_recipes (id, product_id, variant_id, name, yield_portions)
+                 VALUES (gen_random_uuid(), $1, $2, $3, 1.0) RETURNING id`,
+                [id, variantId, `Receta ${v.name}`]
+              );
+              const recipeId = recRes.rows[0].id;
+              for (const item of v.recipe_items) {
+                await client.query(
+                  `INSERT INTO fs_recipe_items (recipe_id, raw_material_id, quantity, waste_pct)
+                   VALUES ($1, $2, $3, $4)
+                   ON CONFLICT (recipe_id, raw_material_id) DO UPDATE SET quantity = EXCLUDED.quantity`,
+                  [recipeId, item.raw_material_id, item.quantity, item.waste_pct || 0]
+                );
+              }
+            }
+          }
+        }
+      }
+
+      // 2. Sincronizar Grupos de Modificadores (Salsas / Bebidas)
+      if (modifier_group_ids !== undefined) {
+        await client.query(`DELETE FROM fs_product_groups WHERE product_id = $1`, [id]);
+        for (const groupId of modifier_group_ids) {
+          await client.query(
+            `INSERT INTO fs_product_groups (product_id, group_id)
+             VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+            [id, groupId]
+          );
+        }
+      }
+
+      // 3. Sincronizar Receta Base
+      if (recipe_items !== undefined && (!variants || variants.length === 0)) {
+        await client.query(`DELETE FROM fs_recipes WHERE product_id = $1 AND variant_id IS NULL`, [id]);
+        if (recipe_items.length > 0) {
+          const baseRecRes = await client.query(
+            `INSERT INTO fs_recipes (id, product_id, variant_id, name, yield_portions)
+             VALUES (gen_random_uuid(), $1, NULL, $2, 1.0) RETURNING id`,
+            [id, `Receta ${productFields.name || 'Platillo'}`]
+          );
+          const baseRecId = baseRecRes.rows[0].id;
+          for (const item of recipe_items) {
+            await client.query(
+              `INSERT INTO fs_recipe_items (recipe_id, raw_material_id, quantity, waste_pct)
+               VALUES ($1, $2, $3, $4)
+               ON CONFLICT (recipe_id, raw_material_id) DO UPDATE SET quantity = EXCLUDED.quantity`,
+              [baseRecId, item.raw_material_id, item.quantity, item.waste_pct || 0]
+            );
+          }
         }
       }
     });

@@ -15,15 +15,24 @@ import {
   ArrowLeft, ArrowRight, Search, Plus, Minus, Trash2, ShoppingCart, ShoppingBag,
   CreditCard, Banknote, CheckCircle2, RotateCcw,
   Package, Printer, Lock, Unlock, X, Calculator, ChevronDown,
-  Bike, MapPin, Store, Tag, Percent, UtensilsCrossed
+  Bike, MapPin, Store, Tag, Percent, UtensilsCrossed, SlidersHorizontal, FileText
 } from 'lucide-react';
 import { ModalPortal } from '@/components/ui/modal-portal';
+import { FormattedDescription } from '@/components/ui/formatted-description';
+import { PosPreordersModal } from './pos-preorders-modal';
+import {
+  FoodProductCustomizerModal,
+  type ProductVariant,
+  type ModifierGroup,
+  type CustomizerResult,
+} from '@/components/food-service/food-product-customizer-modal';
 
 interface Product {
   id: string;
   name: string;
   sku: string;
   barcode?: string;
+  description?: string;
   price_usd: string;
   current_stock: string;
   min_stock_alert: string;
@@ -31,6 +40,8 @@ interface Product {
   category_name?: string;
   image_url?: string;
   is_tax_exempt?: boolean;
+  variants?: ProductVariant[];
+  modifier_groups?: ModifierGroup[];
 }
 
 interface PosSettings {
@@ -59,8 +70,14 @@ interface PosSettings {
 }
 
 interface TicketItem {
+  ticket_item_id?: string;
   product: Product;
   quantity: number;
+  variant_id?: string;
+  variant_name?: string;
+  unit_price?: number;
+  selected_modifiers?: Array<{ id: string; name: string; price: number }>;
+  prep_notes?: string;
 }
 
 interface PosPageProps {
@@ -71,12 +88,15 @@ function PosQuantityInput({
   value,
   onChange,
   productName,
+  maxStock,
 }: {
   value: number;
   onChange: (newQty: number) => void;
   productName: string;
+  maxStock?: number;
 }) {
   const [draft, setDraft] = useState<string>(String(value));
+  const effectiveMax = typeof maxStock === 'number' && maxStock > 0 ? maxStock : 9999;
 
   useEffect(() => {
     setDraft(String(value));
@@ -88,7 +108,7 @@ function PosQuantityInput({
     if (digitsOnly.length > 0) {
       const parsed = parseInt(digitsOnly, 10);
       if (!Number.isNaN(parsed) && parsed >= 1) {
-        onChange(Math.min(parsed, 9999));
+        onChange(Math.min(parsed, effectiveMax));
       }
     }
   }
@@ -120,7 +140,7 @@ function PosQuantityInput({
     if (Number.isNaN(parsed) || parsed < 1) {
       setDraft(String(value));
     } else {
-      const clamped = Math.min(parsed, 9999);
+      const clamped = Math.min(parsed, effectiveMax);
       setDraft(String(clamped));
       if (clamped !== value) {
         onChange(clamped);
@@ -226,6 +246,7 @@ export default function PosPage({ params }: PosPageProps) {
   const [tenderAmount, setTenderAmount] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [selectedProductDetail, setSelectedProductDetail] = useState<Product | null>(null);
+  const [customizerProduct, setCustomizerProduct] = useState<Product | null>(null);
   const [detailQuantity, setDetailQuantity] = useState<number>(1);
   const [isMobileTicketOpen, setIsMobileTicketOpen] = useState<boolean>(false);
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
@@ -241,6 +262,14 @@ export default function PosPage({ params }: PosPageProps) {
   const [posDeliveryType, setPosDeliveryType] = useState<'PICKUP' | 'DELIVERY' | 'DINE_IN'>('PICKUP');
   const [selectedPosZoneId, setSelectedPosZoneId] = useState<string>('');
   const [posDeliveryAddress, setPosDeliveryAddress] = useState<string>('');
+
+  // Plugin Vendedores y Cotizaciones (sales_team)
+  const [isSalesTeamActive, setIsSalesTeamActive] = useState<boolean>(false);
+  const [salesReps, setSalesReps] = useState<Array<{ id: string; full_name: string }>>([]);
+  const [selectedSalesRepId, setSelectedSalesRepId] = useState<string>('');
+  const [activeQuoteId, setActiveQuoteId] = useState<string | null>(null);
+  const [activeQuoteNumber, setActiveQuoteNumber] = useState<string | null>(null);
+  const [isPreordersModalOpen, setIsPreordersModalOpen] = useState<boolean>(false);
 
   const baseCurrency = settings.primary_currency || 'USD';
   const currencySymbol = baseCurrency === 'EUR' ? '€' : '$';
@@ -433,6 +462,12 @@ export default function PosPage({ params }: PosPageProps) {
             setSelectedPosZoneId((prev) => prev || data.delivery_zones[0].id);
           }
         }
+        if (typeof data.is_sales_team_active === 'boolean') {
+          setIsSalesTeamActive(data.is_sales_team_active);
+        }
+        if (Array.isArray(data.sales_reps)) {
+          setSalesReps(data.sales_reps);
+        }
         const nextSettings: PosSettings = {
           business_name: data.business_name || 'Mi Comercio',
           primary_currency: data.currency || 'USD',
@@ -516,7 +551,8 @@ export default function PosPage({ params }: PosPageProps) {
     let subtotalTaxable = 0;
 
     for (const item of ticket) {
-      const line = parseFloat(item.product.price_usd) * item.quantity;
+      const itemPrice = item.unit_price ?? parseFloat(item.product.price_usd);
+      const line = itemPrice * item.quantity;
       if (item.product.is_tax_exempt) {
         subtotalExempt += line;
       } else {
@@ -665,6 +701,55 @@ export default function PosPage({ params }: PosPageProps) {
     toast.info('Descuento eliminado');
   }
 
+  function handleLoadQuote(quoteData: any, quoteItems: any[]) {
+    setCustomerName(quoteData.customer_name || '');
+    setCustomerPhone(quoteData.customer_whatsapp || '');
+    setActiveQuoteId(quoteData.id);
+    setActiveQuoteNumber(quoteData.quote_number);
+    if (quoteData.sales_rep_id) {
+      setSelectedSalesRepId(quoteData.sales_rep_id);
+    }
+
+    const newTicketItems = quoteItems.map((qi: any) => {
+      const prodMatch = products.find((p) => p.id === qi.product_id);
+      const fallbackProd: Product = {
+        id: qi.product_id,
+        name: qi.product_name,
+        sku: qi.sku || '',
+        price_usd: String(qi.unit_price_primary || 0),
+        current_stock: '999',
+        min_stock_alert: '0',
+        category_id: '',
+        is_tax_exempt: false,
+      };
+      return {
+        product: prodMatch || fallbackProd,
+        quantity: parseFloat(String(qi.quantity)) || 1,
+        unit_price: parseFloat(String(qi.unit_price_primary)) || 0,
+        prep_notes: qi.notes || undefined,
+      };
+    });
+
+    setTicket(newTicketItems);
+
+    const discPrimary = parseFloat(String(quoteData.discount_primary || 0));
+    if (discPrimary > 0) {
+      setAppliedDiscounts([
+        {
+          id: `quote-disc-${quoteData.id}`,
+          name: `Descuento Cotización ${quoteData.quote_number}`,
+          type: 'FIXED_AMOUNT',
+          value: discPrimary,
+          amount_primary: discPrimary,
+        },
+      ]);
+    } else {
+      setAppliedDiscounts([]);
+    }
+
+    toast.success(`Preorden ${quoteData.quote_number} cargada con ${newTicketItems.length} producto(s)`);
+  }
+
   // Acciones sobre el ticket
   function addToTicket(product: Product) {
     if (daily86Ids.includes(product.id)) {
@@ -673,12 +758,24 @@ export default function PosPage({ params }: PosPageProps) {
       });
       return;
     }
+    const stock = Math.max(0, parseFloat(product.current_stock || '0'));
+    if (stock <= 0) {
+      toast.error(`"${product.name}" no tiene existencias disponibles en inventario.`, {
+        icon: '🚫',
+      });
+      return;
+    }
+
     setTicket((prev) => {
       const existing = prev.find((item) => item.product.id === product.id);
       if (existing) {
+        if (existing.quantity >= stock) {
+          toast.warning(`Tope alcanzado: Solo hay ${stock} uds disponibles de "${product.name}".`);
+          return prev;
+        }
         return prev.map((item) =>
           item.product.id === product.id
-            ? { ...item, quantity: item.quantity + 1 }
+            ? { ...item, quantity: Math.min(item.quantity + 1, stock) }
             : item
         );
       }
@@ -686,13 +783,66 @@ export default function PosPage({ params }: PosPageProps) {
     });
   }
 
-  function updateQuantity(productId: string, delta: number) {
+  function handleCustomizerConfirm(res: CustomizerResult) {
+    const itemKey = `${res.product_id}_${res.variant_id || 'base'}_${(res.selected_modifiers || []).map((m) => m.id).sort().join(',')}`;
+    const p = products.find((prod) => prod.id === res.product_id);
+    if (!p) return;
+    const stock = Math.max(0, parseFloat(p.current_stock || '0'));
+    if (stock <= 0) {
+      toast.error(`"${p.name}" está agotado en inventario.`);
+      return;
+    }
+
+    setTicket((prev) => {
+      const existingIdx = prev.findIndex((item) => (item.ticket_item_id || item.product.id) === itemKey);
+      if (existingIdx >= 0) {
+        const existing = prev[existingIdx];
+        if (existing.quantity >= stock) {
+          toast.warning(`Tope alcanzado: Solo hay ${stock} unidades disponibles de "${p.name}".`);
+          return prev;
+        }
+        const next = [...prev];
+        next[existingIdx] = {
+          ...existing,
+          quantity: Math.min(existing.quantity + res.quantity, stock),
+        };
+        return next;
+      }
+
+      const safeQty = Math.min(res.quantity, stock);
+      return [
+        ...prev,
+        {
+          ticket_item_id: itemKey,
+          product: p,
+          quantity: safeQty,
+          variant_id: res.variant_id,
+          variant_name: res.variant_name,
+          unit_price: res.unit_price,
+          selected_modifiers: res.selected_modifiers,
+          prep_notes: res.prep_notes,
+        },
+      ];
+    });
+
+    toast.success(`${res.quantity} × ${p.name} en el ticket`, {
+      description: res.variant_name ? `${res.variant_name}` : undefined,
+    });
+  }
+
+  function updateQuantity(itemKeyOrId: string, delta: number) {
     setTicket((prev) => {
       return prev
         .map((item) => {
-          if (item.product.id === productId) {
+          if ((item.ticket_item_id || item.product.id) === itemKeyOrId || item.product.id === itemKeyOrId) {
+            const stock = Math.max(0, parseFloat(item.product.current_stock || '0'));
             const newQty = item.quantity + delta;
-            return newQty > 0 ? { ...item, quantity: Math.min(newQty, 9999) } : null;
+            if (newQty <= 0) return null;
+            if (delta > 0 && stock > 0 && newQty > stock) {
+              toast.warning(`Tope alcanzado: Solo hay ${stock} unidades disponibles de "${item.product.name}".`);
+              return { ...item, quantity: stock };
+            }
+            return { ...item, quantity: stock > 0 ? Math.min(newQty, stock) : newQty };
           }
           return item;
         })
@@ -702,17 +852,28 @@ export default function PosPage({ params }: PosPageProps) {
 
   function setExactQuantity(productId: string, newQty: number) {
     if (!Number.isInteger(newQty) || newQty < 1) return;
-    setTicket((prev) =>
-      prev.map((item) =>
-        item.product.id === productId
-          ? { ...item, quantity: Math.min(newQty, 9999) }
-          : item
-      )
-    );
+    const targetProd = products.find((p) => p.id === productId);
+    const stock = targetProd ? Math.max(0, parseFloat(targetProd.current_stock || '0')) : 9999;
+    const clamped = stock > 0 ? Math.min(newQty, stock) : newQty;
+
+    setTicket((prev) => {
+      const existing = prev.find((item) => item.product.id === productId);
+      if (existing) {
+        return prev.map((item) =>
+          item.product.id === productId
+            ? { ...item, quantity: clamped }
+            : item
+        );
+      }
+      if (targetProd && clamped > 0) {
+        return [...prev, { product: targetProd, quantity: clamped }];
+      }
+      return prev;
+    });
   }
 
-  function removeFromTicket(productId: string) {
-    setTicket((prev) => prev.filter((item) => item.product.id !== productId));
+  function removeFromTicket(itemKeyOrId: string) {
+    setTicket((prev) => prev.filter((item) => (item.ticket_item_id || item.product.id) !== itemKeyOrId && item.product.id !== itemKeyOrId));
   }
 
   function clearTicket() {
@@ -748,15 +909,26 @@ export default function PosPage({ params }: PosPageProps) {
         store_id: settings.store_id || 'default',
         customer_name: customerName.trim() || 'Cliente Mostrador',
         customer_phone: safePhone,
-        items: ticket.map((i) => ({
-          product_id: i.product.id,
-          product_name: i.product.name,
-          quantity: i.quantity,
-          unit_price_usd: parseFloat(i.product.price_usd),
-          total_price_usd: Number((parseFloat(i.product.price_usd) * i.quantity).toFixed(2)),
-          unit_price_primary: parseFloat(i.product.price_usd),
-          total_price_primary: Number((parseFloat(i.product.price_usd) * i.quantity).toFixed(2)),
-        })),
+        items: ticket.map((i) => {
+          const itemPrice = i.unit_price ?? parseFloat(i.product.price_usd);
+          return {
+            product_id: i.product.id,
+            product_name: i.variant_name ? `${i.product.name} (${i.variant_name})` : i.product.name,
+            quantity: i.quantity,
+            variant_id: i.variant_id,
+            unit_price_usd: itemPrice,
+            total_price_usd: Number((itemPrice * i.quantity).toFixed(2)),
+            unit_price_primary: itemPrice,
+            total_price_primary: Number((itemPrice * i.quantity).toFixed(2)),
+            metadata: {
+              variant_id: i.variant_id,
+              variant_name: i.variant_name,
+              modifiers: i.selected_modifiers,
+              prep_notes: i.prep_notes,
+              is_custom_quote: Boolean(i.selected_modifiers && i.selected_modifiers.length > 0),
+            },
+          };
+        }),
         subtotal_usd: taxCalculations.subtotal,
         subtotal_primary: taxCalculations.subtotal,
         discount_usd: taxCalculations.discountAmount,
@@ -781,6 +953,8 @@ export default function PosPage({ params }: PosPageProps) {
         notes: (posDeliveryType === 'DELIVERY'
           ? `Delivery: ${selectedPosZone?.name || 'Zona'} · Dirección: ${posDeliveryAddress || customerName} · Cobrado en Mostrador POS-01`
           : `Cobrado en Mostrador POS-01 · ${settings.business_name}${effectiveRate > 0 ? ` (Tasa: ${effectiveRate.toFixed(2)})` : ''}`) + discNote,
+        sales_rep_id: selectedSalesRepId || null,
+        quote_id: activeQuoteId || null,
       };
 
       // 1. Guardar localmente en Dexie IndexedDB
@@ -833,6 +1007,9 @@ export default function PosPage({ params }: PosPageProps) {
       setIsCheckoutOpen(false);
       setPaymentRef('');
       setTenderAmount('');
+      setActiveQuoteId(null);
+      setActiveQuoteNumber(null);
+      setSelectedSalesRepId('');
     } catch (err) {
       console.error('Error completing sale:', err);
       alert('Error al registrar la venta en la terminal');
@@ -884,6 +1061,18 @@ export default function PosPage({ params }: PosPageProps) {
               <ArrowLeft className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Panel Admin</span>
             </Link>
+          )}
+
+          {isSalesTeamActive && (
+            <button
+              type="button"
+              onClick={() => setIsPreordersModalOpen(true)}
+              title="Cargar Preorden o Cotización de Vendedor"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/60 border border-purple-200 dark:border-purple-800 text-purple-800 dark:text-purple-300 text-xs font-bold transition shrink-0"
+            >
+              <FileText className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+              <span className="hidden sm:inline">Cotizaciones</span>
+            </button>
           )}
 
           {settings.logo_url ? (
@@ -975,9 +1164,33 @@ export default function PosPage({ params }: PosPageProps) {
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 dark:text-zinc-400" />
               <input
                 type="text"
-                placeholder="Buscar por producto, marca o SKU..."
+                placeholder="Buscar por producto, marca, SKU o código de barras (Enter para agregar)..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const q = searchQuery.trim().toLowerCase();
+                    if (!q) return;
+                    // 1. Coincidencia exacta por código de barras o SKU
+                    const exactMatch = products.find(
+                      (p) =>
+                        (p.barcode && p.barcode.toLowerCase() === q) ||
+                        (p.sku && p.sku.toLowerCase() === q)
+                    );
+                    if (exactMatch) {
+                      addToTicket(exactMatch);
+                      setSearchQuery('');
+                      return;
+                    }
+                    // 2. Si hay exactamente 1 producto filtrado en los resultados
+                    if (filteredProducts.length === 1) {
+                      addToTicket(filteredProducts[0]);
+                      setSearchQuery('');
+                      return;
+                    }
+                  }
+                }}
                 className="w-full pl-10 pr-4 py-2 sm:py-2.5 bg-slate-50 dark:bg-zinc-900/80 border border-slate-300 dark:border-zinc-800 rounded-xl text-sm font-medium text-slate-950 dark:text-white placeholder:text-slate-500 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500 select-text"
               />
             </div>
@@ -1028,10 +1241,12 @@ export default function PosPage({ params }: PosPageProps) {
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-3.5 overflow-y-auto max-h-[calc(100vh-14.5rem)] pr-1">
               {filteredProducts.map((product) => {
-                const price = parseFloat(product.price_usd);
-                const stock = parseFloat(product.current_stock || '0');
-                const isLow = stock <= parseFloat(product.min_stock_alert || '5');
+                const price = Math.max(0, parseFloat(product.price_usd || '0'));
+                const stock = Math.max(0, parseFloat(product.current_stock || '0'));
+                const isOutOfStock = stock <= 0;
+                const isLow = !isOutOfStock && stock <= parseFloat(product.min_stock_alert || '5');
                 const inTicket = ticket.find((item) => item.product.id === product.id);
+                const isMaxInTicket = !isOutOfStock && Boolean(inTicket && inTicket.quantity >= stock);
                 const isTaxActive = Boolean(settings.tax_enabled);
                 const taxRatePercent = Number(settings.tax_rate ?? 16);
                 const taxRate = taxRatePercent / 100;
@@ -1054,32 +1269,60 @@ export default function PosPage({ params }: PosPageProps) {
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
-                        setSelectedProductDetail(product);
-                        const inT = ticket.find((item) => item.product.id === product.id);
-                        setDetailQuantity(inT ? inT.quantity : 1);
+                        if (isOutOfStock) {
+                          toast.error(`"${product.name}" no tiene existencias.`);
+                          return;
+                        }
+                        if (
+                          isFoodServiceActive &&
+                          ((product.variants && product.variants.length > 0) ||
+                            (product.modifier_groups && product.modifier_groups.length > 0))
+                        ) {
+                          setCustomizerProduct(product);
+                        } else {
+                          setSelectedProductDetail(product);
+                          const inT = ticket.find((item) => item.product.id === product.id);
+                          setDetailQuantity(inT ? inT.quantity : Math.min(1, stock));
+                        }
                       }
                     }}
                     onClick={() => {
-                      setSelectedProductDetail(product);
-                      const inT = ticket.find((item) => item.product.id === product.id);
-                      setDetailQuantity(inT ? inT.quantity : 1);
+                      if (isOutOfStock) {
+                        toast.error(`"${product.name}" no tiene existencias.`);
+                        return;
+                      }
+                      if (
+                        isFoodServiceActive &&
+                        ((product.variants && product.variants.length > 0) ||
+                          (product.modifier_groups && product.modifier_groups.length > 0))
+                      ) {
+                        setCustomizerProduct(product);
+                      } else {
+                        setSelectedProductDetail(product);
+                        const inT = ticket.find((item) => item.product.id === product.id);
+                        setDetailQuantity(inT ? inT.quantity : Math.min(1, stock));
+                      }
                     }}
-                    className={`flex flex-col justify-between text-left p-3 sm:p-3.5 rounded-2xl bg-white dark:bg-[#121214] border transition-all group active:scale-[0.98] cursor-pointer select-none ${
-                      daily86Ids.includes(product.id)
-                        ? 'opacity-60 grayscale-[40%] border-rose-300 dark:border-rose-900/60'
+                    className={`flex flex-col justify-between text-left p-3 sm:p-3.5 rounded-2xl bg-white dark:bg-[#121214] border transition-all group active:scale-[0.98] select-none ${
+                      isOutOfStock || daily86Ids.includes(product.id)
+                        ? 'opacity-60 grayscale-[40%] border-rose-300 dark:border-rose-900/60 cursor-not-allowed'
                         : inTicket
-                        ? 'border-lime-500 ring-1 ring-lime-500/30 shadow-sm'
-                        : 'border-slate-200 dark:border-zinc-800/80 hover:border-lime-500/50 hover:shadow-md dark:hover:border-lime-500/40'
+                        ? 'border-lime-500 ring-1 ring-lime-500/30 shadow-sm cursor-pointer'
+                        : 'border-slate-200 dark:border-zinc-800/80 hover:border-lime-500/50 hover:shadow-md dark:hover:border-lime-500/40 cursor-pointer'
                     }`}
                   >
                     <div>
                       {/* Imagen o Placeholder */}
                       <div className="w-full aspect-square rounded-xl bg-slate-100 dark:bg-zinc-800/60 overflow-hidden mb-2.5 flex items-center justify-center relative">
-                        {daily86Ids.includes(product.id) && (
+                        {isOutOfStock ? (
+                          <span className="absolute top-2 left-2 z-10 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-rose-600 text-white shadow-xs">
+                            AGOTADO
+                          </span>
+                        ) : daily86Ids.includes(product.id) ? (
                           <span className="absolute top-2 left-2 z-10 text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-rose-600 text-white shadow-xs">
                             AGOTADO (86)
                           </span>
-                        )}
+                        ) : null}
                         {product.image_url ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img 
@@ -1097,7 +1340,9 @@ export default function PosPage({ params }: PosPageProps) {
                           </span>
                         )}
                         <span className={`absolute top-2 right-2 text-[10px] sm:text-[11px] font-mono font-bold px-2 py-0.5 rounded-md shadow-xs backdrop-blur-xs ${
-                          isLow 
+                          isOutOfStock
+                            ? 'bg-rose-600 text-white'
+                            : isLow 
                             ? 'bg-amber-600 text-white' 
                             : 'tenant-secondary-surface opacity-90'
                         }`}>
@@ -1141,18 +1386,38 @@ export default function PosPage({ params }: PosPageProps) {
                           )
                         )}
                       </div>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          addToTicket(product);
-                          toast.success(`+1 ${product.name}`, { duration: 1000 });
-                        }}
-                        className="w-8 h-8 rounded-xl bg-lime-500/15 text-lime-700 dark:text-lime-400 hover:bg-lime-500 hover:text-black flex items-center justify-center transition-all active:scale-90 shrink-0"
-                        title="Añadir 1 rápido al ticket"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </button>
+                      {isOutOfStock ? (
+                        <button
+                          type="button"
+                          disabled
+                          className="w-8 h-8 rounded-xl bg-slate-100 dark:bg-zinc-800 text-slate-400 dark:text-zinc-600 flex items-center justify-center cursor-not-allowed shrink-0"
+                          title="Sin existencias"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      ) : isMaxInTicket ? (
+                        <button
+                          type="button"
+                          disabled
+                          className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 flex items-center justify-center cursor-not-allowed shrink-0"
+                          title={`Tope alcanzado en ticket (${stock} uds)`}
+                        >
+                          <CheckCircle2 className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            addToTicket(product);
+                            toast.success(`+1 ${product.name}`, { duration: 1000 });
+                          }}
+                          className="w-8 h-8 rounded-xl bg-lime-500/15 text-lime-700 dark:text-lime-400 hover:bg-lime-500 hover:text-black flex items-center justify-center transition-all active:scale-90 shrink-0"
+                          title="Añadir 1 rápido al ticket"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -1193,6 +1458,27 @@ export default function PosPage({ params }: PosPageProps) {
             )}
           </div>
 
+          {activeQuoteNumber && (
+            <div className="px-4 py-2 bg-purple-50 dark:bg-purple-950/40 border-b border-purple-200 dark:border-purple-800 flex items-center justify-between text-xs text-purple-900 dark:text-purple-200">
+              <span className="font-bold flex items-center gap-1.5 truncate">
+                <FileText className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                Preorden: <strong className="font-mono">{activeQuoteNumber}</strong>
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveQuoteId(null);
+                  setActiveQuoteNumber(null);
+                  setSelectedSalesRepId('');
+                  toast.info('Preorden desvinculada del ticket');
+                }}
+                className="text-[10px] text-purple-600 dark:text-purple-400 hover:underline font-bold shrink-0 cursor-pointer"
+              >
+                Desvincular
+              </button>
+            </div>
+          )}
+
           {/* Listado de ítems en el ticket */}
           <div className="flex-1 p-4 overflow-y-auto divide-y divide-slate-200/80 dark:divide-zinc-800/60">
             {ticket.length === 0 ? (
@@ -1220,43 +1506,61 @@ export default function PosPage({ params }: PosPageProps) {
               </div>
             ) : (
               ticket.map((item) => {
-                const unitPrice = parseFloat(item.product.price_usd);
+                const itemKey = item.ticket_item_id || item.product.id;
+                const unitPrice = item.unit_price ?? parseFloat(item.product.price_usd);
                 const subtotal = unitPrice * item.quantity;
                 return (
-                  <div key={item.product.id} className="py-3 first:pt-0 last:pb-0 flex items-center justify-between gap-2.5">
+                  <div key={itemKey} className="py-3 first:pt-0 last:pb-0 flex items-center justify-between gap-2.5">
                     <div className="min-w-0 flex-1">
                       <h4 className="text-sm font-bold text-slate-950 dark:text-white truncate">
                         {item.product.name}
                       </h4>
+                      {item.variant_name && (
+                        <p className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                          {item.variant_name}
+                        </p>
+                      )}
+                      {item.selected_modifiers && item.selected_modifiers.length > 0 && (
+                        <p className="text-[10px] text-slate-500 dark:text-zinc-400 truncate">
+                          + {item.selected_modifiers.map((m) => m.name).join(', ')}
+                        </p>
+                      )}
                       <p className="text-xs font-mono font-semibold text-slate-700 dark:text-zinc-300">
                         {currencySymbol}{unitPrice.toFixed(2)} c/u
                       </p>
                     </div>
 
                     {/* Controles de cantidad con input numérico validado */}
-                    <div className="flex items-center gap-1 bg-slate-100 dark:bg-zinc-800/80 rounded-lg p-0.5 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => updateQuantity(item.product.id, -1)}
-                        className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-white dark:hover:bg-zinc-700 text-slate-800 dark:text-zinc-200 cursor-pointer"
-                        title="Restar 1"
-                      >
-                        <Minus className="w-3.5 h-3.5" />
-                      </button>
-                      <PosQuantityInput
-                        value={item.quantity}
-                        productName={item.product.name}
-                        onChange={(newQty) => setExactQuantity(item.product.id, newQty)}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => updateQuantity(item.product.id, 1)}
-                        className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-white dark:hover:bg-zinc-700 text-slate-800 dark:text-zinc-200 cursor-pointer"
-                        title="Sumar 1"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
+                    {(() => {
+                      const itemStock = Math.max(0, parseFloat(item.product.current_stock || '0'));
+                      return (
+                        <div className="flex items-center gap-1 bg-slate-100 dark:bg-zinc-800/80 rounded-lg p-0.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => updateQuantity(itemKey, -1)}
+                            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-white dark:hover:bg-zinc-700 text-slate-800 dark:text-zinc-200 cursor-pointer"
+                            title="Restar 1"
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                          <PosQuantityInput
+                            value={item.quantity}
+                            productName={item.product.name}
+                            maxStock={itemStock}
+                            onChange={(newQty) => setExactQuantity(item.product.id, newQty)}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => updateQuantity(itemKey, 1)}
+                            disabled={itemStock > 0 && item.quantity >= itemStock}
+                            className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-white dark:hover:bg-zinc-700 text-slate-800 dark:text-zinc-200 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                            title={itemStock > 0 && item.quantity >= itemStock ? `Tope de stock alcanzado (${itemStock} uds)` : 'Sumar 1'}
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })()}
 
                     <div className="text-right min-w-[4.5rem] shrink-0">
                       <p className="text-sm font-black font-mono text-slate-950 dark:text-white">
@@ -1264,7 +1568,7 @@ export default function PosPage({ params }: PosPageProps) {
                       </p>
                       <button
                         type="button"
-                        onClick={() => removeFromTicket(item.product.id)}
+                        onClick={() => removeFromTicket(itemKey)}
                         className="text-xs text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 cursor-pointer mt-0.5 inline-flex items-center gap-0.5"
                         title="Quitar del ticket"
                       >
@@ -1624,27 +1928,35 @@ export default function PosPage({ params }: PosPageProps) {
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-1 bg-slate-100 dark:bg-zinc-800/80 rounded-lg p-0.5 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => updateQuantity(item.product.id, -1)}
-                          className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-white dark:hover:bg-zinc-700 text-slate-800 dark:text-zinc-200 cursor-pointer"
-                        >
-                          <Minus className="w-3.5 h-3.5" />
-                        </button>
-                        <PosQuantityInput
-                          value={item.quantity}
-                          productName={item.product.name}
-                          onChange={(newQty) => setExactQuantity(item.product.id, newQty)}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => updateQuantity(item.product.id, 1)}
-                          className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-white dark:hover:bg-zinc-700 text-slate-800 dark:text-zinc-200 cursor-pointer"
-                        >
-                          <Plus className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      {(() => {
+                        const itemStock = Math.max(0, parseFloat(item.product.current_stock || '0'));
+                        return (
+                          <div className="flex items-center gap-1 bg-slate-100 dark:bg-zinc-800/80 rounded-lg p-0.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => updateQuantity(item.product.id, -1)}
+                              className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-white dark:hover:bg-zinc-700 text-slate-800 dark:text-zinc-200 cursor-pointer"
+                            >
+                              <Minus className="w-3.5 h-3.5" />
+                            </button>
+                            <PosQuantityInput
+                              value={item.quantity}
+                              productName={item.product.name}
+                              maxStock={itemStock}
+                              onChange={(newQty) => setExactQuantity(item.product.id, newQty)}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => updateQuantity(item.product.id, 1)}
+                              disabled={itemStock > 0 && item.quantity >= itemStock}
+                              className="w-7 h-7 flex items-center justify-center rounded-md hover:bg-white dark:hover:bg-zinc-700 text-slate-800 dark:text-zinc-200 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                              title={itemStock > 0 && item.quantity >= itemStock ? `Tope de stock alcanzado (${itemStock} uds)` : 'Sumar 1'}
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })()}
 
                       <div className="text-right min-w-[4rem] shrink-0">
                         <p className="text-xs sm:text-sm font-black font-mono text-slate-950 dark:text-white">
@@ -1876,9 +2188,10 @@ export default function PosPage({ params }: PosPageProps) {
       {/* Modal de Detalle de Producto con Desglose Fiscal y Selector Táctil */}
       {selectedProductDetail && (() => {
         const p = selectedProductDetail;
-        const price = parseFloat(p.price_usd);
-        const stock = parseFloat(p.current_stock || '0');
-        const isLow = stock <= parseFloat(p.min_stock_alert || '5');
+        const price = Math.max(0, parseFloat(p.price_usd || '0'));
+        const stock = Math.max(0, parseFloat(p.current_stock || '0'));
+        const isOutOfStock = stock <= 0;
+        const isLow = !isOutOfStock && stock <= parseFloat(p.min_stock_alert || '5');
         const taxRate = (settings.tax_rate ?? 16) / 100;
         const isTaxActive = Boolean(settings.tax_enabled);
         const isExempt = Boolean(p.is_tax_exempt);
@@ -1895,13 +2208,14 @@ export default function PosPage({ params }: PosPageProps) {
           }
         }
 
-        const lineTotalUsd = unitFinalUsd * detailQuantity;
+        const safeDetailQuantity = Math.min(Math.max(1, detailQuantity), stock > 0 ? stock : 1);
+        const lineTotalUsd = unitFinalUsd * safeDetailQuantity;
         const lineTotalVes = effectiveRate > 0 ? lineTotalUsd * effectiveRate : 0;
         const inT = ticket.find((i) => i.product.id === p.id);
 
         return (
           <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 print:hidden animate-in fade-in duration-150">
-            <div className="bg-white dark:bg-[#121214] border border-slate-200 dark:border-zinc-800 rounded-t-3xl sm:rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200">
+            <div className="bg-white dark:bg-[#121214] border border-slate-200 dark:border-zinc-800 rounded-t-3xl sm:rounded-3xl max-w-md w-full p-5 sm:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto overscroll-contain animate-in slide-in-from-bottom-6 sm:zoom-in-95 duration-200">
               {/* Header con botón cerrar */}
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
@@ -1920,8 +2234,8 @@ export default function PosPage({ params }: PosPageProps) {
                     <h3 className="text-base font-extrabold text-slate-950 dark:text-white leading-tight">
                       {p.name}
                     </h3>
-                    <p className={`text-xs font-mono font-bold mt-1 ${isLow ? 'text-amber-600' : 'text-slate-500 dark:text-zinc-400'}`}>
-                      Disponible: {stock} unidades
+                    <p className={`text-xs font-mono font-bold mt-1 ${isOutOfStock ? 'text-rose-600' : isLow ? 'text-amber-600' : 'text-slate-500 dark:text-zinc-400'}`}>
+                      {isOutOfStock ? 'Sin existencias (Agotado)' : `Disponible: ${stock} unidades`}
                     </p>
                   </div>
                 </div>
@@ -1933,6 +2247,16 @@ export default function PosPage({ params }: PosPageProps) {
                   ✕
                 </button>
               </div>
+
+              {/* Descripción formateada del producto si existe */}
+              {p.description && (
+                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800/80 max-h-48 overflow-y-auto overscroll-contain space-y-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-zinc-400 block mb-1">
+                    Descripción y Detalles
+                  </span>
+                  <FormattedDescription description={p.description} />
+                </div>
+              )}
 
               {/* Desglose de Precios e Impuestos */}
               <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800/80 space-y-2">
@@ -1986,7 +2310,7 @@ export default function PosPage({ params }: PosPageProps) {
                 </div>
               </div>
 
-              {/* Selector Táctil de Cantidad */}
+              {/* Selector Táctil de Cantidad con tope estricto al stock */}
               <div className="flex items-center justify-between gap-4 py-2">
                 <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-zinc-300">
                   Cantidad a Despachar
@@ -1995,25 +2319,32 @@ export default function PosPage({ params }: PosPageProps) {
                   <button
                     type="button"
                     onClick={() => setDetailQuantity((q) => Math.max(1, q - 1))}
-                    className="w-10 h-10 flex items-center justify-center rounded-xl bg-white dark:bg-zinc-700 text-slate-900 dark:text-white font-bold text-base hover:opacity-80 active:scale-95 transition-all shadow-xs cursor-pointer"
+                    disabled={detailQuantity <= 1 || isOutOfStock}
+                    className="w-10 h-10 flex items-center justify-center rounded-xl bg-white dark:bg-zinc-700 text-slate-900 dark:text-white font-bold text-base hover:opacity-80 active:scale-95 transition-all shadow-xs cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     <Minus className="w-4 h-4" />
                   </button>
                   <input
-                    type="number"
-                    min={1}
-                    max={9999}
+                    type="text"
+                    inputMode="numeric"
+                    disabled={isOutOfStock}
                     value={detailQuantity}
                     onChange={(e) => {
-                      const val = parseInt(e.target.value, 10);
-                      if (!isNaN(val) && val >= 1) setDetailQuantity(Math.min(val, 9999));
+                      const digitsOnly = e.target.value.replace(/\D/g, '');
+                      if (!digitsOnly) {
+                        setDetailQuantity(1);
+                      } else {
+                        const val = parseInt(digitsOnly, 10);
+                        if (val >= 1) setDetailQuantity(Math.min(val, stock > 0 ? stock : 1));
+                      }
                     }}
-                    className="w-14 text-center font-mono font-black text-base bg-transparent text-slate-950 dark:text-white focus:outline-none"
+                    className="w-14 text-center font-mono font-black text-base bg-transparent text-slate-950 dark:text-white focus:outline-none disabled:opacity-40"
                   />
                   <button
                     type="button"
-                    onClick={() => setDetailQuantity((q) => q + 1)}
-                    className="w-10 h-10 flex items-center justify-center rounded-xl bg-white dark:bg-zinc-700 text-slate-900 dark:text-white font-bold text-base hover:opacity-80 active:scale-95 transition-all shadow-xs cursor-pointer"
+                    onClick={() => setDetailQuantity((q) => Math.min(stock, q + 1))}
+                    disabled={detailQuantity >= stock || isOutOfStock}
+                    className="w-10 h-10 flex items-center justify-center rounded-xl bg-white dark:bg-zinc-700 text-slate-900 dark:text-white font-bold text-base hover:opacity-80 active:scale-95 transition-all shadow-xs cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
                   >
                     <Plus className="w-4 h-4" />
                   </button>
@@ -2021,21 +2352,32 @@ export default function PosPage({ params }: PosPageProps) {
               </div>
 
               {/* Botón de Acción Principal */}
-              <button
-                type="button"
-                onClick={() => {
-                  setExactQuantity(p.id, detailQuantity);
-                  toast.success(`${detailQuantity} × ${p.name} en el ticket`);
-                  setSelectedProductDetail(null);
-                }}
-                className="w-full py-3.5 px-4 rounded-2xl font-black text-sm text-black bg-lime-500 hover:bg-lime-600 transition-all flex items-center justify-between shadow-sm active:scale-[0.99] cursor-pointer"
-                style={settings.primary_color ? { backgroundColor: settings.primary_color, color: '#ffffff' } : undefined}
-              >
-                <span>{inT ? 'Actualizar en Ticket' : 'Añadir al Ticket'}</span>
-                <span className="font-mono text-sm">
-                  {currencySymbol}{lineTotalUsd.toFixed(2)} {effectiveRate > 0 ? `· Bs. ${lineTotalVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}
-                </span>
-              </button>
+              {isOutOfStock ? (
+                <button
+                  type="button"
+                  disabled
+                  className="w-full py-3.5 px-4 rounded-2xl font-black text-xs text-stone-400 dark:text-zinc-500 bg-stone-100 dark:bg-zinc-800 cursor-not-allowed flex items-center justify-center"
+                >
+                  Sin existencias en almacén para despacho
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const finalQty = Math.min(safeDetailQuantity, stock);
+                    setExactQuantity(p.id, finalQty);
+                    toast.success(`${finalQty} × ${p.name} en el ticket`);
+                    setSelectedProductDetail(null);
+                  }}
+                  className="w-full py-3.5 px-4 rounded-2xl font-black text-sm text-black bg-lime-500 hover:bg-lime-600 transition-all flex items-center justify-between shadow-sm active:scale-[0.99] cursor-pointer"
+                  style={settings.primary_color ? { backgroundColor: settings.primary_color, color: '#ffffff' } : undefined}
+                >
+                  <span>{inT ? 'Actualizar en Ticket' : 'Añadir al Ticket'}</span>
+                  <span className="font-mono text-sm">
+                    {currencySymbol}{lineTotalUsd.toFixed(2)} {effectiveRate > 0 ? `· Bs. ${lineTotalVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : ''}
+                  </span>
+                </button>
+              )}
             </div>
           </div>
         );
@@ -2335,8 +2677,9 @@ export default function PosPage({ params }: PosPageProps) {
                   <input
                     type="number"
                     step="any"
+                    min="0"
                     value={tenderAmount}
-                    onChange={(e) => setTenderAmount(e.target.value)}
+                    onChange={(e) => setTenderAmount(e.target.value.replace(/-/g, ''))}
                     placeholder={
                       tenderCurrency === 'BASE'
                         ? `Ej: ${Math.ceil(totalUsd)} o ${totalUsd.toFixed(2)}`
@@ -2882,6 +3225,34 @@ export default function PosPage({ params }: PosPageProps) {
           </div>
         </div>
       )}
+
+      {/* Modal Gastronómico Avanzado para Restaurantes (Tamaños, Proteína y Extras) */}
+      {customizerProduct && (
+        <FoodProductCustomizerModal
+          product={{
+            id: customizerProduct.id,
+            name: customizerProduct.name,
+            price_usd: parseFloat(customizerProduct.price_usd),
+            image_url: customizerProduct.image_url,
+            variants: customizerProduct.variants,
+            modifier_groups: customizerProduct.modifier_groups,
+          }}
+          isOpen={Boolean(customizerProduct)}
+          onClose={() => setCustomizerProduct(null)}
+          onConfirm={handleCustomizerConfirm}
+          primaryCurrency={settings.primary_currency || 'USD'}
+          exchangeRate={effectiveRate}
+        />
+      )}
+
+      {/* Modal de Preórdenes y Cotizaciones de Vendedores */}
+      <PosPreordersModal
+        slug={slug}
+        isOpen={isPreordersModalOpen}
+        onClose={() => setIsPreordersModalOpen(false)}
+        onLoadQuote={handleLoadQuote}
+        primaryCurrency={baseCurrency}
+      />
     </div>
   );
 }

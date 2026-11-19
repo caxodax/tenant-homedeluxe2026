@@ -144,16 +144,33 @@ export function InventoryManager({ slug, initialProducts, categories }: Inventor
       return;
     }
 
+    const parsedPrice = parseFloat(priceUsd);
+    const parsedStock = parseFloat(currentStock);
+    const parsedMinAlert = parseFloat(minStockAlert || '5');
+
+    if (isNaN(parsedPrice) || parsedPrice <= 0) {
+      toast.error('El precio debe ser un número positivo mayor a 0');
+      return;
+    }
+    if (isNaN(parsedStock) || parsedStock < 0) {
+      toast.error('El stock no puede ser un número negativo');
+      return;
+    }
+    if (isNaN(parsedMinAlert) || parsedMinAlert < 0) {
+      toast.error('El stock mínimo de alerta no puede ser un número negativo');
+      return;
+    }
+
     const payload: ProductInput = {
       name: name.trim(),
       sku: sku.trim(),
       barcode: barcode.trim() || null,
       category_id: categoryId || null,
       description: description.trim() || null,
-      price_primary: parseFloat(priceUsd),
-      price_usd: parseFloat(priceUsd),
-      current_stock: parseFloat(currentStock),
-      min_stock_alert: parseFloat(minStockAlert),
+      price_primary: parsedPrice,
+      price_usd: parsedPrice,
+      current_stock: parsedStock,
+      min_stock_alert: parsedMinAlert,
       image_url: imageUrl.trim() || null,
     };
 
@@ -636,7 +653,7 @@ export function InventoryManager({ slug, initialProducts, categories }: Inventor
                     min="0.01"
                     required
                     value={priceUsd}
-                    onChange={(e) => setPriceUsd(e.target.value)}
+                    onChange={(e) => setPriceUsd(e.target.value.replace(/-/g, ''))}
                     placeholder="1.50"
                     className="text-xs h-10 rounded-xl font-mono font-bold"
                   />
@@ -652,22 +669,57 @@ export function InventoryManager({ slug, initialProducts, categories }: Inventor
                     min="0"
                     required
                     value={currentStock}
-                    onChange={(e) => setCurrentStock(e.target.value)}
+                    onChange={(e) => setCurrentStock(e.target.value.replace(/-/g, ''))}
                     placeholder="10"
                     className="text-xs h-10 rounded-xl font-mono font-bold"
                   />
                 </div>
 
                 <div className="sm:col-span-2 space-y-1">
-                  <label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                    Descripción / Detalles
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                      Stock Mínimo para Alerta *
+                    </label>
+                    <span className="text-[10px] text-stone-400 dark:text-zinc-500">
+                      Dispara alerta en header y dashboard al alcanzar este número
+                    </span>
+                  </div>
+                  <Input
+                    type="number"
+                    step="1"
+                    min="0"
+                    required
+                    value={minStockAlert}
+                    onChange={(e) => setMinStockAlert(e.target.value.replace(/-/g, ''))}
+                    placeholder="5"
+                    className="text-xs h-10 rounded-xl font-mono font-bold"
+                  />
+                </div>
+
+                <div className="sm:col-span-2 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
+                      Descripción / Detalles del Producto
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDescription((prev) => {
+                          const prefix = prev && !prev.endsWith('\n') ? '\n' : '';
+                          return `${prev}${prefix}• `;
+                        });
+                      }}
+                      className="text-[11px] font-bold text-lime-700 dark:text-lime-400 hover:underline flex items-center gap-1 cursor-pointer"
+                    >
+                      <span>+ Insertar viñeta (•)</span>
+                    </button>
+                  </div>
                   <textarea
-                    rows={2}
+                    rows={4}
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Descripción visible en la vitrina digital..."
-                    className="w-full p-3 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-slate-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-lime-500/20"
+                    placeholder="Descripción con formato... Escribe '• Ítem' o '- Ítem' para listas con viñetas, o **negrita** para resaltar."
+                    className="w-full p-3 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs text-slate-900 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-lime-500/20 leading-relaxed font-sans"
                   />
                 </div>
               </div>

@@ -22,12 +22,15 @@ import {
   Bike,
   UtensilsCrossed,
   ChefHat,
+  FileText,
+  Briefcase,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { LogoutButton } from '@/components/auth/logout-button';
 import { cn } from '@/lib/utils';
 import { hasPermission, type TenantPermission } from '@/lib/auth/rbac';
 import { usePendingOrdersBadge } from '@/components/admin/new-order-notification';
+import { useLowStockCountBadge } from '@/components/admin/low-stock-notification';
 import { IconBadge, type IconBadgeColor } from '@/components/ui/icon-badge';
 import { ModalPortal } from '@/components/ui/modal-portal';
 
@@ -58,6 +61,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Dashboard', href: '', icon: LayoutDashboard, permission: 'dashboard', badgeColor: 'emerald' },
       { label: 'Pedidos', href: '/orders', icon: ShoppingCart, permission: 'orders', badgeColor: 'blue' },
+      { label: 'Cotizaciones', href: '/sales/quotes', icon: FileText, permission: 'orders', badgeColor: 'blue', plugin: 'sales_team' },
       { label: 'Cocina (KDS)', href: '/kds', icon: ChefHat, permission: 'orders', badgeColor: 'amber', plugin: 'food_service' },
       { label: 'Salón & Mesas', href: '/food-service', icon: UtensilsCrossed, permission: 'pos', badgeColor: 'amber', plugin: 'food_service' },
       { label: 'Delivery', href: '/delivery', icon: Bike, permission: 'orders', badgeColor: 'emerald', plugin: 'delivery_fleet' },
@@ -78,6 +82,7 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'Tasas (BCV)', href: '/rates', icon: Coins, permission: 'settings', badgeColor: 'emerald' },
       { label: 'Reportes', href: '/reports', icon: BarChart3, permission: 'reports', badgeColor: 'emerald' },
       { label: 'Equipo & Roles', href: '/staff', icon: ShieldCheck, permission: 'staff', badgeColor: 'rose' },
+      { label: 'Vendedores', href: '/sales/reps', icon: Briefcase, permission: 'staff', badgeColor: 'purple', plugin: 'sales_team' },
       { label: 'Configuración', href: '/settings', icon: Settings, permission: 'settings', badgeColor: 'stone' },
     ],
   },
@@ -93,6 +98,7 @@ export function AdminMobileNav({
 }: AdminMobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
   const pendingOrders = usePendingOrdersBadge(slug);
+  const lowStockCount = useLowStockCountBadge(slug);
   const pathname = usePathname() || '';
   const cleanPath =
     pathname.endsWith('/') && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
@@ -181,6 +187,7 @@ export function AdminMobileNav({
                           item.href === '' ? cleanPath === basePath : cleanPath.startsWith(itemPath);
                         const Icon = item.icon;
                         const showPendingBadge = item.permission === 'orders' && pendingOrders > 0;
+                        const showLowStockBadge = item.permission === 'inventory' && item.href === '/inventory' && lowStockCount > 0;
 
                         return (
                           <Link
@@ -202,6 +209,11 @@ export function AdminMobileNav({
                               {showPendingBadge && (
                                 <span className="inline-flex items-center justify-center min-w-[1.25rem] h-4.5 px-1.5 rounded-full bg-rose-600 text-white text-[10px] font-black leading-none">
                                   {pendingOrders > 99 ? '99+' : pendingOrders}
+                                </span>
+                              )}
+                              {showLowStockBadge && (
+                                <span className="inline-flex items-center justify-center min-w-[1.25rem] h-4.5 px-1.5 rounded-full bg-amber-500 text-white text-[10px] font-black leading-none">
+                                  {lowStockCount > 99 ? '99+' : lowStockCount}
                                 </span>
                               )}
                             </div>

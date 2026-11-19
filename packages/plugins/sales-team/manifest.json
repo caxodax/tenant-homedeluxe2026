@@ -1,0 +1,43 @@
+{
+  "id": "sales_team",
+  "name": "Vendedores y Comisiones",
+  "category": "vertical",
+  "version": "1.0.0",
+  "description": "Fuerza de ventas, cotizaciones profesionales PDF para WhatsApp, conversión directa a pedidos y liquidación de comisiones.",
+  "is_core_addon": true,
+  "pricing_tier": "STARTER",
+  "price_usd_monthly": 0.00,
+  "dependencies": [],
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "quote_default_validity_days": {
+        "type": "number",
+        "default": 7
+      },
+      "additional_services_product_slug": {
+        "type": "string",
+        "default": "servicios-adicionales-st"
+      },
+      "commission_enabled": {
+        "type": "boolean",
+        "default": true
+      }
+    }
+  },
+  "hooks": {
+    "staff_roles": ["SALES_REP"],
+    "nav_items": [
+      {
+        "title": "Vendedores",
+        "href": "/admin/sales/reps",
+        "icon": "Users"
+      },
+      {
+        "title": "Cotizaciones",
+        "href": "/admin/sales/quotes",
+        "icon": "FileText"
+      }
+    ]
+  }
+}

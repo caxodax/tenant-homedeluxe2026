@@ -119,6 +119,38 @@ export default async function TenantAdminDashboard({ params }: { params: Promise
           </p>
         </div>
       </div>
+
+      {/* Banner de Notificación de Stock Mínimo en Dashboard (Impeccable Ultra) */}
+      {metrics.lowStock > 0 && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="flex items-start sm:items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-amber-500 text-black flex items-center justify-center shrink-0 shadow-sm font-black">
+              <AlertTriangle className="w-5 h-5 stroke-[2.5]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-mono font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-amber-600 text-white shadow-2xs">
+                  Atención Inmediata
+                </span>
+                <span className="text-xs font-bold text-amber-900 dark:text-amber-200">
+                  {metrics.lowStock} {metrics.lowStock === 1 ? 'producto en riesgo de agotarse' : 'productos en riesgo de agotarse'}
+                </span>
+              </div>
+              <p className="text-xs text-stone-600 dark:text-zinc-300 mt-1">
+                Las existencias actuales alcanzaron o cayeron por debajo del stock mínimo fijado. Repón inventario para no detener ventas en caja ni en vitrina.
+              </p>
+            </div>
+          </div>
+
+          <Link
+            href={`/t/${slug}/admin/inventory`}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-black transition shadow-xs shrink-0 cursor-pointer self-start sm:self-center"
+          >
+            <span>Ver Inventario Crítico</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </Link>
+        </div>
+      )}
       
       {/* 4 KPIs con Icon Badges suaves (Imagen 2) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

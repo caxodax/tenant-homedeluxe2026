@@ -23,6 +23,7 @@ interface BulkProductRow {
   price_primary?: number;
   price_usd?: number;
   current_stock?: number;
+  min_stock_alert?: number;
   sku?: string;
   barcode?: string;
   is_tax_exempt?: boolean;
@@ -63,8 +64,9 @@ export async function POST(
         const rawName = (item.name || '').trim();
         if (!rawName) continue;
 
-        const price = Math.max(0, Number(item.price_primary ?? item.price_usd) || 0);
+        const price = Math.max(0.01, Number(item.price_primary ?? item.price_usd) || 0.01);
         const stock = Math.max(0, Number(item.current_stock) || 0);
+        const minAlert = Math.max(0, Number(item.min_stock_alert ?? 5) || 5);
         const sku = item.sku ? item.sku.trim() : null;
         const barcode = item.barcode ? item.barcode.trim() : null;
         const isTaxExempt = Boolean(item.is_tax_exempt);
@@ -108,11 +110,11 @@ export async function POST(
         // Insertar producto
         const insertRes = await client.query(
           `INSERT INTO products (
-             name, slug, category_id, price_primary, current_stock, 
+             name, slug, category_id, price_primary, current_stock, min_stock_alert,
              sku, barcode, is_tax_exempt, description, is_active
-           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)
            RETURNING id`,
-          [rawName, finalSlug, categoryId, price, stock, sku, barcode, isTaxExempt, description]
+          [rawName, finalSlug, categoryId, price, stock, minAlert, sku, barcode, isTaxExempt, description]
         );
 
         const newProdId = insertRes.rows[0].id;
@@ -121,9 +123,9 @@ export async function POST(
         if (storeId) {
           await client.query(
             `INSERT INTO inventory (product_id, store_id, quantity, min_quantity)
-             VALUES ($1, $2, $3, 5)
-             ON CONFLICT (product_id, store_id) DO UPDATE SET quantity = EXCLUDED.quantity`,
-            [newProdId, storeId, stock]
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (product_id, store_id) DO UPDATE SET quantity = EXCLUDED.quantity, min_quantity = EXCLUDED.min_quantity`,
+            [newProdId, storeId, stock, minAlert]
           );
         }
 

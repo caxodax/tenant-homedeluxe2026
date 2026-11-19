@@ -11,6 +11,7 @@ import { LogoutButton } from '@/components/auth/logout-button';
 import { hasPermission } from '@/lib/auth/rbac';
 import { TENANT_DEFAULTS } from '@/lib/tenant/defaults';
 import { NewOrderNotification } from '@/components/admin/new-order-notification';
+import { LowStockNotification } from '@/components/admin/low-stock-notification';
 
 export async function generateMetadata({
   params,
@@ -173,8 +174,10 @@ export default async function TenantAdminLayout({
             </span>
           </div>
 
-          {/* Notificaciones Realtime + Controles Desktop y Móvil */}
+          {/* Notificaciones Realtime + Alertas de Stock + Controles Desktop y Móvil */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <LowStockNotification slug={slug} />
+
             {hasPermission(staff.role, 'orders') && (
               <NewOrderNotification slug={slug} />
             )}

@@ -354,9 +354,17 @@ export function CheckoutForm({
           : undefined,
         items: items.map((i) => ({
           product_id: i.product_id,
-          product_name: i.product_name,
+          product_name: i.variant_name ? `${i.product_name} (${i.variant_name})` : i.product_name,
           quantity: i.quantity,
           unit_price_usd: i.price_usd,
+          variant_id: i.variant_id,
+          metadata: {
+            variant_id: i.variant_id,
+            variant_name: i.variant_name,
+            modifiers: i.selected_modifiers,
+            prep_notes: i.prep_notes,
+            is_custom_quote: Boolean(i.selected_modifiers && i.selected_modifiers.length > 0),
+          },
         })),
       });
 

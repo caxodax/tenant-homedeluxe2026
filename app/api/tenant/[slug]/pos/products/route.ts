@@ -26,12 +26,40 @@ export async function GET(
     const activePlugins = pluginsRes.rows.map((r: { plugin_id: string }) => r.plugin_id);
 
     const data = await withTenantDb(db_schema_name, null, async (client) => {
+      const isFoodServiceActive = activePlugins.includes('food_service');
+      const modifierGroupsSql = isFoodServiceActive
+        ? `, COALESCE(
+             (SELECT jsonb_agg(jsonb_build_object(
+               'group_id', mg.id,
+               'group_name', mg.name,
+               'min_select', mg.min_select,
+               'max_select', mg.max_select,
+               'required', mg.required,
+               'options', (
+                 SELECT jsonb_agg(jsonb_build_object(
+                   'product_id', opt.id,
+                   'name', opt.name,
+                   'price_primary', opt.price_primary
+                 ))
+                 FROM fs_group_modifiers gm
+                 JOIN products opt ON opt.id = gm.product_id
+                 WHERE gm.group_id = mg.id AND opt.is_active = true
+               )
+             ))
+             FROM fs_product_groups pg
+             JOIN fs_modifier_groups mg ON mg.id = pg.group_id
+             WHERE pg.product_id = p.id AND mg.is_active = true),
+             '[]'::jsonb
+           ) as modifier_groups`
+        : `, '[]'::jsonb as modifier_groups`;
+
       const pRes = await client.query(`
         SELECT 
           p.id, 
           p.name, 
           p.sku, 
           p.barcode,
+          p.description,
           p.price_primary, 
           p.price_primary as price_usd, 
           p.current_stock, 
@@ -39,7 +67,18 @@ export async function GET(
           p.category_id,
           c.name as category_name,
           p.image_url,
-          p.is_tax_exempt
+          p.is_tax_exempt,
+          COALESCE(
+            (SELECT jsonb_agg(jsonb_build_object(
+              'id', pv.id,
+              'name', pv.name,
+              'sku', pv.sku,
+              'attributes', pv.attributes,
+              'price_adjustment_primary', pv.price_adjustment_primary
+            )) FROM product_variants pv WHERE pv.product_id = p.id AND pv.is_active = true),
+            '[]'::jsonb
+          ) as variants
+          ${modifierGroupsSql}
         FROM products p
         LEFT JOIN categories c ON c.id = p.category_id
         WHERE p.is_active = true AND p.deleted_at IS NULL
@@ -90,6 +129,7 @@ export async function GET(
         seats: number;
       }> = [];
       let daily86Ids: string[] = [];
+      let salesReps: Array<{ id: string; full_name: string }> = [];
 
       if (activePlugins.includes('delivery_fleet')) {
         const dzRes = await client.query(`
@@ -99,6 +139,16 @@ export async function GET(
           ORDER BY sort_order ASC, name ASC
         `);
         deliveryZones = dzRes.rows;
+      }
+
+      if (activePlugins.includes('sales_team') || activePlugins.includes('sales_commission')) {
+        const repsRes = await client.query(`
+          SELECT id, full_name
+          FROM staff_profiles
+          WHERE role = 'SALES_REP' AND is_active = true
+          ORDER BY full_name ASC
+        `);
+        salesReps = repsRes.rows;
       }
 
       if (activePlugins.includes('food_service')) {
@@ -130,6 +180,8 @@ export async function GET(
         is_food_service_active: activePlugins.includes('food_service'),
         food_service_tables: fsTables,
         daily_86_ids: daily86Ids,
+        sales_reps: salesReps,
+        is_sales_team_active: activePlugins.includes('sales_team') || activePlugins.includes('sales_commission'),
       };
     });
 
@@ -142,6 +194,8 @@ export async function GET(
       is_food_service_active: data.is_food_service_active,
       food_service_tables: data.food_service_tables,
       daily_86_ids: data.daily_86_ids,
+      sales_reps: data.sales_reps,
+      is_sales_team_active: data.is_sales_team_active,
       store_id: data.store_id,
       business_name: data.settings?.business_name || name || 'Comercio',
       logo_url: data.settings?.logo_url || null,

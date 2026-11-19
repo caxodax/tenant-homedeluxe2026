@@ -32,4 +32,19 @@
     background-color: var(--color-canvas-dark);
     color: #f4f4f5;
   }
+
+  /* Fix Sonner Toast Close Button: Siempre visible en móviles y desktop sin requerir hover */
+  [data-sonner-toast] [data-close-button] {
+    opacity: 1 !important;
+    background: rgba(0, 0, 0, 0.08) !important;
+    color: currentColor !important;
+    border-radius: 9999px !important;
+    transition: transform 0.15s ease, background-color 0.15s ease !important;
+  }
+  .dark [data-sonner-toast] [data-close-button] {
+    background: rgba(255, 255, 255, 0.18) !important;
+  }
+  [data-sonner-toast] [data-close-button]:hover {
+    transform: scale(1.1) !important;
+  }
 }

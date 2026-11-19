@@ -12,7 +12,7 @@ const createStaffSchema = z.object({
   full_name: z.string().trim().min(2, 'Nombre requerido').max(120),
   email: z.string().trim().email('Correo electrónico inválido').toLowerCase(),
   phone: z.string().trim().max(30).optional().nullable(),
-  role: z.enum(['OWNER', 'MANAGER', 'CASHIER', 'INVENTORY', 'DELIVERY']),
+  role: z.enum(['OWNER', 'MANAGER', 'CASHIER', 'INVENTORY', 'DELIVERY', 'WAITER', 'KITCHEN', 'SALES_REP']),
   password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres').max(100),
 });
 
@@ -20,7 +20,7 @@ const updateStaffSchema = z.object({
   id: z.string().uuid('ID de usuario inválido'),
   full_name: z.string().trim().min(2).max(120).optional(),
   phone: z.string().trim().max(30).optional().nullable(),
-  role: z.enum(['OWNER', 'MANAGER', 'CASHIER', 'INVENTORY', 'DELIVERY']).optional(),
+  role: z.enum(['OWNER', 'MANAGER', 'CASHIER', 'INVENTORY', 'DELIVERY', 'WAITER', 'KITCHEN', 'SALES_REP']).optional(),
   is_active: z.boolean().optional(),
   password: z.string().min(6).max(100).optional(),
 });
