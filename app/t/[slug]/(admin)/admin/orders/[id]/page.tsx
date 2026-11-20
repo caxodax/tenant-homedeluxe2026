@@ -30,6 +30,7 @@ import {
   X,
   Bike,
   UserCheck,
+  PackageCheck,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -230,6 +231,9 @@ export default function AdminOrderDetailPage() {
   const [movements, setMovements] = useState<InventoryMovementRow[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<TenantPaymentMethod[]>([]);
 
+  // Operational View vs Forensic Audit Tab
+  const [activeTab, setActiveTab] = useState<'operation' | 'audit'>('operation');
+
   // Status Update state
   const [selectedStatus, setSelectedStatus] = useState('');
   const [statusNote, setStatusNote] = useState('');
@@ -412,6 +416,7 @@ export default function AdminOrderDetailPage() {
   }, [slug, id, applyPayload]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadOrder();
   }, [loadOrder]);
 
@@ -717,11 +722,270 @@ export default function AdminOrderDetailPage() {
         </div>
       </div>
 
-      {/* Main Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left 2 Columns */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Card 1: Items & Total Breakdown */}
+            {/* Navigation Tabs (Operación vs Auditoría Gerencial) */}
+      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-zinc-800 pb-3 print:hidden">
+        <button
+          type="button"
+          onClick={() => setActiveTab('operation')}
+          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all cursor-pointer ${
+            activeTab === 'operation'
+              ? 'bg-[var(--tenant-primary)] text-[var(--tenant-primary-fg)] shadow-sm'
+              : 'bg-white dark:bg-zinc-900 text-slate-700 dark:text-zinc-300 hover:text-slate-950 dark:hover:text-white border border-slate-300 dark:border-zinc-700'
+          }`}
+        >
+          <PackageCheck className="w-4 h-4" />
+          <span>Operación & Despacho</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('audit')}
+          className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold transition-all cursor-pointer ${
+            activeTab === 'audit'
+              ? 'bg-[var(--tenant-primary)] text-[var(--tenant-primary-fg)] shadow-sm'
+              : 'bg-white dark:bg-zinc-900 text-slate-700 dark:text-zinc-300 hover:text-slate-950 dark:hover:text-white border border-slate-300 dark:border-zinc-700'
+          }`}
+        >
+          <ShieldCheck className="w-4 h-4" />
+          <span>Auditoría & Kárdex</span>
+          {(auditLogs.length > 0 || movements.length > 0) && (
+            <span
+              className={`text-xs px-2 py-0.5 rounded-full font-mono font-black ${
+                activeTab === 'audit'
+                  ? 'bg-black/25 text-white'
+                  : 'bg-slate-100 dark:bg-zinc-800 text-slate-800 dark:text-zinc-200'
+              }`}
+            >
+              {auditLogs.length + movements.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Tab 1: Operación & Despacho */}
+      {activeTab === 'operation' && (
+        <div className="flex flex-col lg:grid lg:grid-cols-3 gap-6">
+          {/* Right Sidebar */}
+        <div className="order-1 lg:order-2 lg:col-span-1 space-y-6 print:hidden">
+          {/* Status Workflow Control */}
+          <div className="bg-white dark:bg-[#121214] border border-slate-200 dark:border-zinc-800 rounded-2xl p-5 space-y-3.5 shadow-sm">
+            <h2 className="text-base font-extrabold text-slate-950 dark:text-white">
+              Gestión del Estado
+            </h2>
+
+            <div>
+              <label className="text-xs font-bold text-slate-700 dark:text-zinc-300 block mb-1">
+                Estado del Pedido
+              </label>
+              <select
+                value={selectedStatus}
+                onChange={(e) => setSelectedStatus(e.target.value)}
+                className="w-full h-10 rounded-lg border border-slate-300 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900 px-3 text-sm font-semibold text-slate-950 dark:text-white"
+              >
+                {STATUS_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs font-bold text-slate-700 dark:text-zinc-300 block mb-1">
+                Nota de auditoría (opcional)
+              </label>
+              <Input
+                value={statusNote}
+                onChange={(e) => setStatusNote(e.target.value)}
+                placeholder="Ej: Empacado en caja #2"
+                className="text-sm bg-slate-50 dark:bg-zinc-900"
+              />
+            </div>
+
+            <Button
+              onClick={handleUpdateStatus}
+              disabled={mutating || selectedStatus === order.status}
+              style={{
+                backgroundColor: 'var(--tenant-primary)',
+                color: 'var(--tenant-primary-fg)',
+              }}
+              className="w-full font-bold"
+            >
+              Guardar Cambio de Estado
+            </Button>
+          </div>
+
+          {/* Customer Info */}
+          <div className="bg-white dark:bg-[#121214] border border-slate-200 dark:border-zinc-800 rounded-2xl p-5 space-y-3.5 shadow-sm">
+            <h2 className="text-base font-extrabold text-slate-950 dark:text-white flex items-center gap-2">
+              <User className="w-4 h-4 text-[var(--tenant-primary)]" />
+              Cliente y Entrega
+            </h2>
+
+            <div className="space-y-2.5 text-sm">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-zinc-400">
+                  Cliente
+                </p>
+                <p className="font-bold text-slate-950 dark:text-white">
+                  {order.customer_name}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-zinc-400">
+                  Teléfono / WhatsApp
+                </p>
+                <div className="flex items-center justify-between gap-2 mt-0.5">
+                  <a
+                    href={`tel:${cleanPhone}`}
+                    className="font-mono font-semibold text-slate-900 dark:text-zinc-200 flex items-center gap-1.5 hover:text-[var(--tenant-primary)] transition-colors"
+                  >
+                    <Phone className="w-3.5 h-3.5 text-slate-500" />
+                    {order.customer_phone}
+                  </a>
+                  {waHref && (
+                    <a
+                      href={waHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs font-bold text-[#25D366] hover:underline"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      Chat
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-zinc-400">
+                  Modalidad
+                </p>
+                <p className="font-semibold text-slate-900 dark:text-zinc-200 flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-slate-500" />
+                  {order.delivery_type === 'PICKUP'
+                    ? 'Retiro en tienda (Pick-up)'
+                    : order.delivery_type === 'DELIVERY'
+                      ? 'Envío a domicilio'
+                      : order.delivery_type === 'POS'
+                        ? 'Venta en Mostrador POS'
+                        : order.delivery_type}
+                </p>
+              </div>
+
+              {order.delivery_address && (
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-zinc-400">
+                    Dirección de Entrega
+                  </p>
+                  <p className="text-slate-800 dark:text-zinc-300">
+                    {order.delivery_address}
+                  </p>
+                </div>
+              )}
+
+              {order.notes && (
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-zinc-400 mb-0.5">
+                    Notas del pedido
+                  </p>
+                  <p className="text-xs text-slate-800 dark:text-zinc-200 whitespace-pre-wrap">
+                    {order.notes}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {waHref && (
+              <a
+                href={waHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full h-10 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors"
+              >
+                <MessageSquare className="w-4 h-4" />
+                Escribir por WhatsApp
+              </a>
+            )}
+          </div>
+
+          {/* Card Despacho y Asignación de Repartidor */}
+          {order.delivery_type === 'DELIVERY' && (
+            <div className="bg-white dark:bg-[#121214] border border-emerald-200 dark:border-emerald-950/60 rounded-2xl p-5 space-y-4 shadow-sm overflow-hidden">
+              <div className="flex items-start justify-between gap-2">
+                <h2 className="text-base font-extrabold text-slate-950 dark:text-white flex items-center gap-2 min-w-0">
+                  <Bike className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span className="truncate">Despacho & Repartidor</span>
+                </h2>
+                {dispatch?.status && (
+                  <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 shrink-0">
+                    {dispatch.status}
+                  </span>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                {dispatch?.driver_name && (
+                  <div className="p-3 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-900/40 text-xs space-y-1">
+                    <p className="font-bold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5" />
+                      Repartidor: <strong>{dispatch.driver_name}</strong>
+                    </p>
+                    <p className="text-emerald-700 dark:text-emerald-400 font-mono">
+                      {dispatch.driver_phone} {dispatch.driver_vehicle ? `· ${dispatch.driver_vehicle}` : ''} {dispatch.driver_plate ? `(${dispatch.driver_plate})` : ''}
+                    </p>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-700 dark:text-zinc-300 block">
+                    Seleccionar Repartidor de la Flota
+                  </label>
+                  <div className="space-y-2">
+                    <select
+                      value={selectedDriverId}
+                      onChange={(e) => setSelectedDriverId(e.target.value)}
+                      className="w-full h-10 rounded-xl border border-slate-300 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900 px-3 text-xs font-semibold text-slate-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 truncate"
+                    >
+                      <option value="">-- Seleccionar de la flota --</option>
+                      {drivers.map((d) => (
+                        <option key={d.id} value={d.id}>
+                          {d.full_name} ({d.vehicle_type || 'Moto'} - {d.phone})
+                        </option>
+                      ))}
+                    </select>
+
+                    <Button
+                      type="button"
+                      disabled={assigningDriver || !selectedDriverId}
+                      onClick={handleAssignDriver}
+                      className="w-full h-10 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50 transition-all"
+                    >
+                      <UserCheck className="w-4 h-4" />
+                      <span>{assigningDriver ? 'Asignando chofer...' : dispatch?.driver_id ? 'Cambiar Repartidor' : 'Asignar Repartidor'}</span>
+                    </Button>
+                  </div>
+                </div>
+
+                {driverWaHref && (
+                  <a
+                    href={driverWaHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full h-10 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs flex items-center justify-center gap-2 transition-colors shadow-xs"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                    Enviar Comanda por WhatsApp al Chofer
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+          <div className="order-2 lg:order-1 lg:col-span-2 space-y-6">
+            {/* Card 1: Items & Total Breakdown */}
           <div className="bg-white dark:bg-[#121214] border border-slate-200 dark:border-zinc-800 rounded-2xl p-5 space-y-4 shadow-sm">
             <div className="flex items-center justify-between">
               <h2 className="text-base font-extrabold text-slate-950 dark:text-white flex items-center gap-2">
@@ -1154,6 +1418,57 @@ export default function AdminOrderDetailPage() {
               </form>
             )}
           </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tab 2: Auditoría & Kárdex Forense */}
+      {activeTab === 'audit' && (
+        <div className="space-y-6">
+          <div className="bg-gradient-to-r from-slate-950 via-slate-900 to-zinc-900 text-white rounded-2xl p-5 border border-zinc-800 shadow-sm space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-5 h-5 text-[var(--tenant-primary)]" />
+                  <h2 className="text-base sm:text-lg font-black tracking-tight">
+                    Trazabilidad Inmutable & Kárdex Forense
+                  </h2>
+                </div>
+                <p className="text-xs sm:text-sm text-zinc-300">
+                  Registro cronológico auditable de autorías, transacciones bancarias, sellado SHA-256 y movimientos de inventario.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-xs font-mono font-bold px-3 py-1 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  Auditoría Inmutable PostgreSQL
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 border-t border-zinc-800 text-xs">
+              <div className="bg-zinc-900/80 rounded-xl p-3 border border-zinc-800">
+                <span className="text-zinc-400 block mb-0.5 font-medium">Eventos de Auditoría</span>
+                <span className="font-mono font-black text-lg text-white">{auditLogs.length}</span>
+              </div>
+              <div className="bg-zinc-900/80 rounded-xl p-3 border border-zinc-800">
+                <span className="text-zinc-400 block mb-0.5 font-medium">Movimientos de Stock</span>
+                <span className="font-mono font-black text-lg text-white">{movements.length}</span>
+              </div>
+              <div className="bg-zinc-900/80 rounded-xl p-3 border border-zinc-800">
+                <span className="text-zinc-400 block mb-0.5 font-medium">Sellado Hash SHA-256</span>
+                <span className="font-mono font-bold text-xs text-emerald-400 truncate block mt-1">
+                  {primaryPayment?.proof_file_hash ? 'Sellado Criptográfico ✓' : 'Sin Comprobante'}
+                </span>
+              </div>
+              <div className="bg-zinc-900/80 rounded-xl p-3 border border-zinc-800">
+                <span className="text-zinc-400 block mb-0.5 font-medium">Última Modificación</span>
+                <span className="font-mono text-xs text-zinc-300 truncate block mt-1">
+                  {formatDateTime(order.updated_at || order.created_at)}
+                </span>
+              </div>
+            </div>
+          </div>
 
           {/* Card 3: Audit Logs Timeline */}
           <div className="bg-white dark:bg-[#121214] border border-slate-200 dark:border-zinc-800 rounded-2xl p-5 space-y-4 shadow-sm">
@@ -1261,210 +1576,7 @@ export default function AdminOrderDetailPage() {
             )}
           </div>
         </div>
-
-        {/* Right Sidebar */}
-        <div className="space-y-6 print:hidden">
-          {/* Status Workflow Control */}
-          <div className="bg-white dark:bg-[#121214] border border-slate-200 dark:border-zinc-800 rounded-2xl p-5 space-y-3.5 shadow-sm">
-            <h2 className="text-base font-extrabold text-slate-950 dark:text-white">
-              Gestión del Estado
-            </h2>
-
-            <div>
-              <label className="text-xs font-bold text-slate-700 dark:text-zinc-300 block mb-1">
-                Estado del Pedido
-              </label>
-              <select
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
-                className="w-full h-10 rounded-lg border border-slate-300 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900 px-3 text-sm font-semibold text-slate-950 dark:text-white"
-              >
-                {STATUS_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-xs font-bold text-slate-700 dark:text-zinc-300 block mb-1">
-                Nota de auditoría (opcional)
-              </label>
-              <Input
-                value={statusNote}
-                onChange={(e) => setStatusNote(e.target.value)}
-                placeholder="Ej: Empacado en caja #2"
-                className="text-sm bg-slate-50 dark:bg-zinc-900"
-              />
-            </div>
-
-            <Button
-              onClick={handleUpdateStatus}
-              disabled={mutating || selectedStatus === order.status}
-              style={{
-                backgroundColor: 'var(--tenant-primary)',
-                color: 'var(--tenant-primary-fg)',
-              }}
-              className="w-full font-bold"
-            >
-              Guardar Cambio de Estado
-            </Button>
-          </div>
-
-          {/* Customer Info */}
-          <div className="bg-white dark:bg-[#121214] border border-slate-200 dark:border-zinc-800 rounded-2xl p-5 space-y-3.5 shadow-sm">
-            <h2 className="text-base font-extrabold text-slate-950 dark:text-white flex items-center gap-2">
-              <User className="w-4 h-4 text-[var(--tenant-primary)]" />
-              Cliente y Entrega
-            </h2>
-
-            <div className="space-y-2.5 text-sm">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-zinc-400">
-                  Cliente
-                </p>
-                <p className="font-bold text-slate-950 dark:text-white">
-                  {order.customer_name}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-zinc-400">
-                  Teléfono / WhatsApp
-                </p>
-                <p className="font-mono font-semibold text-slate-900 dark:text-zinc-200 flex items-center gap-1.5">
-                  <Phone className="w-3.5 h-3.5 text-slate-500" />
-                  {order.customer_phone}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-zinc-400">
-                  Modalidad
-                </p>
-                <p className="font-semibold text-slate-900 dark:text-zinc-200 flex items-center gap-1.5">
-                  <MapPin className="w-3.5 h-3.5 text-slate-500" />
-                  {order.delivery_type === 'PICKUP'
-                    ? 'Retiro en tienda (Pick-up)'
-                    : order.delivery_type === 'DELIVERY'
-                      ? 'Envío a domicilio'
-                      : order.delivery_type === 'POS'
-                        ? 'Venta en Mostrador POS'
-                        : order.delivery_type}
-                </p>
-              </div>
-
-              {order.delivery_address && (
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-zinc-400">
-                    Dirección de Entrega
-                  </p>
-                  <p className="text-slate-800 dark:text-zinc-300">
-                    {order.delivery_address}
-                  </p>
-                </div>
-              )}
-
-              {order.notes && (
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800">
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-zinc-400 mb-0.5">
-                    Notas del pedido
-                  </p>
-                  <p className="text-xs text-slate-800 dark:text-zinc-200 whitespace-pre-wrap">
-                    {order.notes}
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {waHref && (
-              <a
-                href={waHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full h-10 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-sm flex items-center justify-center gap-2 transition-colors"
-              >
-                <MessageSquare className="w-4 h-4" />
-                Escribir por WhatsApp
-              </a>
-            )}
-          </div>
-
-          {/* Card Despacho y Asignación de Repartidor */}
-          {order.delivery_type === 'DELIVERY' && (
-            <div className="bg-white dark:bg-[#121214] border border-emerald-200 dark:border-emerald-950/60 rounded-2xl p-5 space-y-4 shadow-sm overflow-hidden">
-              <div className="flex items-start justify-between gap-2">
-                <h2 className="text-base font-extrabold text-slate-950 dark:text-white flex items-center gap-2 min-w-0">
-                  <Bike className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                  <span className="truncate">Despacho & Repartidor</span>
-                </h2>
-                {dispatch?.status && (
-                  <span className="text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 shrink-0">
-                    {dispatch.status}
-                  </span>
-                )}
-              </div>
-
-              <div className="space-y-3">
-                {dispatch?.driver_name && (
-                  <div className="p-3 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-900/40 text-xs space-y-1">
-                    <p className="font-bold text-emerald-900 dark:text-emerald-200 flex items-center gap-1.5">
-                      <User className="w-3.5 h-3.5" />
-                      Repartidor: <strong>{dispatch.driver_name}</strong>
-                    </p>
-                    <p className="text-emerald-700 dark:text-emerald-400 font-mono">
-                      {dispatch.driver_phone} {dispatch.driver_vehicle ? `· ${dispatch.driver_vehicle}` : ''} {dispatch.driver_plate ? `(${dispatch.driver_plate})` : ''}
-                    </p>
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-700 dark:text-zinc-300 block">
-                    Seleccionar Repartidor de la Flota
-                  </label>
-                  <div className="space-y-2">
-                    <select
-                      value={selectedDriverId}
-                      onChange={(e) => setSelectedDriverId(e.target.value)}
-                      className="w-full h-10 rounded-xl border border-slate-300 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-900 px-3 text-xs font-semibold text-slate-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20 truncate"
-                    >
-                      <option value="">-- Seleccionar de la flota --</option>
-                      {drivers.map((d) => (
-                        <option key={d.id} value={d.id}>
-                          {d.full_name} ({d.vehicle_type || 'Moto'} - {d.phone})
-                        </option>
-                      ))}
-                    </select>
-
-                    <Button
-                      type="button"
-                      disabled={assigningDriver || !selectedDriverId}
-                      onClick={handleAssignDriver}
-                      className="w-full h-10 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50 transition-all"
-                    >
-                      <UserCheck className="w-4 h-4" />
-                      <span>{assigningDriver ? 'Asignando chofer...' : dispatch?.driver_id ? 'Cambiar Repartidor' : 'Asignar Repartidor'}</span>
-                    </Button>
-                  </div>
-                </div>
-
-                {driverWaHref && (
-                  <a
-                    href={driverWaHref}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full h-10 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs flex items-center justify-center gap-2 transition-colors shadow-xs"
-                  >
-                    <MessageSquare className="w-4 h-4" />
-                    Enviar Comanda por WhatsApp al Chofer
-                  </a>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      )}
 
       {/* Proof Image Lightbox Modal */}
       {previewImageUrl && (
