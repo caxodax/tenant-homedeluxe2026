@@ -146,6 +146,7 @@ export async function GET(
         .resize(innerSize, innerSize, {
           fit: 'inside',
           withoutEnlargement: false,
+          kernel: sharp.kernel.lanczos3,
         })
         .toBuffer();
 
@@ -158,7 +159,7 @@ export async function GET(
         },
       })
         .composite([{ input: resizedLogo, gravity: 'center' }])
-        .png({ quality: 90, compressionLevel: 9 })
+        .png({ quality: 95, compressionLevel: 9, adaptiveFiltering: true })
         .toBuffer();
 
       return new NextResponse(finalPng, {

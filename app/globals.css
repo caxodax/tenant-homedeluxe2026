@@ -47,4 +47,41 @@
   [data-sonner-toast] [data-close-button]:hover {
     transform: scale(1.1) !important;
   }
+
+  /* Micro-animaciones PWA Splash Heartbeat (100% aceleradas por Hardware/GPU) */
+  @keyframes pwa-heartbeat {
+    0%, 100% {
+      transform: scale(1);
+      opacity: 0.96;
+    }
+    50% {
+      transform: scale(1.09);
+      opacity: 1;
+    }
+  }
+
+  @keyframes pwa-pulse-ring {
+    0% {
+      transform: scale(0.92);
+      opacity: 0.45;
+    }
+    50% {
+      transform: scale(1.22);
+      opacity: 0.15;
+    }
+    100% {
+      transform: scale(0.92);
+      opacity: 0.45;
+    }
+  }
+
+  .animate-pwa-heartbeat {
+    animation: pwa-heartbeat 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    will-change: transform, opacity;
+  }
+
+  .animate-pwa-pulse-ring {
+    animation: pwa-pulse-ring 2.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    will-change: transform, opacity;
+  }
 }

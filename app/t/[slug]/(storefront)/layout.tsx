@@ -6,6 +6,7 @@ import { StorefrontHeader } from './components/storefront-header';
 import { ContingencyBanner } from './components/contingency-banner';
 import { TenantThemeInjector } from '@/components/tenant-theme-injector';
 import { FavoritesProvider } from '@/lib/favorites/favorites-store';
+import { PwaSplashScreen } from '@/components/storefront/pwa-splash-screen';
 import { Store, MapPin, Phone, ShieldCheck } from 'lucide-react';
 
 export async function generateMetadata({
@@ -66,6 +67,13 @@ export default async function StorefrontLayout({
         accentColor={settings?.accent_color}
       />
       <div className="min-h-screen flex flex-col bg-stone-50/60 dark:bg-[#09090b] text-stone-900 dark:text-zinc-100 font-sans w-full max-w-full overflow-x-hidden">
+        {/* Pantalla Splash PWA con Animación Heartbeat al Abrir */}
+        <PwaSplashScreen
+          businessName={settings.business_name || tenant.name}
+          logoUrl={settings.logo_url}
+          primaryColor={settings.primary_color}
+        />
+
         {/* Banner de contingencia offline inteligente (inicializado desde SSR) */}
         <ContingencyBanner slug={slug} initialInContingency={inContingency} />
 
