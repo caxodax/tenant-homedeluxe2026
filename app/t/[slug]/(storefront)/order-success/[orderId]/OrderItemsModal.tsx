@@ -15,6 +15,9 @@ interface OrderItemsModalProps {
   orderNumber: string;
   items: OrderItem[];
   totalUsd: number;
+  subtotalUsd?: number | null;
+  shippingUsd?: number | null;
+  deliveryType?: string | null;
   totalSecondary?: number | null;
   exchangeRate?: number | null;
 }
@@ -23,6 +26,9 @@ export function OrderItemsModal({
   orderNumber,
   items,
   totalUsd,
+  subtotalUsd,
+  shippingUsd,
+  deliveryType,
   totalSecondary,
   exchangeRate,
 }: OrderItemsModalProps) {
@@ -32,6 +38,15 @@ export function OrderItemsModal({
   const secondaryTotal = totalSecondary && totalSecondary > 0
     ? totalSecondary
     : rate ? totalUsd * rate : null;
+
+  const subtotal = typeof subtotalUsd === 'number' && subtotalUsd > 0
+    ? subtotalUsd
+    : items.reduce((acc, it) => acc + (parseFloat(it.total_price_usd) || 0), 0);
+  const subtotalBs = rate ? subtotal * rate : null;
+
+  const shipping = typeof shippingUsd === 'number' ? shippingUsd : 0;
+  const shippingBs = rate && shipping > 0 ? shipping * rate : null;
+  const isDelivery = deliveryType === 'DELIVERY';
 
   return (
     <>
@@ -113,10 +128,47 @@ export function OrderItemsModal({
               })}
             </div>
 
-            {/* Modal Footer: Totales Bimonetarios */}
-            <div className="p-5 border-t border-slate-200 dark:border-zinc-800 bg-slate-50/80 dark:bg-zinc-900/60 space-y-1.5">
-              <div className="flex justify-between items-baseline text-sm">
-                <span className="font-bold text-slate-700 dark:text-zinc-300">Total Pedido:</span>
+            {/* Modal Footer: Desglose y Totales Bimonetarios */}
+            <div className="p-5 border-t border-slate-200 dark:border-zinc-800 bg-slate-50/80 dark:bg-zinc-900/60 space-y-2">
+              {/* Subtotal */}
+              <div className="flex justify-between items-center text-xs text-slate-600 dark:text-zinc-400">
+                <span>Subtotal ({items.length} {items.length === 1 ? 'producto' : 'productos'}):</span>
+                <div className="text-right font-mono font-medium">
+                  <span className="text-slate-900 dark:text-white font-bold">${subtotal.toFixed(2)} USD</span>
+                  {subtotalBs && (
+                    <span className="text-[11px] text-slate-500 ml-1.5">
+                      (Bs. {subtotalBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Flete o Retiro */}
+              <div className="flex justify-between items-center text-xs text-slate-600 dark:text-zinc-400">
+                <span>{isDelivery ? 'Flete de Envío (Delivery):' : 'Retiro en Mostrador:'}</span>
+                <div className="text-right font-mono font-medium">
+                  {isDelivery ? (
+                    shipping > 0 ? (
+                      <>
+                        <span className="text-emerald-700 dark:text-emerald-400 font-bold">+${shipping.toFixed(2)} USD</span>
+                        {shippingBs && (
+                          <span className="text-[11px] text-emerald-700/80 dark:text-emerald-400/80 ml-1.5 font-semibold">
+                            (Bs. {shippingBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-emerald-700 dark:text-emerald-400 font-bold">Gratis</span>
+                    )
+                  ) : (
+                    <span className="text-lime-700 dark:text-lime-400 font-bold">Gratis</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Total Final Destacado */}
+              <div className="pt-2 border-t border-slate-200/80 dark:border-zinc-800 flex justify-between items-baseline text-sm">
+                <span className="font-black text-slate-900 dark:text-white">Total Pedido:</span>
                 <div className="text-right">
                   <span className="text-lg font-black font-mono text-[var(--tenant-primary)]">
                     ${totalUsd.toFixed(2)} USD

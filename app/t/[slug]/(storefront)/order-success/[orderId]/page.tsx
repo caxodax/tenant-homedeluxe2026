@@ -252,6 +252,9 @@ export default async function OrderSuccessPage({
             orderNumber={order.order_number}
             items={items}
             totalUsd={totalUsd}
+            subtotalUsd={parseFloat(order.subtotal_usd || '0')}
+            shippingUsd={shippingAmount}
+            deliveryType={order.delivery_type}
             totalSecondary={secondaryTotal}
             exchangeRate={rate}
           />

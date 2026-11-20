@@ -39,7 +39,7 @@ export async function GET(
                   'product_name', oi.product_name,
                   'quantity', oi.quantity,
                   'unit_price_primary', oi.unit_price_primary,
-                  'selected_modifiers', oi.selected_modifiers
+                  'selected_modifiers', COALESCE(oi.metadata->'selected_modifiers', '[]'::jsonb)
                 )
               )
               FROM order_items oi
