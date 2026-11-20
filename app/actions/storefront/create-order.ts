@@ -232,12 +232,18 @@ export async function createStorefrontOrder(data: CheckoutFormData) {
 
     const totalWithShippingUsd = Number((totalUsdFinal + shippingPrimary).toFixed(2));
 
-    let paymentCurrency = 'USD';
+    let paymentCurrency = selectedMethod.currency || 'USD';
     let paymentAmount = totalWithShippingUsd;
 
-    if (isLocalVenezuela && (selectedMethod.code === 'PAGO_MOVIL' || selectedMethod.code === 'CASH_LOCAL')) {
+    if (
+      selectedMethod.currency === 'VES' ||
+      (isLocalVenezuela && (selectedMethod.code === 'PAGO_MOVIL' || selectedMethod.code === 'CASH_LOCAL'))
+    ) {
       paymentCurrency = 'VES';
       paymentAmount = Number((totalWithShippingUsd * exchangeRate).toFixed(2));
+    } else {
+      paymentCurrency = selectedMethod.currency || 'USD';
+      paymentAmount = totalWithShippingUsd;
     }
 
     const totalSecondary = isLocalVenezuela && exchangeRate > 0 ? Number((totalWithShippingUsd * exchangeRate).toFixed(2)) : null;

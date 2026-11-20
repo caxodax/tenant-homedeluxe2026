@@ -16,6 +16,34 @@ const detailItemSchema = z.object({
   value: z.string().trim().min(1, 'Valor requerido').max(180),
 });
 
+const pagoMovilSchema = z
+  .object({
+    bank_code: z.string().trim().default(''),
+    bank_name: z.string().trim().default(''),
+    phone: z.string().trim().default(''),
+    id_doc: z.string().trim().default(''),
+    beneficiary: z.string().trim().default(''),
+  })
+  .optional();
+
+const bankTransferSchema = z
+  .object({
+    bank_code: z.string().trim().default(''),
+    bank_name: z.string().trim().default(''),
+    account_number: z.string().trim().default(''),
+    account_type: z.enum(['Corriente', 'Ahorro']).default('Corriente'),
+    id_doc: z.string().trim().default(''),
+    beneficiary: z.string().trim().default(''),
+  })
+  .optional();
+
+const zelleSchema = z
+  .object({
+    email: z.string().trim().default(''),
+    beneficiary: z.string().trim().default(''),
+  })
+  .optional();
+
 const createMethodSchema = z.object({
   code: z
     .string()
@@ -38,11 +66,15 @@ const createMethodSchema = z.object({
   available_in_pos: z.boolean().default(true),
   instructions: z.string().max(600).default(''),
   details: z.array(detailItemSchema).max(10).default([]),
+  pago_movil: pagoMovilSchema,
+  bank_transfer: bankTransferSchema,
+  zelle: zelleSchema,
 });
 
 const updateMethodSchema = z.object({
   code: z.string().trim().min(2).max(40),
   name: z.string().trim().min(2).max(80).optional(),
+  currency: z.string().trim().min(3).max(5).optional(),
   is_active: z.boolean().optional(),
   requires_reference: z.boolean().optional(),
   requires_proof: z.boolean().optional(),
@@ -50,6 +82,9 @@ const updateMethodSchema = z.object({
   available_in_pos: z.boolean().optional(),
   instructions: z.string().max(600).optional(),
   details: z.array(detailItemSchema).max(10).optional(),
+  pago_movil: pagoMovilSchema,
+  bank_transfer: bankTransferSchema,
+  zelle: zelleSchema,
 });
 
 async function upsertPaymentMethodConfig(
@@ -130,11 +165,11 @@ export async function POST(
         throw new Error(`El método con código "${d.code}" ya existe.`);
       }
 
-      // Core Agnóstico: métodos propios creados desde el Core se almacenan en USD (plugin_id = NULL)
+      // Core Agnóstico: métodos propios creados desde el Core se almacenan con su divisa (plugin_id = NULL)
       await client.query(
         `INSERT INTO payment_methods (code, name, currency, is_active, plugin_id)
          VALUES ($1, $2, $3, $4, NULL)`,
-        [d.code, d.name, 'USD', d.is_active]
+        [d.code, d.name, d.currency || 'USD', d.is_active]
       );
 
       const cfg = normalizeMethodConfig(d.code, {
@@ -144,6 +179,9 @@ export async function POST(
         available_in_pos: d.available_in_pos,
         instructions: d.instructions,
         details: d.details,
+        pago_movil: d.pago_movil,
+        bank_transfer: d.bank_transfer,
+        zelle: d.zelle,
       });
 
       await upsertPaymentMethodConfig(client, d.code, cfg);
@@ -209,9 +247,10 @@ export async function PATCH(
       await client.query(
         `UPDATE payment_methods
          SET name = COALESCE($1, name),
-             is_active = COALESCE($2, is_active)
-         WHERE code = $3`,
-        [d.name ?? null, d.is_active ?? null, d.code]
+             is_active = COALESCE($2, is_active),
+             currency = COALESCE($3, currency)
+         WHERE code = $4`,
+        [d.name ?? null, d.is_active ?? null, d.currency ?? null, d.code]
       );
 
       const settingsRes = await client.query(
@@ -227,6 +266,9 @@ export async function PATCH(
         available_in_pos: d.available_in_pos ?? prevCfg.available_in_pos,
         instructions: d.instructions ?? prevCfg.instructions,
         details: d.details ?? prevCfg.details,
+        pago_movil: d.pago_movil ?? prevCfg.pago_movil,
+        bank_transfer: d.bank_transfer ?? prevCfg.bank_transfer,
+        zelle: d.zelle ?? prevCfg.zelle,
       });
 
       await upsertPaymentMethodConfig(client, d.code, nextCfg);
@@ -238,9 +280,10 @@ export async function PATCH(
         action: 'PAYMENT_METHOD_UPDATED',
         entity: 'payment_method',
         entityId: d.code,
-        oldData: { name: prevRow.name, is_active: prevRow.is_active, ...prevCfg },
+        oldData: { name: prevRow.name, currency: prevRow.currency, is_active: prevRow.is_active, ...prevCfg },
         newData: {
           name: d.name ?? prevRow.name,
+          currency: d.currency ?? prevRow.currency,
           is_active: d.is_active ?? prevRow.is_active,
           ...nextCfg,
         },

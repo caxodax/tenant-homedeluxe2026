@@ -6,15 +6,17 @@ import {
   Bike,
   Compass,
   UserCheck,
+  Send,
 } from 'lucide-react';
 import { DeliveryZonesManager } from '@/components/admin/delivery/delivery-zones-manager';
 import { DriversManager } from '@/components/admin/delivery/drivers-manager';
+import { DispatchesManager } from '@/components/admin/delivery/dispatches-manager';
 
 export default function DeliveryAdminPage() {
   const params = useParams();
   const slug = (params?.slug as string) || '';
 
-  const [activeTab, setActiveTab] = useState<'zones' | 'drivers'>('zones');
+  const [activeTab, setActiveTab] = useState<'dispatches' | 'zones' | 'drivers'>('dispatches');
   const [storeName, setStoreName] = useState('MarketOS Store');
   const [currencySymbol, setCurrencySymbol] = useState('$');
   const [secondaryCurrencySymbol, setSecondaryCurrencySymbol] = useState('Bs.');
@@ -71,6 +73,17 @@ export default function DeliveryAdminPage() {
         {/* Pestañas de Navegación Limpias */}
         <div className="flex items-center bg-stone-100 dark:bg-zinc-900 p-1 rounded-2xl border border-stone-200 dark:border-zinc-800 text-xs font-semibold">
           <button
+            onClick={() => setActiveTab('dispatches')}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl transition-all cursor-pointer ${
+              activeTab === 'dispatches'
+                ? 'bg-white dark:bg-[#141416] text-stone-950 dark:text-white shadow-xs font-bold'
+                : 'text-stone-500 hover:text-stone-900 dark:hover:text-zinc-200'
+            }`}
+          >
+            <Send className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+            Despachos en Vivo
+          </button>
+          <button
             onClick={() => setActiveTab('zones')}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-xl transition-all cursor-pointer ${
               activeTab === 'zones'
@@ -96,6 +109,15 @@ export default function DeliveryAdminPage() {
       </div>
 
       {/* Contenido de la Pestaña Activa */}
+      {activeTab === 'dispatches' && (
+        <DispatchesManager
+          slug={slug}
+          storeName={storeName}
+          currencySymbol={currencySymbol}
+          secondaryCurrencySymbol={secondaryCurrencySymbol}
+        />
+      )}
+
       {activeTab === 'zones' && (
         <DeliveryZonesManager slug={slug} currencySymbol={currencySymbol} />
       )}

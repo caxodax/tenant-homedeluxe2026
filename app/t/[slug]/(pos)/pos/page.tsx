@@ -168,6 +168,16 @@ interface PosPaymentMethod {
   code: string;
   name: string;
   requires_reference?: boolean;
+  requires_proof?: boolean;
+  instructions?: string;
+  details?: Array<{ label: string; value: string }>;
+  pago_movil?: {
+    bank_code?: string;
+    bank_name?: string;
+    phone?: string;
+    id_doc?: string;
+    beneficiary?: string;
+  };
 }
 
 interface ActiveShift {
@@ -3025,6 +3035,51 @@ export default function PosPage({ params }: PosPageProps) {
                   })}
                 </div>
               </div>
+
+              {/* Ficha Resumen de Datos de Pago Móvil para el Cajero */}
+              {paymentMethod === 'PAGO_MOVIL' && (() => {
+                const currentPm = posPaymentMethods.find((m) => m.code === 'PAGO_MOVIL');
+                const pmData = currentPm?.pago_movil;
+                const details = currentPm?.details || [];
+                const bankVal = pmData?.bank_name || details.find((d) => d.label.toLowerCase().includes('banco'))?.value;
+                const phoneVal = pmData?.phone || details.find((d) => d.label.toLowerCase().includes('tel'))?.value;
+                const docVal = pmData?.id_doc || details.find((d) => d.label.toLowerCase().includes('cedula') || d.label.toLowerCase().includes('rif'))?.value;
+                const nameVal = pmData?.beneficiary || details.find((d) => d.label.toLowerCase().includes('titular'))?.value || settings.business_name;
+                const totalVes = effectiveRate > 0 ? Number((totalUsd * effectiveRate).toFixed(2)) : 0;
+
+                return (
+                  <div className="p-3.5 rounded-xl bg-lime-500/10 border border-lime-500/30 text-xs space-y-2 animate-in fade-in duration-150">
+                    <div className="flex items-center justify-between">
+                      <span className="font-extrabold text-[11px] uppercase tracking-wider text-lime-800 dark:text-lime-300">
+                        Datos del Comercio para Pago Móvil
+                      </span>
+                      {totalVes > 0 && (
+                        <span className="font-mono font-black text-xs text-lime-900 dark:text-lime-200">
+                          Bs. {totalVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-[11px]">
+                      <div>
+                        <span className="text-slate-500 dark:text-zinc-400 block text-[10px]">Banco:</span>
+                        <span className="font-bold text-slate-900 dark:text-white truncate block">{bankVal || 'No configurado'}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 dark:text-zinc-400 block text-[10px]">Teléfono:</span>
+                        <span className="font-mono font-bold text-slate-900 dark:text-white block">{phoneVal || 'No configurado'}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 dark:text-zinc-400 block text-[10px]">Cédula / RIF:</span>
+                        <span className="font-mono font-bold text-slate-900 dark:text-white block">{docVal || 'No configurado'}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 dark:text-zinc-400 block text-[10px]">Titular:</span>
+                        <span className="font-medium text-slate-900 dark:text-white truncate block">{nameVal}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Referencia para pagos no en efectivo */}
               {paymentMethod !== 'CASH_USD' && (

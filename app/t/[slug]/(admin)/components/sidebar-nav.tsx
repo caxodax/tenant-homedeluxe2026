@@ -24,6 +24,7 @@ import { cn } from '@/lib/utils';
 import { hasPermission, type TenantPermission } from '@/lib/auth/rbac';
 import { usePendingOrdersBadge } from '@/components/admin/new-order-notification';
 import { useLowStockCountBadge } from '@/components/admin/low-stock-notification';
+import { useKdsActiveCountBadge, useDeliveryPendingCountBadge } from '@/components/admin/module-badges';
 import { IconBadge, type IconBadgeColor } from '@/components/ui/icon-badge';
 
 interface NavSection {
@@ -88,6 +89,10 @@ export function SidebarNav({
   const basePath = `/t/${slug}/admin`;
   const pendingOrders = usePendingOrdersBadge(slug);
   const lowStockCount = useLowStockCountBadge(slug);
+  const isFoodServiceActive = Boolean(activePlugins && activePlugins.includes('food_service'));
+  const isDeliveryActive = Boolean(activePlugins && activePlugins.includes('delivery_fleet'));
+  const kdsCount = useKdsActiveCountBadge(slug, isFoodServiceActive);
+  const deliveryCount = useDeliveryPendingCountBadge(slug, isDeliveryActive);
 
   return (
     <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto">
@@ -109,8 +114,12 @@ export function SidebarNav({
                 const isActive =
                   item.href === '' ? cleanPath === basePath : cleanPath.startsWith(itemPath);
                 const Icon = item.icon;
-                const showPendingBadge = item.permission === 'orders' && pendingOrders > 0;
-                const showLowStockBadge = item.permission === 'inventory' && item.href === '/inventory' && lowStockCount > 0;
+
+                // Segregación estricta de badges por proceso y ruta
+                const showPendingOrdersBadge = item.href === '/orders' && pendingOrders > 0;
+                const showLowStockBadge = item.href === '/inventory' && lowStockCount > 0;
+                const showKdsBadge = item.href === '/kds' && isFoodServiceActive && kdsCount > 0;
+                const showDeliveryBadge = item.href === '/delivery' && isDeliveryActive && deliveryCount > 0;
 
                 return (
                   <Link
@@ -138,8 +147,11 @@ export function SidebarNav({
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
-                      {showPendingBadge && (
-                        <span className="inline-flex items-center justify-center min-w-[1.25rem] h-4.5 px-1.5 rounded-full bg-rose-600 text-white text-[10px] font-black leading-none">
+                      {showPendingOrdersBadge && (
+                        <span 
+                          title={`${pendingOrders} pedidos pendientes de verificación`}
+                          className="inline-flex items-center justify-center min-w-[1.25rem] h-4.5 px-1.5 rounded-full bg-rose-600 text-white text-[10px] font-black leading-none"
+                        >
                           {pendingOrders > 99 ? '99+' : pendingOrders}
                         </span>
                       )}
@@ -149,6 +161,22 @@ export function SidebarNav({
                           className="inline-flex items-center justify-center min-w-[1.25rem] h-4.5 px-1.5 rounded-full bg-amber-500 text-white text-[10px] font-black leading-none shadow-xs"
                         >
                           {lowStockCount > 99 ? '99+' : lowStockCount}
+                        </span>
+                      )}
+                      {showKdsBadge && (
+                        <span 
+                          title={`${kdsCount} comandas en cocina`}
+                          className="inline-flex items-center justify-center min-w-[1.25rem] h-4.5 px-1.5 rounded-full bg-amber-500 text-white text-[10px] font-black leading-none shadow-xs"
+                        >
+                          {kdsCount > 99 ? '99+' : kdsCount}
+                        </span>
+                      )}
+                      {showDeliveryBadge && (
+                        <span 
+                          title={`${deliveryCount} envíos pendientes de asignación`}
+                          className="inline-flex items-center justify-center min-w-[1.25rem] h-4.5 px-1.5 rounded-full bg-emerald-600 text-white text-[10px] font-black leading-none shadow-xs"
+                        >
+                          {deliveryCount > 99 ? '99+' : deliveryCount}
                         </span>
                       )}
                       <ChevronRight

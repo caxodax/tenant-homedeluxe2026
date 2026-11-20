@@ -50,6 +50,58 @@ const patchOrderSchema = z.discriminatedUnion('action', [
   }),
 ]);
 
+async function syncPluginsOnOrderProgression(
+  tenantId: string,
+  schema: string,
+  orderId: string,
+  newStatus: string,
+  deliveryType?: string
+) {
+  if (!['CONFIRMED', 'PREPARING'].includes(newStatus)) return;
+
+  try {
+    // 1. Food Service (KDS): Enviar comanda si el plugin está activo
+    const fsPlugin = await pool.query(
+      `SELECT is_active FROM platform.tenant_plugins WHERE tenant_id = $1 AND plugin_id = 'food_service'`,
+      [tenantId]
+    );
+    if (fsPlugin.rows[0]?.is_active) {
+      const ktCheck = await pool.query(
+        `SELECT id FROM ${schema}.fs_kitchen_tickets WHERE order_id = $1 LIMIT 1`,
+        [orderId]
+      );
+      if ((ktCheck.rowCount || 0) === 0) {
+        await pool.query(
+          `SELECT platform.rpc_fs_send_to_kitchen($1, $2, NULL, '{}'::jsonb)`,
+          [schema, orderId]
+        );
+      }
+    }
+
+    // 2. Delivery Fleet: Generar ruta de despacho si el plugin está activo y es entrega a domicilio
+    if (deliveryType === 'DELIVERY') {
+      const dfPlugin = await pool.query(
+        `SELECT is_active FROM platform.tenant_plugins WHERE tenant_id = $1 AND plugin_id = 'delivery_fleet'`,
+        [tenantId]
+      );
+      if (dfPlugin.rows[0]?.is_active) {
+        const dfCheck = await pool.query(
+          `SELECT id FROM ${schema}.df_dispatch_routes WHERE order_id = $1 LIMIT 1`,
+          [orderId]
+        );
+        if ((dfCheck.rowCount || 0) === 0) {
+          await pool.query(
+            `SELECT platform.rpc_df_create_dispatch($1, $2, $3::jsonb)`,
+            [schema, orderId, JSON.stringify({ notes: 'Despacho auto-generado al confirmar orden' })]
+          );
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Error sincronizando plugins food_service/delivery_fleet:', err);
+  }
+}
+
 async function loadFullOrderDetail(schema: string, orderId: string) {
   return withTenantDb(schema, null, async (client) => {
     const orderRes = await client.query(
@@ -187,17 +239,22 @@ export async function PATCH(
       ? staff.id
       : null;
 
+    let resultingOrderStatus: string | null = null;
+    let orderDeliveryType: string | null = null;
+
     await withTenantDb(tenant.db_schema_name, staff.id, async (client) => {
       const orderRes = await client.query(
-        `SELECT id, order_number, status, total_primary, total_primary as total_usd FROM orders WHERE id = $1 FOR UPDATE`,
+        `SELECT id, order_number, status, total_primary, total_primary as total_usd, delivery_type FROM orders WHERE id = $1 FOR UPDATE`,
         [id]
       );
       if ((orderRes.rowCount || 0) === 0) {
         throw new Error('Pedido no encontrado');
       }
       const order = orderRes.rows[0];
+      orderDeliveryType = order.delivery_type || null;
 
       if (payload.action === 'UPDATE_STATUS') {
+        resultingOrderStatus = payload.status;
         await client.query(
           `UPDATE orders SET status = $1, updated_at = now() WHERE id = $2`,
           [payload.status, id]
@@ -256,6 +313,7 @@ export async function PATCH(
               id,
             ]);
           }
+          resultingOrderStatus = nextOrderStatus;
 
           await writeTenantAuditLog(client, {
             actorId: staff.id,
@@ -438,6 +496,16 @@ export async function PATCH(
         });
       }
     });
+
+    if (resultingOrderStatus && ['CONFIRMED', 'PREPARING'].includes(resultingOrderStatus)) {
+      await syncPluginsOnOrderProgression(
+        tenant.id,
+        tenant.db_schema_name,
+        id,
+        resultingOrderStatus,
+        orderDeliveryType || undefined
+      );
+    }
 
     try {
       revalidatePath(`/t/${slug}/admin/orders`);

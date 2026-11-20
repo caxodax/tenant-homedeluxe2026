@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { pool } from '@/lib/db';
 import { requireTenantStaffApi, TenantAuthError } from '@/lib/auth/tenant-guard';
+import { broadcastTenantOrderEvent } from '@/lib/realtime/tenant-orders-channel';
 import {
   updateKitchenStatus,
   FsKitchenUpdateInputSchema,
@@ -34,6 +36,34 @@ export async function PATCH(
       parsed.data.item_ids || null,
       parsed.data.action
     );
+
+    // Sincronización milimétrica con el Core de Pedidos
+    try {
+      if (result?.status === 'READY') {
+        const orderUp = await pool.query(
+          `UPDATE ${tenant.db_schema_name}.orders
+           SET status = 'READY_FOR_PICKUP', updated_at = now()
+           WHERE id = (SELECT order_id FROM ${tenant.db_schema_name}.fs_kitchen_tickets WHERE id = $1)
+             AND status IN ('CONFIRMED', 'PREPARING')
+           RETURNING id, order_number, total_primary, customer_name`,
+          [parsed.data.kitchen_ticket_id]
+        );
+        if ((orderUp.rowCount || 0) > 0) {
+          const o = orderUp.rows[0];
+          await broadcastTenantOrderEvent(slug, {
+            type: 'ORDER_UPDATED',
+            orderId: o.id,
+            orderNumber: String(o.order_number),
+            status: 'READY_FOR_PICKUP',
+            totalUsd: Number(o.total_primary || 0),
+            customerName: o.customer_name || undefined,
+            source: 'ADMIN',
+          });
+        }
+      }
+    } catch (syncErr) {
+      console.error('Error sincronizando estado de orden desde KDS:', syncErr);
+    }
 
     return NextResponse.json({ success: true, result });
   } catch (error) {

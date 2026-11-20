@@ -31,6 +31,7 @@ import { cn } from '@/lib/utils';
 import { hasPermission, type TenantPermission } from '@/lib/auth/rbac';
 import { usePendingOrdersBadge } from '@/components/admin/new-order-notification';
 import { useLowStockCountBadge } from '@/components/admin/low-stock-notification';
+import { useKdsActiveCountBadge, useDeliveryPendingCountBadge } from '@/components/admin/module-badges';
 import { IconBadge, type IconBadgeColor } from '@/components/ui/icon-badge';
 import { ModalPortal } from '@/components/ui/modal-portal';
 
@@ -101,6 +102,10 @@ export function AdminMobileNav({
   const [isOpen, setIsOpen] = useState(false);
   const pendingOrders = usePendingOrdersBadge(slug);
   const lowStockCount = useLowStockCountBadge(slug);
+  const isFoodServiceActive = Boolean(activePlugins && activePlugins.includes('food_service'));
+  const isDeliveryActive = Boolean(activePlugins && activePlugins.includes('delivery_fleet'));
+  const kdsCount = useKdsActiveCountBadge(slug, isFoodServiceActive);
+  const deliveryCount = useDeliveryPendingCountBadge(slug, isDeliveryActive);
   const pathname = usePathname() || '';
   const cleanPath =
     pathname.endsWith('/') && pathname.length > 1 ? pathname.slice(0, -1) : pathname;
@@ -188,8 +193,10 @@ export function AdminMobileNav({
                         const isActive =
                           item.href === '' ? cleanPath === basePath : cleanPath.startsWith(itemPath);
                         const Icon = item.icon;
-                        const showPendingBadge = item.permission === 'orders' && pendingOrders > 0;
-                        const showLowStockBadge = item.permission === 'inventory' && item.href === '/inventory' && lowStockCount > 0;
+                        const showPendingOrdersBadge = item.href === '/orders' && pendingOrders > 0;
+                        const showLowStockBadge = item.href === '/inventory' && lowStockCount > 0;
+                        const showKdsBadge = item.href === '/kds' && isFoodServiceActive && kdsCount > 0;
+                        const showDeliveryBadge = item.href === '/delivery' && isDeliveryActive && deliveryCount > 0;
 
                         return (
                           <Link
@@ -208,7 +215,7 @@ export function AdminMobileNav({
                                 <Icon className="w-3.5 h-3.5" />
                               </IconBadge>
                               <span className="truncate">{item.label}</span>
-                              {showPendingBadge && (
+                              {showPendingOrdersBadge && (
                                 <span className="inline-flex items-center justify-center min-w-[1.25rem] h-4.5 px-1.5 rounded-full bg-rose-600 text-white text-[10px] font-black leading-none">
                                   {pendingOrders > 99 ? '99+' : pendingOrders}
                                 </span>
@@ -216,6 +223,16 @@ export function AdminMobileNav({
                               {showLowStockBadge && (
                                 <span className="inline-flex items-center justify-center min-w-[1.25rem] h-4.5 px-1.5 rounded-full bg-amber-500 text-white text-[10px] font-black leading-none">
                                   {lowStockCount > 99 ? '99+' : lowStockCount}
+                                </span>
+                              )}
+                              {showKdsBadge && (
+                                <span className="inline-flex items-center justify-center min-w-[1.25rem] h-4.5 px-1.5 rounded-full bg-amber-500 text-white text-[10px] font-black leading-none">
+                                  {kdsCount > 99 ? '99+' : kdsCount}
+                                </span>
+                              )}
+                              {showDeliveryBadge && (
+                                <span className="inline-flex items-center justify-center min-w-[1.25rem] h-4.5 px-1.5 rounded-full bg-emerald-600 text-white text-[10px] font-black leading-none">
+                                  {deliveryCount > 99 ? '99+' : deliveryCount}
                                 </span>
                               )}
                             </div>

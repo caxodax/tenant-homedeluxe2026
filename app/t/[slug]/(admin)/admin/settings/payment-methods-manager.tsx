@@ -21,15 +21,33 @@ import {
   Monitor,
   Save,
   X,
+  Smartphone,
+  Building2,
+  Mail,
+  QrCode,
+  ShieldCheck,
+  Coins,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { PaymentFieldDetail, TenantPaymentMethod } from '@/lib/payment-methods';
+import { cn } from '@/lib/utils';
+import {
+  type PaymentFieldDetail,
+  type TenantPaymentMethod,
+  type PagoMovilConfig,
+  type BankTransferConfig,
+  type ZelleConfig,
+  parsePagoMovilFromDetails,
+  parseBankTransferFromDetails,
+  parseZelleFromDetails,
+} from '@/lib/payment-methods';
+import { VENEZUELAN_BANKS } from '@/lib/plugins/local-venezuela';
 import { ModalPortal } from '@/components/ui/modal-portal';
 
 interface EditingState {
   isNew: boolean;
   code: string;
   name: string;
+  currency: string;
   is_active: boolean;
   requires_reference: boolean;
   requires_proof: boolean;
@@ -37,6 +55,9 @@ interface EditingState {
   available_in_pos: boolean;
   instructions: string;
   details: PaymentFieldDetail[];
+  pago_movil?: PagoMovilConfig;
+  bank_transfer?: BankTransferConfig;
+  zelle?: ZelleConfig;
 }
 
 export function PaymentMethodsManager({ slug }: { slug: string }) {
@@ -69,6 +90,7 @@ export function PaymentMethodsManager({ slug }: { slug: string }) {
       isNew: true,
       code: '',
       name: '',
+      currency: 'USD',
       is_active: true,
       requires_reference: true,
       requires_proof: true,
@@ -84,10 +106,37 @@ export function PaymentMethodsManager({ slug }: { slug: string }) {
   }
 
   function startEditMethod(method: TenantPaymentMethod) {
+    let pm = method.pago_movil || (method.code === 'PAGO_MOVIL' ? parsePagoMovilFromDetails(method.details || []) : undefined);
+    if (pm && !pm.bank_code && pm.bank_name) {
+      const found = VENEZUELAN_BANKS.find(
+        (b) =>
+          b.shortName.toLowerCase().includes(pm!.bank_name.toLowerCase()) ||
+          pm!.bank_name.toLowerCase().includes(b.shortName.toLowerCase())
+      );
+      if (found) {
+        pm = { ...pm, bank_code: found.code, bank_name: found.shortName };
+      }
+    }
+
+    let bt = method.bank_transfer || (method.code === 'BANK_TRANSFER' ? parseBankTransferFromDetails(method.details || []) : undefined);
+    if (bt && !bt.bank_code && bt.bank_name) {
+      const found = VENEZUELAN_BANKS.find(
+        (b) =>
+          b.shortName.toLowerCase().includes(bt!.bank_name.toLowerCase()) ||
+          bt!.bank_name.toLowerCase().includes(b.shortName.toLowerCase())
+      );
+      if (found) {
+        bt = { ...bt, bank_code: found.code, bank_name: found.shortName };
+      }
+    }
+
+    const zelle = method.zelle || (method.code === 'ZELLE' ? parseZelleFromDetails(method.details || []) : undefined);
+
     setEditing({
       isNew: false,
       code: method.code,
       name: method.name,
+      currency: method.currency || (method.code === 'PAGO_MOVIL' ? 'VES' : 'USD'),
       is_active: method.is_active,
       requires_reference: method.requires_reference,
       requires_proof: method.requires_proof,
@@ -98,6 +147,9 @@ export function PaymentMethodsManager({ slug }: { slug: string }) {
         method.details && method.details.length > 0
           ? method.details.map((d) => ({ ...d }))
           : [{ label: 'Banco / Plataforma', value: '' }, { label: 'Titular / Cuenta', value: '' }],
+      pago_movil: pm,
+      bank_transfer: bt,
+      zelle: zelle,
     });
   }
 
@@ -161,7 +213,43 @@ export function PaymentMethodsManager({ slug }: { slug: string }) {
       return;
     }
 
-    const cleanDetails = editing.details.filter((d) => d.label.trim() && d.value.trim());
+    let finalDetails = editing.details.filter((d) => d.label.trim() && d.value.trim());
+
+    // Sincronización automática de detalles estructurados
+    if (derivedCode === 'PAGO_MOVIL' && editing.pago_movil) {
+      const pm = editing.pago_movil;
+      const syncDetails: PaymentFieldDetail[] = [];
+      if (pm.bank_name || pm.bank_code) {
+        syncDetails.push({
+          label: 'Banco',
+          value: pm.bank_code && !pm.bank_name.includes(pm.bank_code) ? `${pm.bank_code} - ${pm.bank_name}` : pm.bank_name,
+        });
+      }
+      if (pm.phone) syncDetails.push({ label: 'Teléfono', value: pm.phone });
+      if (pm.id_doc) syncDetails.push({ label: 'Cédula / RIF', value: pm.id_doc });
+      if (pm.beneficiary) syncDetails.push({ label: 'Titular', value: pm.beneficiary });
+      if (syncDetails.length > 0) finalDetails = syncDetails;
+    } else if (derivedCode === 'BANK_TRANSFER' && editing.bank_transfer) {
+      const bt = editing.bank_transfer;
+      const syncDetails: PaymentFieldDetail[] = [];
+      if (bt.bank_name || bt.bank_code) {
+        syncDetails.push({
+          label: 'Banco',
+          value: bt.bank_code && !bt.bank_name.includes(bt.bank_code) ? `${bt.bank_code} - ${bt.bank_name}` : bt.bank_name,
+        });
+      }
+      if (bt.account_number) syncDetails.push({ label: 'Número de Cuenta', value: bt.account_number });
+      if (bt.account_type) syncDetails.push({ label: 'Tipo de Cuenta', value: bt.account_type });
+      if (bt.id_doc) syncDetails.push({ label: 'Cédula / RIF', value: bt.id_doc });
+      if (bt.beneficiary) syncDetails.push({ label: 'Titular', value: bt.beneficiary });
+      if (syncDetails.length > 0) finalDetails = syncDetails;
+    } else if (derivedCode === 'ZELLE' && editing.zelle) {
+      const z = editing.zelle;
+      const syncDetails: PaymentFieldDetail[] = [];
+      if (z.email) syncDetails.push({ label: 'Correo / Teléfono Zelle', value: z.email });
+      if (z.beneficiary) syncDetails.push({ label: 'Titular', value: z.beneficiary });
+      if (syncDetails.length > 0) finalDetails = syncDetails;
+    }
 
     try {
       setSaving(true);
@@ -171,14 +259,17 @@ export function PaymentMethodsManager({ slug }: { slug: string }) {
         body: JSON.stringify({
           code: derivedCode,
           name: editing.name.trim(),
-          currency: 'USD',
+          currency: editing.currency || (derivedCode === 'PAGO_MOVIL' ? 'VES' : 'USD'),
           is_active: editing.is_active,
           requires_reference: editing.requires_reference,
           requires_proof: editing.requires_proof,
           available_in_storefront: editing.available_in_storefront,
           available_in_pos: editing.available_in_pos,
           instructions: editing.instructions.trim(),
-          details: cleanDetails,
+          details: finalDetails,
+          pago_movil: editing.pago_movil,
+          bank_transfer: editing.bank_transfer,
+          zelle: editing.zelle,
         }),
       });
       const data = await res.json();
@@ -423,6 +514,85 @@ export function PaymentMethodsManager({ slug }: { slug: string }) {
               </div>
             </div>
 
+            {/* Selector Bimonetario de Moneda de Operación */}
+            <div className="p-3.5 rounded-2xl bg-slate-100 dark:bg-zinc-800/70 border border-slate-200 dark:border-zinc-700 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-black uppercase tracking-wider text-slate-800 dark:text-zinc-200 flex items-center gap-1.5">
+                  <Coins className="w-4 h-4 text-amber-500" />
+                  Moneda de Cobro del Método *
+                </Label>
+                <Badge
+                  variant="outline"
+                  className={cn(
+                    'text-[10px] font-mono font-bold',
+                    editing.currency === 'VES'
+                      ? 'border-amber-500/50 text-amber-700 dark:text-amber-400 bg-amber-500/10'
+                      : 'border-emerald-500/50 text-emerald-700 dark:text-emerald-400 bg-emerald-500/10'
+                  )}
+                >
+                  {editing.currency === 'VES' ? 'Bolívares (Tasa BCV)' : 'Dólares ($)'}
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setEditing({ ...editing, currency: 'USD' })}
+                  className={cn(
+                    'p-3 rounded-xl border text-left flex items-start gap-2.5 transition cursor-pointer',
+                    editing.currency === 'USD'
+                      ? 'bg-white dark:bg-zinc-900 border-emerald-500 ring-2 ring-emerald-500/20 shadow-xs'
+                      : 'bg-slate-50 dark:bg-zinc-900/40 border-slate-200 dark:border-zinc-800 opacity-70 hover:opacity-100'
+                  )}
+                >
+                  <div
+                    className={cn(
+                      'w-4 h-4 rounded-full border mt-0.5 flex items-center justify-center shrink-0',
+                      editing.currency === 'USD' ? 'border-emerald-500 bg-emerald-500' : 'border-slate-400'
+                    )}
+                  >
+                    {editing.currency === 'USD' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                  </div>
+                  <div>
+                    <span className="font-extrabold text-xs text-slate-950 dark:text-white block">
+                      USD ($) - Dólares Americanos
+                    </span>
+                    <span className="text-[10px] text-slate-500 dark:text-zinc-400 block leading-tight">
+                      Cobro directo en divisa o cuenta en custodia/exterior
+                    </span>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setEditing({ ...editing, currency: 'VES' })}
+                  className={cn(
+                    'p-3 rounded-xl border text-left flex items-start gap-2.5 transition cursor-pointer',
+                    editing.currency === 'VES'
+                      ? 'bg-white dark:bg-zinc-900 border-amber-500 ring-2 ring-amber-500/20 shadow-xs'
+                      : 'bg-slate-50 dark:bg-zinc-900/40 border-slate-200 dark:border-zinc-800 opacity-70 hover:opacity-100'
+                  )}
+                >
+                  <div
+                    className={cn(
+                      'w-4 h-4 rounded-full border mt-0.5 flex items-center justify-center shrink-0',
+                      editing.currency === 'VES' ? 'border-amber-500 bg-amber-500' : 'border-slate-400'
+                    )}
+                  >
+                    {editing.currency === 'VES' && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+                  </div>
+                  <div>
+                    <span className="font-extrabold text-xs text-slate-950 dark:text-white block">
+                      VES (Bs.) - Bolívares
+                    </span>
+                    <span className="text-[10px] text-slate-500 dark:text-zinc-400 block leading-tight">
+                      Convierte automáticamente con la Tasa Oficial BCV
+                    </span>
+                  </div>
+                </button>
+              </div>
+            </div>
+
             {/* Opciones de flujo */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {[
@@ -455,67 +625,488 @@ export function PaymentMethodsManager({ slug }: { slug: string }) {
               })}
             </div>
 
-            {/* Datos de la cuenta / receptor */}
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <Label className="text-sm font-bold text-slate-800 dark:text-zinc-200">
-                  Datos de Cuenta / Recepción (Visible al Cliente)
-                </Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    setEditing({
-                      ...editing,
-                      details: [...editing.details, { label: '', value: '' }],
-                    })
-                  }
-                  className="text-xs font-bold h-8 rounded-lg cursor-pointer"
-                >
-                  <Plus className="w-3.5 h-3.5 mr-1" />
-                  Agregar Campo
-                </Button>
-              </div>
-
-              <div className="space-y-2">
-                {editing.details.map((detail, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <Input
-                      value={detail.label}
-                      onChange={(e) => {
-                        const next = [...editing.details];
-                        next[idx] = { ...next[idx], label: e.target.value };
-                        setEditing({ ...editing, details: next });
-                      }}
-                      placeholder="Etiqueta (Ej. Banco, Titular, Correo)"
-                      className="flex-1 text-sm h-9 bg-slate-50 dark:bg-zinc-900 border-slate-300 dark:border-zinc-800"
-                    />
-                    <Input
-                      value={detail.value}
-                      onChange={(e) => {
-                        const next = [...editing.details];
-                        next[idx] = { ...next[idx], value: e.target.value };
-                        setEditing({ ...editing, details: next });
-                      }}
-                      placeholder="Dato (Ej. pagos@micomercio.com)"
-                      className="flex-1 text-sm font-mono h-9 bg-slate-50 dark:bg-zinc-900 border-slate-300 dark:border-zinc-800"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const next = editing.details.filter((_, i) => i !== idx);
-                        setEditing({ ...editing, details: next });
-                      }}
-                      className="p-2 text-rose-600 hover:bg-rose-500/10 rounded-lg cursor-pointer"
-                      title="Quitar fila"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+            {/* Datos Especializados por Método o Campos Libres */}
+            {editing.code === 'PAGO_MOVIL' ? (
+              <div className="p-4 rounded-2xl bg-lime-500/10 border-2 border-lime-500/30 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Smartphone className="w-4 h-4 text-lime-600 dark:text-lime-400" />
+                    <span className="text-xs font-black uppercase tracking-wider text-slate-950 dark:text-white">
+                      Datos de Cuenta para Pago Móvil (Venezuela)
+                    </span>
                   </div>
-                ))}
+                  <Badge variant="outline" className="text-[10px] border-lime-500/50 text-lime-700 dark:text-lime-400 font-bold">
+                    SUDEBAN C2P / P2P
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  {/* Banco Receptor */}
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label className="text-xs font-bold text-slate-800 dark:text-zinc-200">
+                      Banco Receptor *
+                    </Label>
+                    <select
+                      value={editing.pago_movil?.bank_code || ''}
+                      onChange={(e) => {
+                        const selectedCode = e.target.value;
+                        const bank = VENEZUELAN_BANKS.find((b) => b.code === selectedCode);
+                        setEditing({
+                          ...editing,
+                          pago_movil: {
+                            ...(editing.pago_movil || { bank_code: '', bank_name: '', phone: '', id_doc: '', beneficiary: '' }),
+                            bank_code: selectedCode,
+                            bank_name: bank ? bank.shortName : '',
+                          },
+                        });
+                      }}
+                      className="w-full h-10 px-3 rounded-xl border border-slate-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs font-semibold text-slate-950 dark:text-white focus:ring-2 focus:ring-lime-500 focus:outline-none"
+                    >
+                      <option value="">Selecciona el banco del comercio...</option>
+                      {VENEZUELAN_BANKS.map((b) => (
+                        <option key={b.code} value={b.code}>
+                          {b.code} - {b.shortName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Documento de Identidad (Cédula o RIF) */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-800 dark:text-zinc-200">
+                      Documento de Identidad (Cédula / RIF) *
+                    </Label>
+                    <div className="flex gap-2">
+                      <select
+                        value={(() => {
+                          const doc = editing.pago_movil?.id_doc || '';
+                          const match = doc.match(/^([VEJG])/i);
+                          return match ? match[1].toUpperCase() : 'V';
+                        })()}
+                        onChange={(e) => {
+                          const prefix = e.target.value;
+                          const currentNum = (editing.pago_movil?.id_doc || '').replace(/^[VEJG]-?/i, '');
+                          setEditing({
+                            ...editing,
+                            pago_movil: {
+                              ...(editing.pago_movil || { bank_code: '', bank_name: '', phone: '', id_doc: '', beneficiary: '' }),
+                              id_doc: currentNum ? `${prefix}-${currentNum}` : prefix,
+                            },
+                          });
+                        }}
+                        className="w-16 h-10 px-2 rounded-xl border border-slate-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs font-black text-slate-950 dark:text-white focus:ring-2 focus:ring-lime-500 focus:outline-none text-center"
+                      >
+                        <option value="V">V-</option>
+                        <option value="J">J-</option>
+                        <option value="E">E-</option>
+                        <option value="G">G-</option>
+                      </select>
+                      <Input
+                        value={(editing.pago_movil?.id_doc || '').replace(/^[VEJG]-?/i, '')}
+                        onChange={(e) => {
+                          const numOnly = e.target.value.replace(/\D/g, '').slice(0, 9);
+                          const currentDoc = editing.pago_movil?.id_doc || '';
+                          const prefix = currentDoc.match(/^([VEJG])/i)?.[1]?.toUpperCase() || 'V';
+                          setEditing({
+                            ...editing,
+                            pago_movil: {
+                              ...(editing.pago_movil || { bank_code: '', bank_name: '', phone: '', id_doc: '', beneficiary: '' }),
+                              id_doc: numOnly ? `${prefix}-${numOnly}` : '',
+                            },
+                          });
+                        }}
+                        placeholder="Ej: 21276890"
+                        className="flex-1 text-xs font-mono font-bold h-10 bg-white dark:bg-zinc-900 border-slate-300 dark:border-zinc-800"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Teléfono Celular Registrado */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-800 dark:text-zinc-200">
+                      Teléfono Celular Afiliado *
+                    </Label>
+                    <div className="flex gap-2">
+                      <select
+                        value={(() => {
+                          const p = editing.pago_movil?.phone || '';
+                          const clean = p.replace(/\D/g, '');
+                          const pref = clean.startsWith('58') ? '0' + clean.slice(2, 5) : clean.slice(0, 4);
+                          return ['0412', '0414', '0424', '0416', '0426'].includes(pref) ? pref : '0414';
+                        })()}
+                        onChange={(e) => {
+                          const pref = e.target.value;
+                          const clean = (editing.pago_movil?.phone || '').replace(/\D/g, '');
+                          const numPart = clean.startsWith('58') ? clean.slice(5) : clean.slice(4);
+                          setEditing({
+                            ...editing,
+                            pago_movil: {
+                              ...(editing.pago_movil || { bank_code: '', bank_name: '', phone: '', id_doc: '', beneficiary: '' }),
+                              phone: `${pref}${numPart.slice(0, 7)}`,
+                            },
+                          });
+                        }}
+                        className="w-24 h-10 px-2 rounded-xl border border-slate-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs font-mono font-bold text-slate-950 dark:text-white focus:ring-2 focus:ring-lime-500 focus:outline-none text-center"
+                      >
+                        <option value="0414">0414</option>
+                        <option value="0424">0424</option>
+                        <option value="0412">0412</option>
+                        <option value="0416">0416</option>
+                        <option value="0426">0426</option>
+                      </select>
+                      <Input
+                        value={(() => {
+                          const clean = (editing.pago_movil?.phone || '').replace(/\D/g, '');
+                          return clean.startsWith('58') ? clean.slice(5) : clean.slice(4);
+                        })()}
+                        onChange={(e) => {
+                          const numPart = e.target.value.replace(/\D/g, '').slice(0, 7);
+                          const clean = (editing.pago_movil?.phone || '').replace(/\D/g, '');
+                          const currentPref = clean.startsWith('58') ? '0' + clean.slice(2, 5) : clean.slice(0, 4);
+                          const validPref = ['0412', '0414', '0424', '0416', '0426'].includes(currentPref) ? currentPref : '0414';
+                          setEditing({
+                            ...editing,
+                            pago_movil: {
+                              ...(editing.pago_movil || { bank_code: '', bank_name: '', phone: '', id_doc: '', beneficiary: '' }),
+                              phone: numPart ? `${validPref}${numPart}` : '',
+                            },
+                          });
+                        }}
+                        placeholder="1234567"
+                        className="flex-1 text-xs font-mono font-bold h-10 bg-white dark:bg-zinc-900 border-slate-300 dark:border-zinc-800"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Nombre del Titular / Beneficiario */}
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label className="text-xs font-bold text-slate-800 dark:text-zinc-200">
+                      Nombre del Titular / Comercio *
+                    </Label>
+                    <Input
+                      value={editing.pago_movil?.beneficiary || ''}
+                      onChange={(e) =>
+                        setEditing({
+                          ...editing,
+                          pago_movil: {
+                            ...(editing.pago_movil || { bank_code: '', bank_name: '', phone: '', id_doc: '', beneficiary: '' }),
+                            beneficiary: e.target.value,
+                          },
+                        })
+                      }
+                      placeholder="Ej: Shop Market C.A. o Nombre del Propietario"
+                      className="text-xs h-10 bg-white dark:bg-zinc-900 border-slate-300 dark:border-zinc-800 font-semibold"
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
+            ) : editing.code === 'BANK_TRANSFER' ? (
+              <div className="p-4 rounded-2xl bg-blue-500/10 border-2 border-blue-500/30 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <span className="text-xs font-black uppercase tracking-wider text-slate-950 dark:text-white">
+                      {editing.currency === 'VES'
+                        ? 'Datos de Cuenta Bancaria en Bolívares (Transferencia VES)'
+                        : 'Datos de Cuenta Bancaria en Dólares (Transferencia USD)'}
+                    </span>
+                  </div>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      'text-[10px] font-mono font-bold',
+                      editing.currency === 'VES'
+                        ? 'border-amber-500/50 text-amber-700 dark:text-amber-400 bg-amber-500/10'
+                        : 'border-blue-500/50 text-blue-700 dark:text-blue-400 bg-blue-500/10'
+                    )}
+                  >
+                    {editing.currency === 'VES' ? 'VES (Tasa BCV)' : 'USD ($)'}
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  {/* Banco Receptor */}
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label className="text-xs font-bold text-slate-800 dark:text-zinc-200">
+                      Banco de la Cuenta *
+                    </Label>
+                    <select
+                      value={editing.bank_transfer?.bank_code || ''}
+                      onChange={(e) => {
+                        const selectedCode = e.target.value;
+                        const bank = VENEZUELAN_BANKS.find((b) => b.code === selectedCode);
+                        const currentAcc = editing.bank_transfer?.account_number || '';
+                        const nextAcc =
+                          currentAcc.length >= 4 && /^\d{4}/.test(currentAcc)
+                            ? `${selectedCode}${currentAcc.slice(4)}`
+                            : selectedCode || currentAcc;
+
+                        setEditing({
+                          ...editing,
+                          bank_transfer: {
+                            ...(editing.bank_transfer || {
+                              bank_code: '',
+                              bank_name: '',
+                              account_number: '',
+                              account_type: 'Corriente',
+                              id_doc: '',
+                              beneficiary: '',
+                            }),
+                            bank_code: selectedCode,
+                            bank_name: bank ? bank.shortName : '',
+                            account_number: nextAcc,
+                          },
+                        });
+                      }}
+                      className="w-full h-10 px-3 rounded-xl border border-slate-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs font-semibold text-slate-950 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    >
+                      <option value="">Selecciona el banco...</option>
+                      {VENEZUELAN_BANKS.map((b) => (
+                        <option key={b.code} value={b.code}>
+                          {b.code} - {b.shortName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Número de Cuenta (20 dígitos) */}
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label className="text-xs font-bold text-slate-800 dark:text-zinc-200 flex items-center justify-between">
+                      <span>Número de Cuenta Bancaria (20 dígitos) *</span>
+                      <span className="font-mono text-[10px] text-slate-500">
+                        {(editing.bank_transfer?.account_number || '').replace(/\D/g, '').length} / 20 dígitos
+                      </span>
+                    </Label>
+                    <Input
+                      value={editing.bank_transfer?.account_number || ''}
+                      onChange={(e) => {
+                        const numOnly = e.target.value.replace(/\D/g, '').slice(0, 20);
+                        setEditing({
+                          ...editing,
+                          bank_transfer: {
+                            ...(editing.bank_transfer || {
+                              bank_code: '',
+                              bank_name: '',
+                              account_number: '',
+                              account_type: 'Corriente',
+                              id_doc: '',
+                              beneficiary: '',
+                            }),
+                            account_number: numOnly,
+                          },
+                        });
+                      }}
+                      placeholder="01080123450100123456"
+                      className="text-xs font-mono font-bold h-10 bg-white dark:bg-zinc-900 border-slate-300 dark:border-zinc-800"
+                    />
+                  </div>
+
+                  {/* Tipo de Cuenta */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-800 dark:text-zinc-200">
+                      Tipo de Cuenta *
+                    </Label>
+                    <select
+                      value={editing.bank_transfer?.account_type || 'Corriente'}
+                      onChange={(e) =>
+                        setEditing({
+                          ...editing,
+                          bank_transfer: {
+                            ...(editing.bank_transfer || {
+                              bank_code: '',
+                              bank_name: '',
+                              account_number: '',
+                              account_type: 'Corriente',
+                              id_doc: '',
+                              beneficiary: '',
+                            }),
+                            account_type: e.target.value as 'Corriente' | 'Ahorro',
+                          },
+                        })
+                      }
+                      className="w-full h-10 px-3 rounded-xl border border-slate-300 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-xs font-semibold text-slate-950 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    >
+                      <option value="Corriente">Cuenta Corriente</option>
+                      <option value="Ahorro">Cuenta de Ahorro</option>
+                    </select>
+                  </div>
+
+                  {/* Cédula o RIF */}
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-bold text-slate-800 dark:text-zinc-200">
+                      Cédula o RIF del Titular *
+                    </Label>
+                    <Input
+                      value={editing.bank_transfer?.id_doc || ''}
+                      onChange={(e) =>
+                        setEditing({
+                          ...editing,
+                          bank_transfer: {
+                            ...(editing.bank_transfer || {
+                              bank_code: '',
+                              bank_name: '',
+                              account_number: '',
+                              account_type: 'Corriente',
+                              id_doc: '',
+                              beneficiary: '',
+                            }),
+                            id_doc: e.target.value.toUpperCase(),
+                          },
+                        })
+                      }
+                      placeholder="J-50123456-7 ó V-12345678"
+                      className="text-xs font-mono font-bold h-10 bg-white dark:bg-zinc-900 border-slate-300 dark:border-zinc-800"
+                    />
+                  </div>
+
+                  {/* Titular */}
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label className="text-xs font-bold text-slate-800 dark:text-zinc-200">
+                      Nombre del Titular / Razón Social *
+                    </Label>
+                    <Input
+                      value={editing.bank_transfer?.beneficiary || ''}
+                      onChange={(e) =>
+                        setEditing({
+                          ...editing,
+                          bank_transfer: {
+                            ...(editing.bank_transfer || {
+                              bank_code: '',
+                              bank_name: '',
+                              account_number: '',
+                              account_type: 'Corriente',
+                              id_doc: '',
+                              beneficiary: '',
+                            }),
+                            beneficiary: e.target.value,
+                          },
+                        })
+                      }
+                      placeholder="Ej: Shop Market C.A."
+                      className="text-xs h-10 bg-white dark:bg-zinc-900 border-slate-300 dark:border-zinc-800 font-semibold"
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : editing.code === 'ZELLE' ? (
+              <div className="p-4 rounded-2xl bg-purple-500/10 border-2 border-purple-500/30 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Mail className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                    <span className="text-xs font-black uppercase tracking-wider text-slate-950 dark:text-white">
+                      Datos de Cuenta Zelle (USD)
+                    </span>
+                  </div>
+                  <Badge variant="outline" className="text-[10px] border-purple-500/50 text-purple-700 dark:text-purple-400 font-bold">
+                    Internacional
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label className="text-xs font-bold text-slate-800 dark:text-zinc-200">
+                      Correo Electrónico o Teléfono Zelle *
+                    </Label>
+                    <Input
+                      value={editing.zelle?.email || ''}
+                      onChange={(e) =>
+                        setEditing({
+                          ...editing,
+                          zelle: {
+                            ...(editing.zelle || { email: '', beneficiary: '' }),
+                            email: e.target.value.trim(),
+                          },
+                        })
+                      }
+                      placeholder="pagos@micomercio.com ó +1 555 123 4567"
+                      className="text-xs font-mono font-bold h-10 bg-white dark:bg-zinc-900 border-slate-300 dark:border-zinc-800"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label className="text-xs font-bold text-slate-800 dark:text-zinc-200">
+                      Nombre del Titular Zelle *
+                    </Label>
+                    <Input
+                      value={editing.zelle?.beneficiary || ''}
+                      onChange={(e) =>
+                        setEditing({
+                          ...editing,
+                          zelle: {
+                            ...(editing.zelle || { email: '', beneficiary: '' }),
+                            beneficiary: e.target.value,
+                          },
+                        })
+                      }
+                      placeholder="Ej: Shop Market LLC"
+                      className="text-xs h-10 bg-white dark:bg-zinc-900 border-slate-300 dark:border-zinc-800 font-semibold"
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Datos de la cuenta / receptor libres para otros métodos */
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-bold text-slate-800 dark:text-zinc-200">
+                    Datos de Cuenta / Recepción (Visible al Cliente)
+                  </Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setEditing({
+                        ...editing,
+                        details: [...editing.details, { label: '', value: '' }],
+                      })
+                    }
+                    className="text-xs font-bold h-8 rounded-lg cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1" />
+                    Agregar Campo
+                  </Button>
+                </div>
+
+                <div className="space-y-2">
+                  {editing.details.map((detail, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <Input
+                        value={detail.label}
+                        onChange={(e) => {
+                          const next = [...editing.details];
+                          next[idx] = { ...next[idx], label: e.target.value };
+                          setEditing({ ...editing, details: next });
+                        }}
+                        placeholder="Etiqueta (Ej. Banco, Titular, Correo)"
+                        className="flex-1 text-sm h-9 bg-slate-50 dark:bg-zinc-900 border-slate-300 dark:border-zinc-800"
+                      />
+                      <Input
+                        value={detail.value}
+                        onChange={(e) => {
+                          const next = [...editing.details];
+                          next[idx] = { ...next[idx], value: e.target.value };
+                          setEditing({ ...editing, details: next });
+                        }}
+                        placeholder="Dato (Ej. pagos@micomercio.com)"
+                        className="flex-1 text-sm font-mono h-9 bg-slate-50 dark:bg-zinc-900 border-slate-300 dark:border-zinc-800"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = editing.details.filter((_, i) => i !== idx);
+                          setEditing({ ...editing, details: next });
+                        }}
+                        className="p-2 text-rose-600 hover:bg-rose-500/10 rounded-lg cursor-pointer"
+                        title="Quitar fila"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="space-y-1.5">
               <Label className="text-sm font-bold text-slate-800 dark:text-zinc-200">

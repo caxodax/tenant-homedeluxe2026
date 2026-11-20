@@ -20,6 +20,9 @@ export async function GET(
       let query = `
         SELECT 
           r.*,
+          COALESCE(r.customer_name, o.customer_name) AS customer_name,
+          COALESCE(r.customer_phone, o.customer_phone) AS customer_phone,
+          COALESCE(r.delivery_address, o.delivery_address) AS delivery_address,
           o.order_number,
           o.total_primary AS order_total_primary,
           o.total_secondary AS order_total_secondary,
