@@ -23,7 +23,7 @@ async function getOrderDetails(slug: string, orderId: string) {
   const { db_schema_name, name } = tRes.rows[0];
 
   return withTenantDb(db_schema_name, null, async (client) => {
-    const [orderRes, itemsRes, settingsRes, paymentRes] = await Promise.all([
+    const [orderRes, itemsRes, settingsRes, paymentRes, dispatchRes] = await Promise.all([
       client.query(`
         SELECT id, order_number, customer_name, customer_phone, status, 
                delivery_type, delivery_address,
@@ -57,6 +57,14 @@ async function getOrderDetails(slug: string, orderId: string) {
         ORDER BY p.created_at DESC
         LIMIT 1
       `, [orderId]),
+      client.query(`
+        SELECT r.id, r.status, r.driver_id, d.full_name as driver_name, d.phone as driver_phone, d.vehicle_type, d.license_plate
+        FROM df_dispatch_routes r
+        LEFT JOIN df_drivers d ON d.id = r.driver_id
+        WHERE r.order_id = $1
+        ORDER BY r.created_at DESC
+        LIMIT 1
+      `, [orderId]).catch(() => ({ rowCount: 0, rows: [] }))
     ]);
 
     if (orderRes.rowCount === 0) return null;
@@ -65,6 +73,7 @@ async function getOrderDetails(slug: string, orderId: string) {
       order: orderRes.rows[0],
       items: itemsRes.rows,
       payment: paymentRes.rows[0] || null,
+      dispatch: dispatchRes?.rows?.[0] || null,
       settings: settingsRes.rows[0] || {
         business_name: name,
         whatsapp_number: TENANT_DEFAULTS.SUPPORT_WHATSAPP || null,
@@ -86,7 +95,7 @@ export default async function OrderSuccessPage({
 
   if (!data) notFound();
 
-  const { order, items, payment, settings } = data;
+  const { order, items, payment, dispatch, settings } = data;
   const totalUsd = parseFloat(order.total_usd);
   const rawRate = parseFloat(order.exchange_rate_applied || '0');
   const storeRate = parseFloat(settings.exchange_rate || '0');
@@ -100,9 +109,9 @@ export default async function OrderSuccessPage({
   const refMatch = (order.notes || '').match(/\[Ref:\s*([^\]]+)\]/i);
   const deliveryReferencePoint = refMatch ? refMatch[1] : null;
 
-  const isPendingVerification =
-    order.status === 'PENDING_PAYMENT_VERIFICATION' ||
-    payment?.payment_status === 'PENDING';
+  const isEnRoute = order.status === 'EN_ROUTE' || dispatch?.status === 'EN_ROUTE';
+  const isDelivered = order.status === 'DELIVERED' || dispatch?.status === 'COMPLETED';
+
   const isPaymentRejected = payment?.payment_status === 'REJECTED';
   const isPaymentVerified = payment?.payment_status === 'VERIFIED';
 
@@ -133,15 +142,23 @@ export default async function OrderSuccessPage({
           className={`w-16 h-16 rounded-full border flex items-center justify-center mx-auto ${
             isPaymentRejected
               ? 'bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400'
-              : order.status === 'PENDING_PAYMENT_VERIFICATION'
-                ? 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400'
-                : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+              : isDelivered
+                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+                : isEnRoute
+                  ? 'bg-blue-500/10 border-blue-500/20 text-blue-600 dark:text-blue-400'
+                  : order.status === 'PENDING_PAYMENT_VERIFICATION'
+                    ? 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400'
+                    : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'
           }`}
         >
-          {order.status === 'PENDING_PAYMENT_VERIFICATION' ? (
-            <Clock className="w-9 h-9 stroke-[2.2]" />
-          ) : isPaymentRejected ? (
+          {isPaymentRejected ? (
             <AlertTriangle className="w-9 h-9 stroke-[2.2]" />
+          ) : isDelivered ? (
+            <CheckCircle2 className="w-10 h-10 stroke-[2.5]" />
+          ) : isEnRoute ? (
+            <Bike className="w-9 h-9 stroke-[2.2] animate-bounce" />
+          ) : order.status === 'PENDING_PAYMENT_VERIFICATION' ? (
+            <Clock className="w-9 h-9 stroke-[2.2]" />
           ) : (
             <CheckCircle2 className="w-10 h-10 stroke-[2.5]" />
           )}
@@ -151,6 +168,18 @@ export default async function OrderSuccessPage({
           {isPaymentRejected ? (
             <span className="text-xs font-mono font-bold uppercase px-3 py-1 rounded-full bg-red-500/10 text-red-700 dark:text-red-400 border border-red-500/20">
               Pago Rechazado
+            </span>
+          ) : isDelivered ? (
+            <span className="text-xs font-mono font-bold uppercase px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+              Pedido Entregado
+            </span>
+          ) : isEnRoute ? (
+            <span className="inline-flex items-center gap-1.5 text-xs font-mono font-bold uppercase px-3 py-1 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20 mx-auto">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+              </span>
+              En Camino (Delivery)
             </span>
           ) : order.status === 'PENDING_PAYMENT_VERIFICATION' ? (
             <span className="text-xs font-mono font-bold uppercase px-3 py-1 rounded-full bg-amber-500/10 text-amber-800 dark:text-amber-300 border border-amber-500/30">
@@ -162,12 +191,20 @@ export default async function OrderSuccessPage({
             </span>
           )}
           <h1 className="text-2xl sm:text-3xl font-black text-slate-950 dark:text-white tracking-tight mt-2.5">
-            {order.status === 'PENDING_PAYMENT_VERIFICATION'
-              ? '¡Pedido recibido, validando tu pago!'
-              : '¡Gracias por tu compra!'}
+            {isDelivered
+              ? '¡Pedido Entregado con Éxito!'
+              : isEnRoute
+                ? '🛵 ¡Tu pedido va en camino!'
+                : order.status === 'PENDING_PAYMENT_VERIFICATION'
+                  ? '¡Pedido recibido, validando tu pago!'
+                  : '¡Gracias por tu compra!'}
           </h1>
           <p className="text-sm text-slate-700 dark:text-zinc-300 mt-1.5">
-            Tu orden ha sido registrada exitosamente en <strong className="text-slate-950 dark:text-white">{settings.business_name}</strong>.
+            {isEnRoute ? (
+              <>El repartidor está en ruta hacia tu dirección con tu pedido de <strong className="text-slate-950 dark:text-white">{settings.business_name}</strong>.</>
+            ) : (
+              <>Tu orden ha sido registrada exitosamente en <strong className="text-slate-950 dark:text-white">{settings.business_name}</strong>.</>
+            )}
           </p>
         </div>
 
@@ -288,20 +325,67 @@ export default async function OrderSuccessPage({
 
       {/* Tarjeta Dinámica: Delivery vs Punto de Retiro */}
       {isDelivery ? (
-        <div className="p-6 rounded-3xl bg-white dark:bg-[#121214] border border-emerald-500/30 dark:border-emerald-500/20 space-y-4 shadow-xs">
+        <div className={`p-6 rounded-3xl bg-white dark:bg-[#121214] border ${isEnRoute ? 'border-blue-500/40 ring-1 ring-blue-500/20 shadow-sm' : 'border-emerald-500/30 dark:border-emerald-500/20 shadow-xs'} space-y-4`}>
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-extrabold uppercase tracking-wider text-emerald-800 dark:text-emerald-400 flex items-center gap-2">
-              <Bike className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+            <h2 className="text-sm font-extrabold uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
+              <Bike className="w-5 h-5 text-blue-600 dark:text-blue-400" />
               Despacho a Domicilio (Delivery)
             </h2>
-            <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-              En espera de despacho
-            </span>
+            {isDelivered ? (
+              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                ✅ Entregado
+              </span>
+            ) : isEnRoute ? (
+              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 flex items-center gap-1.5">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-500"></span>
+                </span>
+                🚀 En camino hacia tu dirección
+              </span>
+            ) : (
+              <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+                ⏳ En preparación / Por despachar
+              </span>
+            )}
           </div>
+
+          {/* Si hay repartidor asignado, mostramos su ficha con llamada/WhatsApp */}
+          {dispatch?.driver_name && (
+            <div className="p-3.5 rounded-2xl bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-900/40 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-blue-500 text-white flex items-center justify-center font-bold text-sm shadow-xs">
+                  🛵
+                </div>
+                <div>
+                  <div className="text-[11px] text-blue-800 dark:text-blue-400 font-bold uppercase tracking-wider">
+                    Repartidor Asignado
+                  </div>
+                  <div className="text-sm font-black text-slate-900 dark:text-white">
+                    {dispatch.driver_name}
+                  </div>
+                  {(dispatch.vehicle_type || dispatch.license_plate) && (
+                    <div className="text-[11px] text-slate-500 dark:text-zinc-400">
+                      {dispatch.vehicle_type} {dispatch.license_plate ? `(${dispatch.license_plate})` : ''}
+                    </div>
+                  )}
+                </div>
+              </div>
+              {dispatch.driver_phone && (
+                <a
+                  href={`tel:${dispatch.driver_phone}`}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 text-xs font-bold text-slate-800 dark:text-zinc-200 hover:bg-slate-50 shadow-xs"
+                >
+                  <Phone className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  <span>Llamar</span>
+                </a>
+              )}
+            </div>
+          )}
 
           <div className="space-y-3 text-xs">
             <div className="flex items-start gap-2.5 text-slate-800 dark:text-zinc-200">
-              <MapPin className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
+              <MapPin className="w-4 h-4 shrink-0 text-blue-600 dark:text-blue-400 mt-0.5" />
               <div>
                 <strong className="block text-zinc-900 dark:text-white text-sm mb-0.5">
                   Dirección de Entrega:
@@ -319,10 +403,12 @@ export default async function OrderSuccessPage({
               </div>
             )}
 
-            <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400 font-medium pt-2 border-t border-slate-100 dark:border-zinc-800/80">
-              <ShieldCheck className="w-4 h-4 shrink-0" />
+            <div className="flex items-center gap-2 text-slate-600 dark:text-zinc-400 font-medium pt-2 border-t border-slate-100 dark:border-zinc-800/80">
+              <ShieldCheck className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
               <span>
-                El repartidor asignado te contactará al <strong>{order.customer_phone}</strong> al momento de llegar.
+                {isEnRoute
+                  ? `El repartidor se dirige a tu ubicación y te contactará al ${order.customer_phone}.`
+                  : `El repartidor asignado te contactará al ${order.customer_phone} al momento de llegar.`}
               </span>
             </div>
           </div>

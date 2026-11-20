@@ -15,6 +15,7 @@ const ORDER_STATUSES = [
   'CONFIRMED',
   'PREPARING',
   'READY_FOR_PICKUP',
+  'EN_ROUTE',
   'DELIVERED',
   'CANCELLED',
 ] as const;
@@ -259,6 +260,23 @@ export async function PATCH(
           `UPDATE orders SET status = $1, updated_at = now() WHERE id = $2`,
           [payload.status, id]
         );
+
+        // Sincronización automática de ruta de delivery si existe
+        if (payload.status === 'EN_ROUTE') {
+          await client.query(
+            `UPDATE df_dispatch_routes 
+             SET status = 'EN_ROUTE', en_route_at = COALESCE(en_route_at, now()), updated_at = now() 
+             WHERE order_id = $1`,
+            [id]
+          ).catch(() => {});
+        } else if (payload.status === 'DELIVERED') {
+          await client.query(
+            `UPDATE df_dispatch_routes 
+             SET status = 'COMPLETED', completed_at = COALESCE(completed_at, now()), updated_at = now() 
+             WHERE order_id = $1`,
+            [id]
+          ).catch(() => {});
+        }
 
         await writeTenantAuditLog(client, {
           actorId: staff.id,

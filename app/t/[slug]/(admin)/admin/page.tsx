@@ -28,7 +28,7 @@ async function getTenantMetrics(schema: string) {
     const pendingOrders = await client.query(`
       SELECT COUNT(*) as count 
       FROM orders 
-      WHERE status IN ('CREATED', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP')
+      WHERE status IN ('CREATED', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'EN_ROUTE')
     `);
     const lowStock = await client.query(`
       SELECT COUNT(*) as count 
@@ -339,6 +339,8 @@ async function RecentOrdersCard({ schema, slug }: { schema: string; slug: string
         return <Badge variant="purple">Preparando</Badge>;
       case 'READY_FOR_PICKUP':
         return <Badge variant="info">Por retirar</Badge>;
+      case 'EN_ROUTE':
+        return <Badge variant="info">En camino</Badge>;
       case 'PENDING_PAYMENT_VERIFICATION':
         return <Badge variant="warning">Por verificar</Badge>;
       case 'CANCELLED':

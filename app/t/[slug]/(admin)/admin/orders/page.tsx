@@ -74,6 +74,10 @@ const ORDER_STATUS_META: Record<string, { label: string; className: string }> = 
     label: 'Listo para retirar',
     className: 'bg-cyan-500/15 text-cyan-800 dark:text-cyan-300 border-cyan-500/30',
   },
+  EN_ROUTE: {
+    label: 'En camino',
+    className: 'bg-blue-500/15 text-blue-800 dark:text-blue-300 border-blue-500/30',
+  },
   DELIVERED: {
     label: 'Entregado',
     className: 'bg-emerald-600/20 text-emerald-900 dark:text-emerald-200 border-emerald-600/40',
@@ -248,7 +252,7 @@ export default function AdminOrdersPage() {
         (o.payment_status === 'PENDING' && o.status !== 'CANCELLED')
     ).length;
     const inProgress = orders.filter((o) =>
-      ['CREATED', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP'].includes(o.status)
+      ['CREATED', 'CONFIRMED', 'PREPARING', 'READY_FOR_PICKUP', 'EN_ROUTE'].includes(o.status)
     ).length;
     const delivered = orders.filter((o) => o.status === 'DELIVERED').length;
     return {
@@ -367,6 +371,7 @@ export default function AdminOrdersPage() {
               <option value="CONFIRMED">Confirmado</option>
               <option value="PREPARING">Preparando</option>
               <option value="READY_FOR_PICKUP">Listo para retirar</option>
+              <option value="EN_ROUTE">En camino</option>
               <option value="DELIVERED">Entregado</option>
               <option value="CANCELLED">Cancelado</option>
             </select>

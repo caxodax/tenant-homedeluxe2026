@@ -1,0 +1,37 @@
+{
+  "id": "credit_cxc",
+  "name": "Cuentas por Cobrar (CxC)",
+  "category": "fintech",
+  "version": "1.0.0",
+  "description": "Crédito a clientes, financiamiento Cashea BNPL, sistema de apartado con custodia física y recibos de abono multimoneda.",
+  "is_core_addon": true,
+  "pricing_tier": "GROWTH",
+  "price_usd_monthly": 15.00,
+  "dependencies": [],
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "layaway_validity_days": {
+        "type": "number",
+        "default": 30
+      },
+      "default_penalty_percent": {
+        "type": "number",
+        "default": 15
+      },
+      "standard_term_days": {
+        "type": "number",
+        "default": 15
+      }
+    }
+  },
+  "hooks": {
+    "nav_items": [
+      {
+        "title": "Cuentas por Cobrar",
+        "href": "/admin/cxc",
+        "icon": "Receipt"
+      }
+    ]
+  }
+}

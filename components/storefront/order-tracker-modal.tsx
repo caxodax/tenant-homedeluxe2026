@@ -6,17 +6,13 @@ import {
   Search,
   X,
   Package,
-  Clock,
-  CheckCircle2,
   Bike,
   Store,
   ExternalLink,
   Loader2,
-  MapPin,
   Calendar,
   AlertCircle,
   Truck,
-  RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ModalPortal } from '@/components/ui/modal-portal';
@@ -91,6 +87,12 @@ const STATUS_STEPS: Record<string, { step: number; label: string; color: string;
     label: 'En Ruta con Delivery',
     color: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 border-emerald-200 dark:border-emerald-800',
     desc: 'El chofer va en camino',
+  },
+  EN_ROUTE: {
+    step: 4,
+    label: 'En Camino',
+    color: 'text-blue-600 bg-blue-50 dark:bg-blue-950/40 border-blue-200 dark:border-blue-800',
+    desc: 'El repartidor va en camino hacia tu dirección',
   },
   DELIVERED: {
     step: 5,

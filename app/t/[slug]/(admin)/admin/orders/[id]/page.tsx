@@ -165,6 +165,10 @@ const ORDER_STATUS_META: Record<string, { label: string; className: string }> = 
     label: 'Listo para retirar',
     className: 'bg-cyan-500/15 text-cyan-800 dark:text-cyan-300 border-cyan-500/30',
   },
+  EN_ROUTE: {
+    label: 'En camino',
+    className: 'bg-blue-500/15 text-blue-800 dark:text-blue-300 border-blue-500/30',
+  },
   DELIVERED: {
     label: 'Entregado',
     className: 'bg-emerald-600/20 text-emerald-900 dark:text-emerald-200 border-emerald-600/40',
@@ -188,7 +192,8 @@ const STATUS_OPTIONS = [
   { value: 'PENDING_PAYMENT_VERIFICATION', label: 'Pago por verificar' },
   { value: 'CONFIRMED', label: 'Confirmado' },
   { value: 'PREPARING', label: 'Preparando' },
-  { value: 'READY_FOR_PICKUP', label: 'Listo para retirar' },
+  { value: 'READY_FOR_PICKUP', label: 'Listo para retirar (Pick-up)' },
+  { value: 'EN_ROUTE', label: 'En camino (Delivery)' },
   { value: 'DELIVERED', label: 'Entregado' },
   { value: 'CANCELLED', label: 'Cancelado' },
 ];
