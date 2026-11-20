@@ -15,6 +15,10 @@ import {
   ChevronRight,
   Heart,
   X,
+  Flame,
+  Zap,
+  Truck,
+  ShieldCheck,
 } from 'lucide-react';
 
 interface Category {
@@ -108,33 +112,64 @@ export function StorefrontCatalog({
   return (
     <div className="space-y-6 sm:space-y-8 pb-32 sm:pb-20">
       {/* Hero Banner de la Vitrina con Contraste y Simetría Impeccable */}
-      <section className="relative rounded-3xl overflow-hidden bg-white dark:bg-[#141416] border border-stone-200/90 dark:border-zinc-800/80 p-6 sm:p-10 shadow-sm border-l-6"
+      <section 
+        className="relative rounded-3xl overflow-hidden bg-white dark:bg-[#141416] border border-stone-200/90 dark:border-zinc-800/80 p-6 sm:p-8 md:p-10 shadow-sm border-l-6 transition-all"
         style={{ borderLeftColor: 'var(--tenant-primary, #dc2626)' }}
       >
-        {bannerUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={bannerUrl}
-            alt={`Banner de ${businessName}`}
-            className="absolute inset-0 w-full h-full object-cover opacity-10 pointer-events-none"
-          />
-        )}
-        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
-          <div className="max-w-2xl space-y-2.5">
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight leading-tight text-stone-950 dark:text-white">
-              Catálogo Online de{' '}
-              <span style={{ color: 'var(--tenant-primary, #dc2626)' }}>
-                {businessName}
-              </span>
-            </h1>
+        {/* Glow ambiental sutil de fondo */}
+        <div 
+          className="absolute -top-24 -right-24 w-80 h-80 rounded-full blur-3xl opacity-10 pointer-events-none"
+          style={{ backgroundColor: 'var(--tenant-primary, #dc2626)' }}
+        />
 
-            <p className="text-xs sm:text-sm text-stone-600 dark:text-zinc-400 font-medium leading-relaxed">
-              Explora nuestros productos con los mejores precios. Arma tu pedido y retira en tienda o pidelo por delivery.
-            </p>
+        {bannerUrl && (
+          <div className="absolute inset-0 pointer-events-none">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={bannerUrl}
+              alt={`Banner de ${businessName}`}
+              className="w-full h-full object-cover opacity-15 dark:opacity-10"
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-white via-white/85 to-transparent dark:from-[#141416] dark:via-[#141416]/90" />
+          </div>
+        )}
+
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="max-w-2xl space-y-3.5">
+            {/* Micro-badge de bienvenida / tipo de servicio */}
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-stone-100 dark:bg-zinc-800/90 border border-stone-200/70 dark:border-zinc-700/70 text-[11px] font-extrabold text-stone-700 dark:text-zinc-200 shadow-2xs">
+              <Flame className="w-3.5 h-3.5 tenant-primary-text" />
+              <span>Menú Digital & Pedidos Directos</span>
+            </div>
+
+            <div className="space-y-1.5">
+              <h1 className="text-2xl sm:text-4xl font-black tracking-tight leading-tight text-stone-950 dark:text-white">
+                {businessName}
+              </h1>
+              <p className="text-xs sm:text-sm text-stone-600 dark:text-zinc-400 font-medium leading-relaxed max-w-xl">
+                Arma tu pedido al momento con ingredientes de calidad. Selecciona tus opciones favoritas y retira en tienda o recíbelo por delivery.
+              </p>
+            </div>
+
+            {/* Badges de servicio rápidos */}
+            <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 pt-1 text-[11px] font-bold text-stone-600 dark:text-zinc-400">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-stone-100/80 dark:bg-zinc-900 border border-stone-200/60 dark:border-zinc-800">
+                <Zap className="w-3 h-3 text-amber-500" />
+                Atención en Vivo
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-stone-100/80 dark:bg-zinc-900 border border-stone-200/60 dark:border-zinc-800">
+                <Truck className="w-3 h-3 text-emerald-500" />
+                Pick-up & Delivery
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-stone-100/80 dark:bg-zinc-900 border border-stone-200/60 dark:border-zinc-800">
+                <ShieldCheck className="w-3 h-3 text-blue-500" />
+                Precios Claros en USD y BCV
+              </span>
+            </div>
           </div>
 
           {logoUrl && (
-            <div className="hidden md:flex w-24 h-24 rounded-3xl bg-white dark:bg-zinc-900 p-2.5 items-center justify-center shrink-0 shadow-md border border-stone-200 dark:border-zinc-700">
+            <div className="hidden md:flex w-24 h-24 sm:w-28 sm:h-28 rounded-2xl sm:rounded-3xl bg-white dark:bg-zinc-900 p-3 items-center justify-center shrink-0 shadow-md border border-stone-200/90 dark:border-zinc-700/80">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={logoUrl} alt={businessName} className="w-full h-full object-contain" />
             </div>

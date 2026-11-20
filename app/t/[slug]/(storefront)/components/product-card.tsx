@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo, memo } from 'react';
 import { useCart } from '@/lib/cart/cart-store';
 import { useFavorites } from '@/lib/favorites/favorites-store';
 import { toast } from 'sonner';
-import { Plus, Minus, Package, ShoppingBag, X, Heart, SlidersHorizontal } from 'lucide-react';
+import { Plus, Minus, Package, ShoppingBag, X, Heart, SlidersHorizontal, GlassWater, UtensilsCrossed, Sparkles } from 'lucide-react';
 import { ModalPortal } from '@/components/ui/modal-portal';
 import { FormattedDescription } from '@/components/ui/formatted-description';
 import {
@@ -31,7 +31,7 @@ export interface StorefrontProduct {
   modifier_groups?: ModifierGroup[];
 }
 
-export function ProductCard({
+function ProductCardComponent({
   product,
   priority = false,
   exchangeRate,
@@ -70,6 +70,11 @@ export function ProductCard({
     (product.variants && product.variants.length > 0) ||
     (product.modifier_groups && product.modifier_groups.length > 0)
   );
+
+  const isBeverage = useMemo(() => {
+    const text = `${product.category_name || ''} ${product.name || ''}`.toLowerCase();
+    return /bebida|agua|refresco|jugo|soda|drink|liquido|malta|cerveza|tea|cafe|café/.test(text);
+  }, [product.category_name, product.name]);
 
   function handleCardClick() {
     if (isOutOfStock) return;
@@ -186,20 +191,36 @@ export function ProductCard({
         }`}
       >
         <div>
-          {/* Imagen del producto limpia (sin categoría encima) */}
-          <div className="aspect-square w-full rounded-xl bg-stone-50 dark:bg-zinc-900/80 border border-stone-100 dark:border-zinc-800 flex items-center justify-center mb-3 relative overflow-hidden group-hover:bg-stone-100/70 dark:group-hover:bg-zinc-800 transition-colors">
+          {/* Imagen del producto limpia o Placeholder Gastronómico Elegante */}
+          <div className="aspect-square w-full rounded-xl bg-stone-100 dark:bg-zinc-900 border border-stone-200/70 dark:border-zinc-800 flex items-center justify-center mb-3 relative overflow-hidden group-hover:border-stone-300 dark:group-hover:border-zinc-700 transition-colors">
             {product.image_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={product.image_url}
                 alt={product.name}
-                className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300"
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
                 loading={priority ? 'eager' : 'lazy'}
                 fetchPriority={priority ? 'high' : 'auto'}
                 decoding="async"
               />
+            ) : isBeverage ? (
+              <div className="w-full h-full flex flex-col items-center justify-center p-3 bg-gradient-to-br from-sky-500/10 via-stone-50 to-indigo-500/10 dark:from-sky-950/20 dark:via-zinc-900 dark:to-indigo-950/30 text-sky-700 dark:text-sky-300">
+                <div className="w-12 h-12 rounded-2xl bg-sky-500/10 dark:bg-sky-500/20 border border-sky-500/20 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform duration-300 shadow-2xs">
+                  <GlassWater className="w-6 h-6 text-sky-600 dark:text-sky-400 stroke-[1.75]" />
+                </div>
+                <span className="text-[10px] font-bold text-stone-500 dark:text-zinc-400 text-center line-clamp-1">
+                  Bebida Refrescante
+                </span>
+              </div>
             ) : (
-              <Package className="w-10 h-10 text-stone-300 dark:text-zinc-600 group-hover:scale-110 transition-transform duration-300" />
+              <div className="w-full h-full flex flex-col items-center justify-center p-3 bg-gradient-to-br from-amber-500/10 via-stone-50 to-orange-500/10 dark:from-amber-950/20 dark:via-zinc-900 dark:to-orange-950/30 text-amber-800 dark:text-amber-300">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/10 dark:bg-amber-500/20 border border-amber-500/20 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform duration-300 shadow-2xs">
+                  <UtensilsCrossed className="w-6 h-6 text-amber-600 dark:text-amber-400 stroke-[1.75]" />
+                </div>
+                <span className="text-[10px] font-bold text-stone-500 dark:text-zinc-400 text-center line-clamp-1">
+                  Especialidad de la Casa
+                </span>
+              </div>
             )}
             
             {/* Badge de stock (solo si está agotado o queda poco stock; NUNCA dice 'Disponible') */}
@@ -212,6 +233,14 @@ export function ProductCard({
                 Últimas {stock} uds
               </span>
             ) : null}
+
+            {/* Badge indicador de personalización */}
+            {hasCustomization && !isOutOfStock && (
+              <span className="absolute bottom-2 left-2 text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-stone-900/85 dark:bg-zinc-800/90 text-white backdrop-blur-md shadow-xs flex items-center gap-1">
+                <SlidersHorizontal className="w-2.5 h-2.5 text-orange-400" />
+                <span className="hidden xs:inline">Personalizable</span>
+              </span>
+            )}
 
             {/* Botón de Favoritos (Corazón en la esquina superior derecha) */}
             <button
@@ -455,3 +484,5 @@ export function ProductCard({
     </>
   );
 }
+
+export const ProductCard = memo(ProductCardComponent);
