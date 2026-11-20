@@ -97,11 +97,20 @@ export function isTenantInContingency(tenant: {
   last_pos_heartbeat_at?: string | Date | null;
   contingency_offline_mode?: string | null;
 }): boolean {
-  const manualMode = (tenant.contingency_offline_mode || 'normal').toLowerCase();
+  const mode = (tenant.contingency_offline_mode || 'normal').toLowerCase();
+
+  // Si el modo configurado es 'normal', el comercio opera de forma regular (sin contingencia)
+  if (mode === 'normal') {
+    return false;
+  }
+
+  // Si el comercio activó una política de contingencia ('preorder_request' o 'safety_buffer'),
+  // solo entra en estado de contingencia si el POS físico registró conexión previa y perdió latido por >15 min
   const hasHeartbeatTimeout = tenant.last_pos_heartbeat_at
     ? Date.now() - new Date(tenant.last_pos_heartbeat_at).getTime() > POS_HEARTBEAT_TIMEOUT_MS
     : false;
-  return manualMode !== 'normal' || hasHeartbeatTimeout;
+
+  return hasHeartbeatTimeout;
 }
 
 /**
