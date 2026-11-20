@@ -227,6 +227,38 @@ Plataforma SaaS Multi-Tenant de Comercio Universal (Minimarkets, Retail, Restaur
 
 ---
 
+### 🍔 FASE 13: Plugin Canónico `food_service` (Gastronomía, Salón, KDS y Variantes)
+- **Base de Datos Canónica & Tablas Gastronómicas (`05_PLUGIN_SCHEMAS.sql` vía `platform.fs_ddl_food_service`)**:
+  - Salón y Mesas: `fs_zones`, `fs_tables`, `fs_table_tickets`, `fs_bill_splits`, `fs_table_qr_tokens`.
+  - Comandas de Cocina & KDS: `fs_kitchen_tickets`, `fs_kitchen_ticket_items`, `fs_daily_86` (agotados diarios).
+  - Recetas & Escandallo (BOM): `fs_recipes`, `fs_recipe_items`, `fs_raw_materials`, `fs_consumption_log`.
+  - Modificadores y Agrupaciones: `fs_modifier_groups`, `fs_group_modifiers`, `fs_product_groups`.
+- **Extensiones Core Seguras (`018_food_service_core_extension.sql`)**:
+  - Nuevo tipo de entrega en órdenes: `delivery_type = 'DINE_IN'` (Consumo en Salón).
+  - Nuevos roles de personal: `'WAITER'` (Mesero) y `'KITCHEN'` (Cocinero/KDS) en `staff_profiles`.
+  - Categorías aisladas: bandera `is_hidden = true` en `categories` para insumos de cocina o modificadores que no deben listarse directamente en vitrina abierta.
+- **Motor de Personalización de Platillos (`FoodProductCustomizerModal`)**:
+  - **Matriz Multidimensional 2D (Porción x Proteína)**: Resolución dinámica cruzada para Burritos, Bowls y platos fuertes con precios netos directos ($5.99 a $9.99), selección por defecto de porción Grande y visualización de acompañantes incluidos.
+  - **Variantes 1D de Selección Directa**: Radio Cards intuitivos para productos con elecciones simples de cobertura o sabor (ej. Nachos con Queso Fundido $3.99 / Chilli $5.99; Churros con Azúcar $4.50 / Canela $4.99 / Dulce de Leche $6.99).
+  - **Grupos de Upselling y Modificadores**: Soporte nativo para combos adicionales (`¡Hazlo Combo! +$3.00`), salsas extras, bebidas sugeridas y notas de preparación para cocina (`prep_notes`).
+
+---
+
+### 💼 FASE 15: Plugin Canónico `sales_team` (Equipo de Ventas, Cotizaciones y Comisiones)
+- **Esquema Aislado de Ventas (`05_PLUGIN_SCHEMAS.sql` vía `platform.st_ddl_sales_team`)**:
+  - Tablas: `sales_reps`, `quotes`, `quote_items`, `quote_status_history`, `sales_commission_ledger`.
+- **Matriz de Permisos Modular y Gestión de Staff (`/admin/staff`)**:
+  - Asignación dinámica del rol `SALES_REP` sensible a la activación del plugin en el inquilino.
+  - Matriz visual de permisos por rol en `staff-manager.tsx` con paginación, modales de creación y edición.
+- **Ciclo Completo de Cotizaciones (`/admin/sales/quotes`)**:
+  - Estados: `DRAFT → ISSUED → CONVERTED / REJECTED / EXPIRED`.
+  - Bloqueo de precio mínimo con ajuste únicamente por descuento controlado.
+  - Conversión directa de cotizaciones a órdenes en Terminal POS con trazabilidad completa.
+
+---
+
+---
+
 ### ✅ FASE 12: Optimización UI/UX Móvil, Redes Sociales en Core, Modularidad de Plugins y Blindaje de Turnos POS
 - **Redes Sociales en Core & Footer Dinámico**:
   - Configuración nativa en pestaña `/admin/settings?tab=social` con persistencia en `settings.value.social_media` (Instagram, Facebook, TikTok, X/Twitter, YouTube, WhatsApp).
