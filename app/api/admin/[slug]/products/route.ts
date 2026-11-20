@@ -296,9 +296,22 @@ export async function POST(
             `INSERT INTO product_variants (
               id, product_id, sku, name, attributes, price_adjustment_primary, current_stock, is_active
             ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, true) RETURNING id`,
-            [inserted.id, vSku, v.name, JSON.stringify(vAttributes), priceAdj, v.stock || 0]
+            [inserted.id, vSku, v.name, JSON.stringify(vAttributes), priceAdj, v.stock ?? 100]
           );
           const variantId = vRes.rows[0].id;
+
+          // Sincronizar stock inicial de la variante en la tabla inventory
+          const storeRes = await client.query(`SELECT id FROM stores WHERE is_active = true LIMIT 1`);
+          const defaultStoreId = storeRes.rows[0]?.id;
+          if (defaultStoreId) {
+            await client.query(
+              `INSERT INTO inventory (store_id, product_id, variant_id, quantity, min_quantity)
+               VALUES ($1, $2, $3, $4, 5.000)
+               ON CONFLICT ON CONSTRAINT uq_inventory_store_product_variant
+               DO UPDATE SET quantity = EXCLUDED.quantity, updated_at = now()`,
+              [defaultStoreId, inserted.id, variantId, v.stock ?? 100]
+            );
+          }
 
           // Si tiene receta específica para esta variante
           if (v.recipe_items && v.recipe_items.length > 0) {
@@ -345,6 +358,21 @@ export async function POST(
              VALUES ($1, $2, $3, $4)
              ON CONFLICT (recipe_id, raw_material_id) DO UPDATE SET quantity = EXCLUDED.quantity`,
             [baseRecId, item.raw_material_id, item.quantity, item.waste_pct || 0]
+          );
+        }
+      }
+
+      // Sincronizar inventario inicial para productos sin variantes
+      if (!hasVariants) {
+        const storeRes = await client.query(`SELECT id FROM stores WHERE is_active = true LIMIT 1`);
+        const defaultStoreId = storeRes.rows[0]?.id;
+        if (defaultStoreId) {
+          await client.query(
+            `INSERT INTO inventory (store_id, product_id, variant_id, quantity, min_quantity)
+             VALUES ($1, $2, NULL, $3, $4)
+             ON CONFLICT ON CONSTRAINT uq_inventory_store_product_variant
+             DO UPDATE SET quantity = EXCLUDED.quantity, min_quantity = EXCLUDED.min_quantity, updated_at = now()`,
+            [defaultStoreId, inserted.id, data.current_stock ?? 0, data.min_stock_alert ?? 5]
           );
         }
       }

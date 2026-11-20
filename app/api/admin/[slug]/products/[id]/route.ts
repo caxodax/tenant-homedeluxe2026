@@ -176,21 +176,9 @@ export async function PATCH(
         );
       }
 
-      // Si se actualizó current_stock o min_stock_alert, sincronizar inventory
-      if (productFields.current_stock !== undefined || productFields.min_stock_alert !== undefined) {
-        const storeRes = await client.query(`SELECT id FROM stores WHERE is_active = true LIMIT 1`);
-        if (storeRes.rowCount && storeRes.rowCount > 0) {
-          const storeId = storeRes.rows[0].id;
-          await client.query(
-            `UPDATE inventory 
-             SET quantity = COALESCE($1, quantity), 
-                 min_quantity = COALESCE($2, min_quantity), 
-                 updated_at = now()
-             WHERE product_id = $3 AND store_id = $4`,
-            [productFields.current_stock ?? null, productFields.min_stock_alert ?? null, id, storeId]
-          );
-        }
-      }
+      // Obtener sucursal activa para sincronización de inventario
+      const storeRes = await client.query(`SELECT id FROM stores WHERE is_active = true LIMIT 1`);
+      const defaultStoreId = storeRes.rows[0]?.id;
 
       // 1. Sincronizar Variantes de Plato (Tamaño / Proteína) si se enviaron
       if (variants !== undefined) {
@@ -214,9 +202,20 @@ export async function PATCH(
               `INSERT INTO product_variants (
                 id, product_id, sku, name, attributes, price_adjustment_primary, current_stock, is_active
               ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, true) RETURNING id`,
-              [id, vSku, v.name, JSON.stringify(vAttributes), priceAdj, v.stock || 0]
+              [id, vSku, v.name, JSON.stringify(vAttributes), priceAdj, v.stock ?? 100]
             );
             const variantId = vRes.rows[0].id;
+
+            // Sincronizar stock de la variante en la tabla inventory
+            if (defaultStoreId) {
+              await client.query(
+                `INSERT INTO inventory (store_id, product_id, variant_id, quantity, min_quantity)
+                 VALUES ($1, $2, $3, $4, 5.000)
+                 ON CONFLICT ON CONSTRAINT uq_inventory_store_product_variant
+                 DO UPDATE SET quantity = EXCLUDED.quantity, updated_at = now()`,
+                [defaultStoreId, id, variantId, v.stock ?? 100]
+              );
+            }
 
             if (v.recipe_items && v.recipe_items.length > 0) {
               const recRes = await client.query(
@@ -236,6 +235,15 @@ export async function PATCH(
             }
           }
         }
+      } else if (defaultStoreId && (productFields.current_stock !== undefined || productFields.min_stock_alert !== undefined)) {
+        // Producto simple sin variantes
+        await client.query(
+          `INSERT INTO inventory (store_id, product_id, variant_id, quantity, min_quantity)
+           VALUES ($1, $2, NULL, $3, $4)
+           ON CONFLICT ON CONSTRAINT uq_inventory_store_product_variant
+           DO UPDATE SET quantity = EXCLUDED.quantity, min_quantity = EXCLUDED.min_quantity, updated_at = now()`,
+          [defaultStoreId, id, productFields.current_stock ?? 0, productFields.min_stock_alert ?? 5]
+        );
       }
 
       // 2. Sincronizar Grupos de Modificadores (Salsas / Bebidas)
