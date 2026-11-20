@@ -14,6 +14,7 @@ const createStaffSchema = z.object({
   phone: z.string().trim().max(30).optional().nullable(),
   role: z.enum(['OWNER', 'MANAGER', 'CASHIER', 'INVENTORY', 'DELIVERY', 'WAITER', 'KITCHEN', 'SALES_REP']),
   password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres').max(100),
+  custom_permissions: z.array(z.string()).optional().nullable(),
 });
 
 const updateStaffSchema = z.object({
@@ -23,6 +24,7 @@ const updateStaffSchema = z.object({
   role: z.enum(['OWNER', 'MANAGER', 'CASHIER', 'INVENTORY', 'DELIVERY', 'WAITER', 'KITCHEN', 'SALES_REP']).optional(),
   is_active: z.boolean().optional(),
   password: z.string().min(6).max(100).optional(),
+  custom_permissions: z.array(z.string()).optional().nullable(),
 });
 
 function handleAuthOrError(err: unknown) {
@@ -44,9 +46,15 @@ export async function GET(
     const { slug } = await params;
     const { tenant } = await requireTenantStaffApi(slug, 'staff');
 
+    const pluginsRes = await pool.query(
+      `SELECT plugin_id FROM platform.tenant_plugins WHERE tenant_id = $1 AND is_active = true`,
+      [tenant.id]
+    );
+    const activePlugins = pluginsRes.rows.map((r: { plugin_id: string }) => r.plugin_id);
+
     const staffList = await withTenantDb(tenant.db_schema_name, null, async (client) => {
       const res = await client.query(`
-        SELECT id, email, full_name, phone, role, is_active,
+        SELECT id, email, full_name, phone, role, is_active, custom_permissions,
                (auth_user_id IS NOT NULL) AS has_supabase_link,
                (password_hash IS NOT NULL) AS has_password,
                created_at, updated_at
@@ -64,7 +72,11 @@ export async function GET(
       return res.rows;
     });
 
-    return NextResponse.json({ staff: staffList, roles: STAFF_ROLES });
+    return NextResponse.json({ 
+      staff: staffList, 
+      roles: STAFF_ROLES, 
+      active_plugins: activePlugins 
+    });
   } catch (err) {
     return handleAuthOrError(err);
   }
@@ -100,10 +112,10 @@ export async function POST(
       }
 
       const ins = await client.query(
-        `INSERT INTO staff_profiles (email, full_name, phone, role, password_hash, is_active)
-         VALUES ($1, $2, $3, $4, $5, true)
-         RETURNING id, email, full_name, phone, role, is_active, created_at`,
-        [d.email, d.full_name, d.phone || null, d.role, passwordHash]
+        `INSERT INTO staff_profiles (email, full_name, phone, role, password_hash, is_active, custom_permissions)
+         VALUES ($1, $2, $3, $4, $5, true, $6)
+         RETURNING id, email, full_name, phone, role, is_active, custom_permissions, created_at`,
+        [d.email, d.full_name, d.phone || null, d.role, passwordHash, d.custom_permissions || null]
       );
 
       if (d.role === 'SALES_REP') {
@@ -196,15 +208,18 @@ export async function PATCH(
              role = COALESCE($3, role),
              is_active = COALESCE($4, is_active),
              password_hash = COALESCE($5, password_hash),
+             custom_permissions = CASE WHEN $6::boolean THEN $7 ELSE custom_permissions END,
              updated_at = now()
-         WHERE id = $6
-         RETURNING id, email, full_name, phone, role, is_active, created_at, updated_at`,
+         WHERE id = $8
+         RETURNING id, email, full_name, phone, role, is_active, custom_permissions, created_at, updated_at`,
         [
           d.full_name ?? null,
           d.phone !== undefined ? d.phone : null,
           d.role ?? null,
           d.is_active !== undefined ? d.is_active : null,
           newPasswordHash,
+          d.custom_permissions !== undefined,
+          d.custom_permissions ?? null,
           d.id,
         ]
       );

@@ -29,6 +29,7 @@ export interface TenantStaffContext {
     role: string;
     full_name: string;
     email?: string;
+    custom_permissions?: string[] | null;
   };
   isDevFallback?: boolean;
 }
@@ -79,7 +80,7 @@ async function resolveTenantContext(
 
     if (user && user.email) {
       let staffRes = await pool.query(
-        `SELECT id, role, full_name, email FROM "${tenant.db_schema_name}".staff_profiles
+        `SELECT id, role, full_name, email, custom_permissions FROM "${tenant.db_schema_name}".staff_profiles
          WHERE auth_user_id = $1 AND is_active = true
          LIMIT 1`,
         [user.id]
@@ -91,7 +92,7 @@ async function resolveTenantContext(
           `UPDATE "${tenant.db_schema_name}".staff_profiles
            SET auth_user_id = $1, updated_at = now()
            WHERE lower(email) = lower($2) AND auth_user_id IS NULL AND is_active = true
-           RETURNING id, role, full_name, email`,
+           RETURNING id, role, full_name, email, custom_permissions`,
           [user.id, user.email]
         );
       }
@@ -140,7 +141,7 @@ async function resolveTenantContext(
       sessionPayload.schemaName === tenant.db_schema_name
     ) {
       const staffRes = await pool.query(
-        `SELECT id, role, full_name, email FROM "${tenant.db_schema_name}".staff_profiles
+        `SELECT id, role, full_name, email, custom_permissions FROM "${tenant.db_schema_name}".staff_profiles
          WHERE id = $1 AND is_active = true
          LIMIT 1`,
         [sessionPayload.staffId]
@@ -201,7 +202,7 @@ export async function requireTenantStaff(
     redirect(`/t/${normalizedSlug}/login`);
   }
 
-  if (requiredPermission && !hasPermission(res.ctx.staff.role, requiredPermission)) {
+  if (requiredPermission && !hasPermission(res.ctx.staff.role, requiredPermission, res.ctx.staff.custom_permissions)) {
     redirect(getDefaultLandingPath(normalizedSlug, res.ctx.staff.role));
   }
 
@@ -228,7 +229,7 @@ export async function requireTenantStaffApi(
     throw new TenantAuthError('Sesión requerida. Inicia sesión para continuar.', 401);
   }
 
-  if (requiredPermission && !hasPermission(res.ctx.staff.role, requiredPermission)) {
+  if (requiredPermission && !hasPermission(res.ctx.staff.role, requiredPermission, res.ctx.staff.custom_permissions)) {
     throw new TenantAuthError(
       `Permisos insuficientes para el rol ${res.ctx.staff.role}`,
       403

@@ -44,7 +44,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Dashboard', href: '', icon: LayoutDashboard, permission: 'dashboard', badgeColor: 'emerald' },
       { label: 'Pedidos', href: '/orders', icon: ShoppingCart, permission: 'orders', badgeColor: 'blue' },
-      { label: 'Cotizaciones', href: '/sales/quotes', icon: FileText, permission: 'orders', badgeColor: 'blue', plugin: 'sales_team' },
+      { label: 'Cotizaciones', href: '/sales/quotes', icon: FileText, permission: 'quotes', badgeColor: 'blue', plugin: 'sales_team' },
       { label: 'Cocina (KDS)', href: '/kds', icon: ChefHat, permission: 'orders', badgeColor: 'amber', plugin: 'food_service' },
       { label: 'Salón & Mesas', href: '/food-service', icon: UtensilsCrossed, permission: 'pos', badgeColor: 'amber', plugin: 'food_service' },
       { label: 'Delivery', href: '/delivery', icon: Bike, permission: 'orders', badgeColor: 'emerald', plugin: 'delivery_fleet' },
@@ -74,11 +74,13 @@ const NAV_SECTIONS: NavSection[] = [
 export function SidebarNav({ 
   slug, 
   role = 'OWNER',
-  activePlugins 
+  activePlugins,
+  customPermissions,
 }: { 
   slug: string; 
   role?: string;
   activePlugins?: string[];
+  customPermissions?: string[] | null;
 }) {
   const pathname = usePathname() || '';
   const cleanPath =
@@ -91,7 +93,7 @@ export function SidebarNav({
     <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto">
       {NAV_SECTIONS.map((section) => {
         const visibleItems = section.items.filter((item) =>
-          hasPermission(role, item.permission) &&
+          hasPermission(role, item.permission, customPermissions) &&
           (!item.plugin || (activePlugins && activePlugins.includes(item.plugin)))
         );
         if (visibleItems.length === 0) return null;

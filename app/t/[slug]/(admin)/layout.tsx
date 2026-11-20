@@ -124,11 +124,11 @@ export default async function TenantAdminLayout({
         </div>
         
         {/* Navegación Reactiva con Secciones estructuradas (Opción A) */}
-        <SidebarNav slug={slug} role={staff.role} activePlugins={activePlugins} />
+        <SidebarNav slug={slug} role={staff.role} activePlugins={activePlugins} customPermissions={staff.custom_permissions} />
         
         {/* Footer del Sidebar */}
         <div className="p-3 border-t border-stone-200/80 dark:border-zinc-800/80 space-y-1 bg-stone-50/50 dark:bg-zinc-900/30">
-          {hasPermission(staff.role, 'pos') && (
+          {hasPermission(staff.role, 'pos', staff.custom_permissions) && (
             <Link 
               href={`/t/${slug}/pos`}
               className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-stone-800 dark:text-zinc-200 hover:text-stone-950 dark:hover:text-white hover:bg-stone-200/60 dark:hover:bg-zinc-800/60 transition-all font-bold"
@@ -178,7 +178,7 @@ export default async function TenantAdminLayout({
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <LowStockNotification slug={slug} />
 
-            {hasPermission(staff.role, 'orders') && (
+            {hasPermission(staff.role, 'orders', staff.custom_permissions) && (
               <NewOrderNotification slug={slug} />
             )}
 
@@ -193,6 +193,7 @@ export default async function TenantAdminLayout({
               logoUrl={logoUrl}
               storefrontEnabled={tenant.storefront_enabled}
               activePlugins={activePlugins}
+              customPermissions={staff.custom_permissions}
             />
           </div>
         </header>

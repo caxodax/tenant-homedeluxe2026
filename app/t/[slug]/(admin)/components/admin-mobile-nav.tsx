@@ -41,6 +41,7 @@ interface AdminMobileNavProps {
   logoUrl?: string | null;
   storefrontEnabled?: boolean;
   activePlugins?: string[];
+  customPermissions?: string[] | null;
 }
 
 interface NavSection {
@@ -61,7 +62,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Dashboard', href: '', icon: LayoutDashboard, permission: 'dashboard', badgeColor: 'emerald' },
       { label: 'Pedidos', href: '/orders', icon: ShoppingCart, permission: 'orders', badgeColor: 'blue' },
-      { label: 'Cotizaciones', href: '/sales/quotes', icon: FileText, permission: 'orders', badgeColor: 'blue', plugin: 'sales_team' },
+      { label: 'Cotizaciones', href: '/sales/quotes', icon: FileText, permission: 'quotes', badgeColor: 'blue', plugin: 'sales_team' },
       { label: 'Cocina (KDS)', href: '/kds', icon: ChefHat, permission: 'orders', badgeColor: 'amber', plugin: 'food_service' },
       { label: 'Salón & Mesas', href: '/food-service', icon: UtensilsCrossed, permission: 'pos', badgeColor: 'amber', plugin: 'food_service' },
       { label: 'Delivery', href: '/delivery', icon: Bike, permission: 'orders', badgeColor: 'emerald', plugin: 'delivery_fleet' },
@@ -95,6 +96,7 @@ export function AdminMobileNav({
   logoUrl,
   storefrontEnabled = true,
   activePlugins,
+  customPermissions,
 }: AdminMobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
   const pendingOrders = usePendingOrdersBadge(slug);
@@ -170,7 +172,7 @@ export function AdminMobileNav({
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {NAV_SECTIONS.map((section) => {
                 const visibleItems = section.items.filter((item) =>
-                  hasPermission(role, item.permission) &&
+                  hasPermission(role, item.permission, customPermissions) &&
                   (!item.plugin || (activePlugins && activePlugins.includes(item.plugin)))
                 );
                 if (visibleItems.length === 0) return null;
@@ -229,7 +231,7 @@ export function AdminMobileNav({
 
             {/* Footer con Acciones Rápidas */}
             <div className="p-4 border-t border-stone-200/80 dark:border-zinc-800/80 space-y-2 bg-stone-50/50 dark:bg-zinc-900/30">
-              {hasPermission(role, 'pos') && (
+              {hasPermission(role, 'pos', customPermissions) && (
                 <Link
                   href={`/t/${slug}/pos`}
                   onClick={() => setIsOpen(false)}
