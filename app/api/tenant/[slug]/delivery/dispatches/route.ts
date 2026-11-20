@@ -26,7 +26,8 @@ export async function GET(
           o.order_number,
           o.total_primary AS order_total_primary,
           o.total_secondary AS order_total_secondary,
-          o.currency AS order_currency,
+          COALESCE((SELECT primary_currency FROM settings WHERE key = 'general' LIMIT 1), 'USD') AS order_currency,
+          COALESCE((SELECT secondary_currency FROM settings WHERE key = 'general' LIMIT 1), 'VES') AS order_secondary_currency,
           d.full_name AS driver_name,
           d.phone AS driver_phone,
           d.license_plate AS driver_plate,
@@ -51,7 +52,7 @@ export async function GET(
         LEFT JOIN df_drivers d ON r.driver_id = d.id
       `;
 
-      const values: any[] = [];
+      const values: (string | number)[] = [];
       if (status) {
         query += ` WHERE r.status = $1`;
         values.push(status);
@@ -109,10 +110,11 @@ export async function POST(
       success: true,
       dispatch: res.rows[0]?.result,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error creating dispatch:', error);
+    const message = error instanceof Error ? error.message : 'Error al registrar despacho';
     return NextResponse.json(
-      { error: error.message || 'Error al registrar despacho' },
+      { error: message },
       { status: 500 }
     );
   }
