@@ -35,8 +35,10 @@ export function useKdsActiveCountBadge(slug: string, isActive = false): number {
 
     fetchKdsCount();
 
-    // Actualizar periódicamente cada 30s o cuando regrese el foco
-    const interval = setInterval(fetchKdsCount, 30000);
+    // Actualizar periódicamente cada 60s si está visible o cuando regrese el foco
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchKdsCount();
+    }, 60000);
     const onFocus = () => fetchKdsCount();
     window.addEventListener('focus', onFocus);
 
@@ -82,7 +84,9 @@ export function useDeliveryPendingCountBadge(slug: string, isActive = false): nu
 
     fetchDeliveryPending();
 
-    const interval = setInterval(fetchDeliveryPending, 30000);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchDeliveryPending();
+    }, 60000);
     const onFocus = () => fetchDeliveryPending();
     window.addEventListener('focus', onFocus);
 

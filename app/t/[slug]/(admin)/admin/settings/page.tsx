@@ -39,6 +39,7 @@ import {
   Ban,
   Blocks,
   Tag,
+  UtensilsCrossed,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ImageUploader } from '@/components/admin/image-uploader';
@@ -75,6 +76,11 @@ const settingsSchema = z.object({
     tax_enabled: z.boolean(),
     tax_rate: z.number().min(0).max(100),
     prices_include_tax: z.boolean(),
+  }),
+  features: z.object({
+    tables_enabled: z.boolean(),
+    recipes_enabled: z.boolean(),
+    banner_style: z.enum(['clean', 'card']),
   }),
 });
 
@@ -162,6 +168,11 @@ export default function SettingsPage() {
         tax_rate: 16,
         prices_include_tax: false,
       },
+      features: {
+        tables_enabled: true,
+        recipes_enabled: false,
+        banner_style: 'clean',
+      },
     },
   });
 
@@ -210,6 +221,11 @@ export default function SettingsPage() {
             tax_enabled: s.taxes?.tax_enabled ?? true,
             tax_rate: typeof s.taxes?.tax_rate === 'number' ? s.taxes.tax_rate : 16,
             prices_include_tax: s.taxes?.prices_include_tax ?? false,
+          },
+          features: {
+            tables_enabled: s.features?.tables_enabled !== false,
+            recipes_enabled: s.features?.recipes_enabled === true,
+            banner_style: s.features?.banner_style || 'clean',
           },
         });
       }
@@ -624,6 +640,64 @@ export default function SettingsPage() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* MODALIDADES OPERATIVAS GASTRONÓMICAS (FOOD SERVICE) */}
+            {activePlugins.includes('food_service') && (
+              <Card className="bg-white dark:bg-[#121214] border-slate-200 dark:border-zinc-800 shadow-xs">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-extrabold uppercase tracking-wider text-slate-950 dark:text-white flex items-center gap-2">
+                    <UtensilsCrossed className="w-4 h-4 text-orange-600 dark:text-orange-500" />
+                    Modalidades de Operación Gastronómica
+                  </CardTitle>
+                  <p className="text-xs text-slate-500 dark:text-zinc-400 mt-0.5">
+                    Adapta MarketOS a la tipología de tu comercio (Restaurante con salón vs. Feria de comida / Takeout / Delivery).
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="p-4 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/50 space-y-3">
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.watch('features.tables_enabled') !== false}
+                        onChange={(e) => {
+                          form.setValue('features.tables_enabled', e.target.checked, { shouldDirty: true });
+                        }}
+                        className="w-4 h-4 mt-0.5 rounded text-orange-600 cursor-pointer"
+                      />
+                      <div className="flex flex-col">
+                        <span className="text-xs font-bold text-slate-900 dark:text-white">
+                          Servicio en Salón & Mesas de Sala
+                        </span>
+                        <span className="text-[11px] text-slate-500 dark:text-zinc-400">
+                          Activa la gestión de mesas, comensales y cuentas divididas. Desmárcalo para comercios en ferias de centro comercial, comida rápida o dark kitchens.
+                        </span>
+                      </div>
+                    </label>
+
+                    <div className="border-t border-slate-200 dark:border-zinc-800 pt-3">
+                      <label className="flex items-start gap-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={form.watch('features.recipes_enabled') === true}
+                          onChange={(e) => {
+                            form.setValue('features.recipes_enabled', e.target.checked, { shouldDirty: true });
+                          }}
+                          className="w-4 h-4 mt-0.5 rounded text-orange-600 cursor-pointer"
+                        />
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-slate-900 dark:text-white">
+                            Gestión Avanzada de Escandallo y Deducción de Recetas Técnicas
+                          </span>
+                          <span className="text-[11px] text-slate-500 dark:text-zinc-400">
+                            Descuenta materias primas por gramajes exactos según receta. Si se desmarca, la cocina opera de forma ágil y visual por plato y adicionales.
+                          </span>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           {/* TAB 2: BRANDING (LOGO Y PALETA) */}
@@ -654,8 +728,11 @@ export default function SettingsPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300">
-                      Banner Promocional Superior (16:9 o Panorámico)
+                    <Label className="text-xs font-bold text-slate-700 dark:text-zinc-300 flex items-center justify-between">
+                      <span>Banner Promocional de Vitrina (Panorámico 21:9)</span>
+                      <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-md">
+                        1920 × 600 px
+                      </span>
                     </Label>
                     <ImageUploader
                       tenantSlug={params.slug}
@@ -666,8 +743,68 @@ export default function SettingsPage() {
                       maxSize={5}
                     />
                     <p className="text-[10px] text-slate-400">
-                      Banner decorativo para el hero de la vitrina digital de tu tienda.
+                      Recomendado: 1920 × 600 px (21:9). Ocupará el 100% del ancho horizontal sin recortes ni barras borrosas.
                     </p>
+                  </div>
+                </div>
+
+                {/* SELECTOR DE ESTILO DEL BANNER EN VITRINA */}
+                <div className="pt-4 border-t border-slate-200 dark:border-zinc-800 space-y-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs font-bold text-slate-800 dark:text-zinc-200 uppercase tracking-wider">
+                      Estilo de Visualización del Banner en Vitrina
+                    </Label>
+                    <p className="text-xs text-slate-500 dark:text-zinc-400">
+                      Define cómo se presentará el banner en la cabecera de la vitrina digital de tus clientes.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => form.setValue('features.banner_style', 'clean', { shouldDirty: true })}
+                      className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                        form.watch('features.banner_style') !== 'card'
+                          ? 'border-emerald-500 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100 ring-1 ring-emerald-500'
+                          : 'border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/50 text-slate-700 dark:text-zinc-300 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                          Banner Gráfico Protagónico (Recomendado)
+                        </span>
+                        {form.watch('features.banner_style') !== 'card' && (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-zinc-400 leading-snug">
+                        Muestra tu banner al 100% nítido, sin opacidad ni textos encimados. Si no has subido banner, mostrará automáticamente la tarjeta informativa.
+                      </p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => form.setValue('features.banner_style', 'card', { shouldDirty: true })}
+                      className={`p-3.5 rounded-xl border text-left transition flex flex-col justify-between cursor-pointer ${
+                        form.watch('features.banner_style') === 'card'
+                          ? 'border-emerald-500 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100 ring-1 ring-emerald-500'
+                          : 'border-slate-200 dark:border-zinc-800 bg-slate-50/50 dark:bg-zinc-900/50 text-slate-700 dark:text-zinc-300 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                          <Store className="w-3.5 h-3.5 text-slate-600 dark:text-zinc-400" />
+                          Tarjeta Informativa Tradicional
+                        </span>
+                        {form.watch('features.banner_style') === 'card' && (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                        )}
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-zinc-400 leading-snug">
+                        Muestra la tarjeta blanca con el nombre comercial, badges de servicio y el banner atenuado como fondo decorativo.
+                      </p>
+                    </button>
                   </div>
                 </div>
               </CardContent>

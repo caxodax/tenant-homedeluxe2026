@@ -97,9 +97,16 @@ export function LowStockNotification({ slug }: { slug: string }) {
 
   useEffect(() => {
     fetchAlerts();
-    // Sondeo ligero cada 60s
-    const timer = setInterval(fetchAlerts, 60000);
-    return () => clearInterval(timer);
+    // Sondeo ligero cada 2m solo con pestaña visible
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchAlerts();
+    }, 120000);
+    const onFocus = () => fetchAlerts();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', onFocus);
+    };
   }, [slug]);
 
   // Cerrar dropdown al hacer click afuera o presionar Escape

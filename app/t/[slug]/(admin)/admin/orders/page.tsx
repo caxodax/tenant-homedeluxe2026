@@ -206,7 +206,7 @@ export default function AdminOrdersPage() {
       ) {
         void fetchOrders(true);
       }
-    }, 30000);
+    }, 60000);
 
     return () => {
       window.removeEventListener(TENANT_ORDERS_DOM_EVENT, handleRealtimeEvent);

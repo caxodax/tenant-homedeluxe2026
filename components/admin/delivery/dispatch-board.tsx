@@ -73,9 +73,17 @@ export function DispatchBoard({
 
   useEffect(() => {
     fetchData();
-    // Polling de respaldo cada 10 segundos
-    const interval = setInterval(fetchData, 10000);
-    return () => clearInterval(interval);
+    const handleRealtime = () => {
+      if (document.visibilityState === 'visible') fetchData();
+    };
+    window.addEventListener('marketos:order-realtime', handleRealtime);
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchData();
+    }, 60000);
+    return () => {
+      window.removeEventListener('marketos:order-realtime', handleRealtime);
+      clearInterval(interval);
+    };
   }, [slug]);
 
   // Manejo de asignación de chofer

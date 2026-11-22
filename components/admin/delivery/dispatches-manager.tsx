@@ -85,9 +85,17 @@ export function DispatchesManager({
     loadDrivers();
     loadDispatches();
 
-    // Polling suave cada 25 segundos
-    const timer = setInterval(() => loadDispatches(true), 25000);
-    return () => clearInterval(timer);
+    const handleRealtime = () => {
+      if (document.visibilityState === 'visible') void loadDispatches(true);
+    };
+    window.addEventListener('marketos:order-realtime', handleRealtime);
+    const timer = setInterval(() => {
+      if (document.visibilityState === 'visible') void loadDispatches(true);
+    }, 60000);
+    return () => {
+      window.removeEventListener('marketos:order-realtime', handleRealtime);
+      clearInterval(timer);
+    };
   }, [loadDrivers, loadDispatches]);
 
   // Asignar Chofer

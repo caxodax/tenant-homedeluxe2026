@@ -44,6 +44,7 @@ interface AdminMobileNavProps {
   storefrontEnabled?: boolean;
   activePlugins?: string[];
   customPermissions?: string[] | null;
+  tablesEnabled?: boolean;
 }
 
 interface NavSection {
@@ -100,6 +101,7 @@ export function AdminMobileNav({
   storefrontEnabled = true,
   activePlugins,
   customPermissions,
+  tablesEnabled = true,
 }: AdminMobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
   const pendingOrders = usePendingOrdersBadge(slug);
@@ -180,7 +182,8 @@ export function AdminMobileNav({
               {NAV_SECTIONS.map((section) => {
                 const visibleItems = section.items.filter((item) =>
                   hasPermission(role, item.permission, customPermissions) &&
-                  (!item.plugin || (activePlugins && activePlugins.includes(item.plugin)))
+                  (!item.plugin || (activePlugins && activePlugins.includes(item.plugin))) &&
+                  !(item.href === '/food-service' && tablesEnabled === false)
                 );
                 if (visibleItems.length === 0) return null;
 

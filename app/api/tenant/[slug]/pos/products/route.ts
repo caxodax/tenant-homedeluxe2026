@@ -182,6 +182,7 @@ export async function GET(
         daily_86_ids: daily86Ids,
         sales_reps: salesReps,
         is_sales_team_active: activePlugins.includes('sales_team') || activePlugins.includes('sales_commission'),
+        is_credit_cxc_active: activePlugins.includes('credit_cxc'),
       };
     });
 
@@ -196,6 +197,7 @@ export async function GET(
       daily_86_ids: data.daily_86_ids,
       sales_reps: data.sales_reps,
       is_sales_team_active: data.is_sales_team_active,
+      is_credit_cxc_active: data.is_credit_cxc_active,
       store_id: data.store_id,
       business_name: data.settings?.business_name || name || 'Comercio',
       logo_url: data.settings?.logo_url || null,
@@ -213,6 +215,11 @@ export async function GET(
       discount_settings: data.settings?.value?.discounts || {
         allow_stacked: false,
         presets: [],
+      },
+      tables_enabled: data.settings?.value?.features?.tables_enabled !== false,
+      features: data.settings?.value?.features || {
+        tables_enabled: true,
+        recipes_enabled: false,
       },
     });
   } catch (error: unknown) {

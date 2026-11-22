@@ -40,6 +40,17 @@ export interface OfflineSale {
     currency: string;
     reference_number?: string;
   };
+  cxc_data?: {
+    account_type: 'LAYAWAY' | 'BNPL_FINANCING' | 'DIRECT_CREDIT';
+    document_type: 'FISCAL_INVOICE' | 'COMMERCIAL_NOTE';
+    financing_provider?: string | null;
+    external_reference?: string | null;
+    down_payment_usd: number;
+    down_payment_method?: string;
+    term_days: number;
+    notes?: string | null;
+    customer_id_number?: string | null;
+  } | null;
   sales_rep_id?: string | null;
   quote_id?: string | null;
   notes?: string;

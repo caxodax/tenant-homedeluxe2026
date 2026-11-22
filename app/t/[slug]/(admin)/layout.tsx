@@ -65,7 +65,7 @@ export default async function TenantAdminLayout({
   
   const { settings, activePlugins } = await withTenantDb(tenant.db_schema_name, null, async (client) => {
     const sRes = await client.query(`
-      SELECT business_name, logo_url, primary_color, secondary_color, accent_color 
+      SELECT business_name, logo_url, primary_color, secondary_color, accent_color, value
       FROM settings 
       WHERE key = 'general' 
       LIMIT 1
@@ -82,6 +82,7 @@ export default async function TenantAdminLayout({
   const storeName = settings?.business_name || tenant.name;
   const logoUrl = settings?.logo_url || null;
   const primaryColor = settings?.primary_color || TENANT_DEFAULTS.PRIMARY_COLOR;
+  const tablesEnabled = settings?.value?.features?.tables_enabled !== false;
   
   return (
     <>
@@ -124,7 +125,7 @@ export default async function TenantAdminLayout({
         </div>
         
         {/* Navegación Reactiva con Secciones estructuradas (Opción A) */}
-        <SidebarNav slug={slug} role={staff.role} activePlugins={activePlugins} customPermissions={staff.custom_permissions} />
+        <SidebarNav slug={slug} role={staff.role} activePlugins={activePlugins} customPermissions={staff.custom_permissions} tablesEnabled={tablesEnabled} />
         
         {/* Footer del Sidebar */}
         <div className="p-3 border-t border-stone-200/80 dark:border-zinc-800/80 space-y-1 bg-stone-50/50 dark:bg-zinc-900/30">
@@ -194,6 +195,7 @@ export default async function TenantAdminLayout({
               storefrontEnabled={tenant.storefront_enabled}
               activePlugins={activePlugins}
               customPermissions={staff.custom_permissions}
+              tablesEnabled={tablesEnabled}
             />
           </div>
         </header>

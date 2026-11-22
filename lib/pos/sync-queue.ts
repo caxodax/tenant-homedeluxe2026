@@ -155,6 +155,7 @@ function serializeSaleForApi(sale: OfflineSale) {
     offline_ticket_ref: sale.offline_ticket_ref,
     is_offline_sale: true,
     payment: sale.payment,
+    cxc_data: sale.cxc_data || null,
     notes: sale.notes,
   };
 }

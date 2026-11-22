@@ -184,10 +184,10 @@ function ProductCardComponent({
     <>
       <div 
         onClick={handleCardClick}
-        className={`group rounded-2xl border p-3.5 sm:p-4 flex flex-col justify-between transition-all duration-300 relative text-left select-none ${
+        className={`group rounded-2xl sm:rounded-3xl border p-3.5 sm:p-4 flex flex-col justify-between transition-all duration-300 relative text-left select-none ${
           isOutOfStock
             ? 'bg-stone-50/80 dark:bg-zinc-900/40 border-stone-200/50 dark:border-zinc-800/40 opacity-60 grayscale-[35%] cursor-not-allowed'
-            : 'bg-white dark:bg-[#141416] border-stone-200/90 dark:border-zinc-800/80 shadow-[0_3px_15px_-3px_rgba(0,0,0,0.05)] hover:shadow-[0_12px_24px_-4px_rgba(0,0,0,0.1)] hover:-translate-y-1 hover:border-stone-400/70 dark:hover:border-zinc-700 cursor-pointer'
+            : 'bg-white/95 dark:bg-[#15110e] border-stone-200/90 dark:border-zinc-800/80 hover:border-[var(--tenant-primary)]/50 shadow-[0_2px_12px_-2px_rgba(0,0,0,0.04)] hover:shadow-[0_12px_28px_-6px_rgba(179,81,30,0.12)] hover:-translate-y-1 cursor-pointer'
         }`}
       >
         <div>
@@ -267,7 +267,13 @@ function ProductCardComponent({
           {/* Categoría y SKU reubicados en la sección de información con alto contraste */}
           <div className="flex items-center gap-1.5 flex-wrap mb-1.5">
             {product.category_name && (
-              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-md bg-stone-100 dark:bg-zinc-800 text-stone-600 dark:text-zinc-300 uppercase tracking-wider">
+              <span 
+                className="text-[10px] font-extrabold px-2 py-0.5 rounded-md uppercase tracking-wider"
+                style={{
+                  backgroundColor: 'var(--tenant-warm-tint, rgba(252,232,200,0.3))',
+                  color: 'var(--tenant-brand-title, #4D2109)',
+                }}
+              >
                 {product.category_name}
               </span>
             )}
@@ -279,7 +285,7 @@ function ProductCardComponent({
           </div>
 
           {/* Título del Producto */}
-          <h3 className="text-xs sm:text-sm font-extrabold text-stone-900 dark:text-white line-clamp-2 leading-snug transition-colors min-h-[2.25rem]">
+          <h3 className="text-xs sm:text-sm font-extrabold text-stone-900 dark:text-white group-hover:tenant-primary-text line-clamp-2 leading-snug transition-colors min-h-[2.25rem]">
             {product.name}
           </h3>
         </div>
@@ -332,10 +338,10 @@ function ProductCardComponent({
               <button
                 type="button"
                 onClick={handleQuickAdd}
-                className={`w-full h-9 rounded-xl font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs ${
+                className={`w-full h-9 rounded-xl font-extrabold text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs active:scale-[0.98] ${
                   isAdded
                     ? 'bg-emerald-500 text-white'
-                    : 'bg-stone-100 hover:bg-stone-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-stone-800 dark:text-zinc-100'
+                    : 'tenant-primary-bg hover:brightness-105'
                 }`}
               >
                 {isAdded ? (
@@ -345,7 +351,7 @@ function ProductCardComponent({
                   </>
                 ) : hasCustomization ? (
                   <>
-                    <SlidersHorizontal className="w-3.5 h-3.5 text-orange-500" />
+                    <SlidersHorizontal className="w-3.5 h-3.5 opacity-90" />
                     <span>Personalizar</span>
                   </>
                 ) : (

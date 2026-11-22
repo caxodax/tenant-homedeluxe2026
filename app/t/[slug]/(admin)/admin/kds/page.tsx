@@ -111,7 +111,12 @@ export default function KitchenDisplayPage() {
       )
       .subscribe();
 
-    const interval = setInterval(loadTickets, 15000);
+    // Fallback perezoso por si hay micro-cortes de red, solo con pestaña visible
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadTickets();
+      }
+    }, 60000);
 
     return () => {
       supabase.removeChannel(channel);

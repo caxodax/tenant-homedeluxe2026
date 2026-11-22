@@ -56,8 +56,9 @@ export async function POST(request: NextRequest) {
     if (file.type?.startsWith("image/") && !file.type.includes("svg") && !file.type.includes("gif")) {
       try {
         const isProof = folder === "proofs";
-        const maxDimension = isProof ? 1280 : 1600;
-        const quality = isProof ? 80 : 85;
+        const isBanner = folder === "banners";
+        const maxDimension = isProof ? 1280 : isBanner ? 2048 : 1600;
+        const quality = isProof ? 80 : isBanner ? 92 : 85;
 
         finalBuffer = await sharp(rawBuffer)
           .rotate() // Respeta orientación EXIF de fotos móviles

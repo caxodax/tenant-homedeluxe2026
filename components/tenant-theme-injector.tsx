@@ -51,6 +51,30 @@ export function TenantThemeInjector({
       --tenant-secondary: ${safeSecondary};
       --tenant-secondary-contrast: ${secondaryContrast};
       --tenant-accent: ${safeAccent};
+
+      /* Superficies Impeccable Culinarias con Identidad de Marca */
+      --tenant-canvas-bg: #FAF7F2;
+      --tenant-card-bg: #FFFFFF;
+      --tenant-card-border: ${safeSecondary}1a;
+      --tenant-warm-tint: ${safeAccent}26;
+      --tenant-brand-title: ${safeSecondary};
+    }
+    .dark {
+      --tenant-canvas-bg: #0F0C0A;
+      --tenant-card-bg: #181310;
+      --tenant-card-border: ${safeAccent}1f;
+      --tenant-warm-tint: ${safePrimary}22;
+      --tenant-brand-title: ${safeAccent};
+    }
+    .tenant-canvas {
+      background-color: var(--tenant-canvas-bg) !important;
+    }
+    .tenant-card-surface {
+      background-color: var(--tenant-card-bg) !important;
+      border-color: var(--tenant-card-border) !important;
+    }
+    .tenant-brand-heading {
+      color: var(--tenant-brand-title) !important;
     }
     .tenant-primary-bg {
       background-color: ${safePrimary} !important;

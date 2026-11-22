@@ -46,9 +46,10 @@ export async function uploadTenantMedia(
   rawFile: File,
   tenantSlug: string,
   folder: string,
-  maxDim = 900
+  maxDim = 900,
+  quality = 0.82
 ): Promise<{ url: string; filename?: string }> {
-  const file = await toWebpFile(rawFile, maxDim);
+  const file = await toWebpFile(rawFile, maxDim, quality);
   const formData = new FormData();
   formData.append('file', file);
   formData.append('folder', folder);

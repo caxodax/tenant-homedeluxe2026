@@ -40,8 +40,9 @@ export function ImageUploader({
       setUploading(true);
 
       try {
-        const maxDim = path === 'logos' || path === 'branding' ? 512 : 900;
-        const file = await toWebpFile(rawFile, maxDim);
+        const maxDim = path === 'logos' || path === 'branding' ? 512 : path === 'banners' ? 2048 : 900;
+        const quality = path === 'banners' ? 0.92 : 0.82;
+        const file = await toWebpFile(rawFile, maxDim, quality);
 
         // 1. Intentar presigned upload directo a Cloudflare R2
         let uploadedUrl = '';
@@ -77,7 +78,7 @@ export function ImageUploader({
 
         // 2. Fallback de streaming si PUT directo falló por CORS en bucket
         if (!uploadedUrl) {
-          const fallbackData = await uploadTenantMedia(file, tenantSlug, path, maxDim);
+          const fallbackData = await uploadTenantMedia(file, tenantSlug, path, maxDim, quality);
           uploadedUrl = fallbackData.url;
         }
 

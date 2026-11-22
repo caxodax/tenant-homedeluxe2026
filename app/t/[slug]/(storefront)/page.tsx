@@ -42,6 +42,7 @@ export default async function StorefrontPage({
         businessName={shell.settings.business_name || shell.tenant.name}
         logoUrl={shell.settings.logo_url}
         bannerUrl={shell.settings.banner_url}
+        bannerStyle={shell.settings.features?.banner_style || 'clean'}
         exchangeRate={shell.settings.exchange_rate}
         primaryCurrency={shell.settings.primary_currency || 'USD'}
         slug={slug}

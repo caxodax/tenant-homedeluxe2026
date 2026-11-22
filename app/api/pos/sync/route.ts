@@ -36,10 +36,21 @@ const saleSchema = z.object({
   is_offline_sale: z.literal(true),
   payment: z.object({
     method: z.string().min(2),
-    amount: z.number().positive(),
+    amount: z.number().nonnegative(),
     currency: z.string().default('USD'),
     reference_number: z.string().optional(),
   }),
+  cxc_data: z.object({
+    account_type: z.enum(['LAYAWAY', 'BNPL_FINANCING', 'DIRECT_CREDIT']),
+    document_type: z.enum(['FISCAL_INVOICE', 'COMMERCIAL_NOTE']).default('COMMERCIAL_NOTE'),
+    financing_provider: z.string().optional().nullable(),
+    external_reference: z.string().optional().nullable(),
+    down_payment_usd: z.number().min(0).default(0),
+    down_payment_method: z.string().optional(),
+    term_days: z.number().int().positive().default(30),
+    notes: z.string().optional().nullable(),
+    customer_id_number: z.string().optional().nullable(),
+  }).optional().nullable(),
   sales_rep_id: z.string().uuid().optional().nullable(),
   quote_id: z.string().uuid().optional().nullable(),
   internal_notes: z.string().optional().nullable(),
@@ -141,6 +152,142 @@ export async function POST(request: NextRequest) {
       );
 
       invalidateTenantCache(tenant_slug, 'catalog', 'swr');
+
+      // Procesar Cuentas por Cobrar (CxC) para ventas reconciliadas con cxc_data
+      try {
+        const salesWithCxc = normalizedBatch.filter((s) => Boolean(s.cxc_data));
+        if (salesWithCxc.length > 0) {
+          await withTenantDb(schemaName, null, async (client) => {
+            const checkTbl = await client.query(`SELECT to_regclass('cxc_accounts') AS tbl`);
+            if (!checkTbl.rows[0]?.tbl) return;
+
+            for (const d of details) {
+              if (d.status !== 'RECONCILED' || !d.order_id) continue;
+              const sale = normalizedBatch.find((s) => s.offline_ticket_ref === d.offline_ref);
+              if (!sale || !sale.cxc_data) continue;
+
+              const existingAcc = await client.query(
+                `SELECT id FROM cxc_accounts WHERE order_id = $1 LIMIT 1`,
+                [d.order_id]
+              );
+              if (existingAcc.rowCount && existingAcc.rowCount > 0) continue;
+
+              // Resolver o registrar cliente
+              const custRes = await client.query(
+                `INSERT INTO customers (name, phone, id_number)
+                 VALUES ($1, $2, $3)
+                 ON CONFLICT (phone) DO UPDATE 
+                 SET name = EXCLUDED.name,
+                     id_number = COALESCE(EXCLUDED.id_number, customers.id_number)
+                 RETURNING id`,
+                [sale.customer_name, sale.customer_phone, sale.cxc_data.customer_id_number || null]
+              );
+              const customerId = custRes.rows[0].id;
+
+              // Generar correlativo CXC-YYYYMM-XXXXX
+              const seqRes = await client.query(
+                `SELECT format('CXC-%s-%s', to_char(now(), 'YYYYMM'), lpad(nextval('cxc_account_seq')::text, 5, '0')) AS acc_num`
+              );
+              const accountNumber = seqRes.rows[0].acc_num;
+
+              const originalAmount = Number(sale.total_primary || sale.total_usd || 0);
+              const downPayment = Math.min(originalAmount, Math.max(0, Number(sale.cxc_data.down_payment_usd || 0)));
+              const financedAmount = Math.max(0, Number((originalAmount - downPayment).toFixed(2)));
+              const downPercent = originalAmount > 0 ? Number(((downPayment / originalAmount) * 100).toFixed(2)) : 0;
+              const termDays = sale.cxc_data.term_days || (sale.cxc_data.account_type === 'LAYAWAY' ? 30 : 15);
+              const custodyStatus = sale.cxc_data.account_type === 'LAYAWAY' ? 'IN_CUSTODY' : 'NOT_APPLICABLE';
+              const accountStatus = financedAmount === 0 ? 'SETTLED' : 'CURRENT';
+
+              // En caso de apartado, mantener orden en CONFIRMED (mercancía bajo custodia en tienda)
+              if (sale.cxc_data.account_type === 'LAYAWAY') {
+                await client.query(
+                  `UPDATE orders SET status = 'CONFIRMED' WHERE id = $1`,
+                  [d.order_id]
+                );
+              }
+
+              const accRes = await client.query(
+                `INSERT INTO cxc_accounts (
+                   account_number, order_id, customer_id, seller_id, account_type, document_type,
+                   financing_provider, external_reference, custody_status, original_amount_usd,
+                   down_payment_usd, down_payment_percent, financed_amount_usd, balance_usd,
+                   total_paid_usd, term_days, issue_date, due_date, status, notes
+                 ) VALUES (
+                   $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
+                   CURRENT_DATE, CURRENT_DATE + ($16 || ' days')::interval, $17, $18
+                 ) RETURNING id`,
+                [
+                  accountNumber,
+                  d.order_id,
+                  customerId,
+                  sale.sales_rep_id || null,
+                  sale.cxc_data.account_type,
+                  sale.cxc_data.document_type || 'COMMERCIAL_NOTE',
+                  sale.cxc_data.account_type === 'BNPL_FINANCING' ? 'CASHEA' : (sale.cxc_data.financing_provider || null),
+                  sale.cxc_data.external_reference || null,
+                  custodyStatus,
+                  originalAmount,
+                  downPayment,
+                  downPercent,
+                  financedAmount,
+                  financedAmount,
+                  downPayment,
+                  termDays,
+                  accountStatus,
+                  sale.cxc_data.notes || `Venta POS ${sale.offline_ticket_ref}`
+                ]
+              );
+              const accountId = accRes.rows[0].id;
+
+              // Generar recibo de abono inicial si aplica
+              if (downPayment > 0) {
+                const recRes = await client.query(
+                  `SELECT format('REC-%s-%s', to_char(now(), 'YYYYMM'), lpad(nextval('cxc_receipt_seq')::text, 5, '0')) AS rec_num`
+                );
+                const receiptNum = recRes.rows[0].rec_num;
+
+                await client.query(
+                  `INSERT INTO cxc_payments (
+                     account_id, receipt_number, amount_usd, amount_paid_primary, amount_paid_secondary,
+                     exchange_rate, payment_method, payment_reference, payment_date, balance_after_usd
+                   ) VALUES (
+                     $1, $2, $3, $3, $3 * $4, $4, $5, $6, now(), $7
+                   )`,
+                  [
+                    accountId,
+                    receiptNum,
+                    downPayment,
+                    sale.exchange_rate_applied || 1.0,
+                    sale.cxc_data.down_payment_method || sale.payment.method || 'CASH_USD',
+                    sale.payment.reference_number || 'INICIAL-POS',
+                    financedAmount
+                  ]
+                );
+              }
+
+              // Generar cuotas quincenales para financiamiento Cashea
+              if (sale.cxc_data.account_type === 'BNPL_FINANCING' && financedAmount > 0) {
+                const tranche1 = Number((financedAmount / 3).toFixed(2));
+                const tranche2 = Number((financedAmount / 3).toFixed(2));
+                const tranche3 = Number((financedAmount - tranche1 - tranche2).toFixed(2));
+
+                await client.query(
+                  `INSERT INTO cxc_financing_tranches (
+                     account_id, tranche_number, tranche_name, expected_amount_usd, expected_date, status
+                   ) VALUES
+                     ($1, 1, 'Cuota 1 (Día 14)', $2, CURRENT_DATE + interval '14 days', 'PENDING'),
+                     ($1, 2, 'Cuota 2 (Día 28)', $3, CURRENT_DATE + interval '28 days', 'PENDING'),
+                     ($1, 3, 'Cuota 3 (Día 42)', $4, CURRENT_DATE + interval '42 days', 'PENDING')`,
+                  [accountId, tranche1, tranche2, tranche3]
+                );
+              }
+            }
+          });
+        }
+      } catch (cxcErr) {
+        console.error('Error syncing CxC accounts from POS:', cxcErr);
+      }
+
       await broadcastTenantOrderEvent(tenant_slug, {
         type: 'ORDER_CREATED',
         orderId: firstReconciled?.order_id,

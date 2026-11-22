@@ -38,6 +38,11 @@ const settingsUpdateSchema = z.object({
       is_active: z.boolean().default(true),
     })).default([]),
   }).optional(),
+  features: z.object({
+    tables_enabled: z.boolean().default(true),
+    recipes_enabled: z.boolean().default(false),
+    banner_style: z.enum(['clean', 'card']).default('clean'),
+  }).optional(),
 });
 
 export async function GET(
@@ -65,10 +70,12 @@ export async function GET(
       return NextResponse.json({ error: 'Configuración no encontrada' }, { status: 404 });
     }
 
-    // Aplanar social_media, taxes y discounts desde el JSONB 'value' para el frontend
+    // Aplanar social_media, taxes, discounts y features desde el JSONB 'value' para el frontend
     const socialMedia = settings.value?.social_media || {};
     const taxes = settings.value?.taxes || { tax_enabled: true, tax_rate: 16.0, prices_include_tax: false };
     const discounts = settings.value?.discounts || { allow_stacked: false, presets: [] };
+    const features = settings.value?.features || { tables_enabled: true, recipes_enabled: false, banner_style: 'clean' };
+    if (!features.banner_style) features.banner_style = 'clean';
     const activePlugins = pluginsRes.rows.map((r: { plugin_id: string }) => r.plugin_id);
 
     return NextResponse.json({ 
@@ -77,6 +84,7 @@ export async function GET(
         social_media: socialMedia,
         taxes,
         discounts,
+        features,
       },
       active_plugins: activePlugins,
     });
@@ -117,9 +125,10 @@ export async function PATCH(
     if (data.social_media !== undefined) jsonPatch.social_media = data.social_media;
     if (data.taxes !== undefined) jsonPatch.taxes = data.taxes;
     if (data.discounts !== undefined) jsonPatch.discounts = data.discounts;
+    if (data.features !== undefined) jsonPatch.features = data.features;
 
     for (const [key, value] of Object.entries(data)) {
-      if (value !== undefined && key !== 'social_media' && key !== 'taxes' && key !== 'discounts') {
+      if (value !== undefined && key !== 'social_media' && key !== 'taxes' && key !== 'discounts' && key !== 'features') {
         fields.push(`${key} = $${paramIndex}`);
         values.push(value);
         paramIndex++;

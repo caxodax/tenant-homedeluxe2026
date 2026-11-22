@@ -7,7 +7,7 @@ const isCloudDb = process.env.DATABASE_URL?.includes('supabase') || process.env.
 // Pool de conexiones PostgreSQL
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  max: 20,
+  max: (isProduction && !process.env.IS_STANDALONE) ? 2 : 20, // ponytail: 2 en serverless previene saturar pooler y cold starts
   idleTimeoutMillis: 15000,
   connectionTimeoutMillis: 8000,
   keepAlive: true,

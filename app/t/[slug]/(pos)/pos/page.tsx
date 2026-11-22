@@ -15,7 +15,8 @@ import {
   ArrowLeft, ArrowRight, Search, Plus, Minus, Trash2, ShoppingCart, ShoppingBag,
   CreditCard, Banknote, CheckCircle2, RotateCcw,
   Package, Printer, Lock, Unlock, X, Calculator, ChevronDown,
-  Bike, MapPin, Store, Tag, Percent, UtensilsCrossed, SlidersHorizontal, FileText
+  Bike, MapPin, Store, Tag, Percent, UtensilsCrossed, SlidersHorizontal, FileText,
+  Layers, Hash, Calendar, AlertCircle
 } from 'lucide-react';
 import { ModalPortal } from '@/components/ui/modal-portal';
 import { FormattedDescription } from '@/components/ui/formatted-description';
@@ -202,6 +203,28 @@ const DEFAULT_POS_METHODS: PosPaymentMethod[] = [
   { code: 'CARD', name: 'Punto / Tarjeta', requires_reference: false },
 ];
 
+function sanitizeDecimalInput(val: string): string {
+  const normalized = val.replace(/,/g, '.');
+  const cleaned = normalized.replace(/[^0-9.]/g, '');
+  const parts = cleaned.split('.');
+  if (parts.length > 2) {
+    return parts[0] + '.' + parts.slice(1).join('');
+  }
+  return cleaned;
+}
+
+function sanitizeIntegerInput(val: string): string {
+  return val.replace(/\D/g, '');
+}
+
+function sanitizePhoneInput(val: string): string {
+  return val.replace(/\D/g, '');
+}
+
+function sanitizeDocNumberInput(val: string): string {
+  return val.replace(/\D/g, '');
+}
+
 export default function PosPage({ params }: PosPageProps) {
   const { slug } = use(params);
   const brandContext = usePosBrand();
@@ -266,6 +289,7 @@ export default function PosPage({ params }: PosPageProps) {
   const [isDeliveryActive, setIsDeliveryActive] = useState(false);
   const [deliveryZones, setDeliveryZones] = useState<Array<{ id: string; name: string; rate_primary: number; estimated_time?: string }>>([]);
   const [isFoodServiceActive, setIsFoodServiceActive] = useState(false);
+  const [tablesEnabled, setTablesEnabled] = useState(true);
   const [foodServiceTables, setFoodServiceTables] = useState<Array<{ id: string; label: string; status: string; seats: number }>>([]);
   const [selectedTableId, setSelectedTableId] = useState<string>('');
   const [daily86Ids, setDaily86Ids] = useState<string[]>([]);
@@ -292,6 +316,19 @@ export default function PosPage({ params }: PosPageProps) {
   const [posNotes, setPosNotes] = useState<string>('');
   const [isPreordersModalOpen, setIsPreordersModalOpen] = useState<boolean>(false);
 
+  // Plugin Cuentas por Cobrar (credit_cxc) en POS
+  const [isCreditCxcActive, setIsCreditCxcActive] = useState<boolean>(false);
+  const [saleCategory, setSaleCategory] = useState<'IMMEDIATE' | 'CREDIT_CARTERA'>('IMMEDIATE');
+  const [cxcAccountType, setCxcAccountType] = useState<'LAYAWAY' | 'BNPL_FINANCING' | 'DIRECT_CREDIT'>('LAYAWAY');
+  const [cxcDocumentType, setCxcDocumentType] = useState<'COMMERCIAL_NOTE' | 'FISCAL_INVOICE'>('COMMERCIAL_NOTE');
+  const [cxcDownPaymentUsd, setCxcDownPaymentUsd] = useState<string>('');
+  const [cxcDownPaymentMethod, setCxcDownPaymentMethod] = useState<string>('CASH_USD');
+  const [cxcTermDays, setCxcTermDays] = useState<string>('30');
+  const [cxcExternalRef, setCxcExternalRef] = useState<string>('');
+  const [cxcDocType, setCxcDocType] = useState<'V' | 'J' | 'G' | 'E'>('V');
+  const [cxcDocNumber, setCxcDocNumber] = useState<string>('');
+  const [cxcNotes, setCxcNotes] = useState<string>('');
+
   const baseCurrency = settings.primary_currency || 'USD';
   const currencySymbol = baseCurrency === 'EUR' ? '€' : '$';
   const effectiveRate = Number(settings.exchange_rate || 0);
@@ -315,6 +352,13 @@ export default function PosPage({ params }: PosPageProps) {
     items: { name: string; quantity: number; unitPrice: number; subtotal: number }[];
     timestamp: string;
     syncStatus: 'synced' | 'pending' | 'error';
+    cxcInfo?: {
+      accountType: 'LAYAWAY' | 'BNPL_FINANCING' | 'DIRECT_CREDIT';
+      downPaymentUsd: number;
+      balanceUsd: number;
+      termDays: number;
+      externalRef?: string;
+    };
   } | null>(null);
 
   // Inicializar heartbeat, caché offline de marca/catálogo en Dexie y turno de caja
@@ -468,6 +512,9 @@ export default function PosPage({ params }: PosPageProps) {
         if (typeof data.is_food_service_active === 'boolean') {
           setIsFoodServiceActive(data.is_food_service_active);
         }
+        if (typeof data.tables_enabled === 'boolean') {
+          setTablesEnabled(data.tables_enabled);
+        }
         if (Array.isArray(data.food_service_tables)) {
           setFoodServiceTables(data.food_service_tables);
           if (data.food_service_tables.length > 0) {
@@ -485,6 +532,9 @@ export default function PosPage({ params }: PosPageProps) {
         }
         if (typeof data.is_sales_team_active === 'boolean') {
           setIsSalesTeamActive(data.is_sales_team_active);
+        }
+        if (typeof data.is_credit_cxc_active === 'boolean') {
+          setIsCreditCxcActive(data.is_credit_cxc_active);
         }
         if (Array.isArray(data.sales_reps)) {
           setSalesReps(data.sales_reps);
@@ -951,6 +1001,17 @@ export default function PosPage({ params }: PosPageProps) {
     toast.info('Ticket limpiado y preorden desvinculada exitosamente');
   }
 
+  function handleOpenCheckout() {
+    setSaleCategory('IMMEDIATE');
+    const defaultDown = totalUsd > 0 ? (totalUsd * 0.4).toFixed(2) : '';
+    setCxcDownPaymentUsd(defaultDown);
+    setCxcAccountType('LAYAWAY');
+    setCxcTermDays('30');
+    setCxcExternalRef('');
+    setCxcNotes('');
+    setIsCheckoutOpen(true);
+  }
+
   // Procesar cobro y guardar en Dexie (Offline-First en USD)
   async function handleCompleteSale() {
     if (ticket.length === 0 || isProcessing) return;
@@ -964,6 +1025,30 @@ export default function PosPage({ params }: PosPageProps) {
       return;
     }
 
+    // Validaciones estrictas si es venta a crédito / apartado
+    if (saleCategory === 'CREDIT_CARTERA') {
+      const cleanName = customerName.trim();
+      if (!cleanName || cleanName === 'Cliente Mostrador') {
+        toast.error('Datos del Cliente Requeridos', {
+          description: 'Ingresa el nombre o razón social del cliente para registrar el crédito / apartado.',
+        });
+        return;
+      }
+      const cleanPhone = customerPhone.replace(/\D/g, '');
+      if (cleanPhone.length < 7) {
+        toast.error('Teléfono Requerido', {
+          description: 'Ingresa un número de teléfono válido para la ficha de cobranza.',
+        });
+        return;
+      }
+      if (cxcAccountType === 'BNPL_FINANCING' && !cxcExternalRef.trim()) {
+        toast.error('Código Cashea Requerido', {
+          description: 'Ingresa el código de aprobación de la app Cashea.',
+        });
+        return;
+      }
+    }
+
     try {
       setIsProcessing(true);
       const ticketRef = await generateOfflineTicketRef('POS-01');
@@ -972,6 +1057,40 @@ export default function PosPage({ params }: PosPageProps) {
       const discNote = appliedDiscounts.length > 0 
         ? ` · Desc: ${appliedDiscounts.map(d => `${d.name} (-$${d.amount_primary.toFixed(2)})`).join(', ')}` 
         : '';
+
+      const isCredit = saleCategory === 'CREDIT_CARTERA';
+      const downPaymentUsd = isCredit
+        ? Math.min(totalUsd, Math.max(0, parseFloat(cxcDownPaymentUsd) || 0))
+        : totalUsd;
+      const actualPaymentMethod = isCredit
+        ? (downPaymentUsd > 0 ? cxcDownPaymentMethod : (cxcAccountType === 'BNPL_FINANCING' ? 'CASHEA' : 'CREDITO'))
+        : paymentMethod;
+
+      const isLocalCurrencyPayment = (actualPaymentMethod === 'PAGO_MOVIL' || actualPaymentMethod === 'CASH_LOCAL' || ((actualPaymentMethod === 'BANK_TRANSFER' || actualPaymentMethod === 'CARD') && effectiveRate > 1));
+      const paymentAmount = isLocalCurrencyPayment
+        ? Number((downPaymentUsd * (effectiveRate > 0 ? effectiveRate : 1.0)).toFixed(2))
+        : Number(downPaymentUsd.toFixed(2));
+      const paymentCurrency = isLocalCurrencyPayment ? 'VES' : 'USD';
+
+      const cxcData = isCredit ? {
+        account_type: cxcAccountType,
+        document_type: cxcDocumentType,
+        financing_provider: cxcAccountType === 'BNPL_FINANCING' ? 'CASHEA' : null,
+        external_reference: cxcExternalRef.trim() || null,
+        down_payment_usd: Number(downPaymentUsd.toFixed(2)),
+        down_payment_method: actualPaymentMethod,
+        term_days: parseInt(cxcTermDays) || (cxcAccountType === 'LAYAWAY' ? 30 : 15),
+        notes: cxcNotes.trim() || null,
+        customer_id_number: cxcDocNumber.trim() ? `${cxcDocType}-${cxcDocNumber.trim()}` : null,
+      } : null;
+
+      const cxcNoteTag = isCredit
+        ? cxcAccountType === 'LAYAWAY'
+          ? '🔒 SISTEMA DE APARTADO (EN CUSTODIA)'
+          : cxcAccountType === 'BNPL_FINANCING'
+            ? `⚡ CASHEA BNPL (REF: ${cxcExternalRef.trim() || 'N/A'})`
+            : `💳 CRÉDITO DIRECTO (PLAZO: ${cxcTermDays}d)`
+        : null;
 
       const saleRecord = {
         offline_ticket_ref: ticketRef,
@@ -1013,14 +1132,14 @@ export default function PosPage({ params }: PosPageProps) {
         exchange_rate_applied: effectiveRate > 0 ? effectiveRate : 1.0,
         discounts_applied: appliedDiscounts,
         payment: {
-          method: paymentMethod,
-          amount: (paymentMethod === 'PAGO_MOVIL' || paymentMethod === 'CASH_LOCAL' || ((paymentMethod === 'BANK_TRANSFER' || paymentMethod === 'CARD') && effectiveRate > 1))
-            ? Number((totalUsd * (effectiveRate > 0 ? effectiveRate : 1.0)).toFixed(2))
-            : Number(totalUsd.toFixed(2)),
-          currency: (paymentMethod === 'PAGO_MOVIL' || paymentMethod === 'CASH_LOCAL' || ((paymentMethod === 'BANK_TRANSFER' || paymentMethod === 'CARD') && effectiveRate > 1)) ? 'VES' : 'USD',
-          reference_number: paymentRef || undefined,
+          method: actualPaymentMethod,
+          amount: paymentAmount,
+          currency: paymentCurrency,
+          reference_number: paymentRef || (isCredit && cxcExternalRef ? cxcExternalRef : undefined),
         },
+        cxc_data: cxcData,
         notes: [
+          cxcNoteTag,
           posDeliveryType === 'DELIVERY'
             ? `Delivery: ${selectedPosZone?.name || 'Zona'} · Dirección: ${posDeliveryAddress || customerName} · Cobrado en Mostrador POS-01`
             : `Cobrado en Mostrador POS-01 · ${settings.business_name}${effectiveRate > 0 ? ` (Tasa: ${effectiveRate.toFixed(2)})` : ''}`,
@@ -1059,7 +1178,14 @@ export default function PosPage({ params }: PosPageProps) {
         totalSecondary: effectiveRate > 0 ? Number((totalUsd * effectiveRate).toFixed(2)) : undefined,
         itemsCount: ticket.reduce((s, i) => s + i.quantity, 0),
         customerName: customerName.trim() || 'Cliente Mostrador',
-        paymentMethod,
+        paymentMethod: actualPaymentMethod,
+        cxcInfo: isCredit ? {
+          accountType: cxcAccountType,
+          downPaymentUsd,
+          balanceUsd: Math.max(0, Number((totalUsd - downPaymentUsd).toFixed(2))),
+          termDays: parseInt(cxcTermDays) || 30,
+          externalRef: cxcExternalRef.trim(),
+        } : undefined,
         deliveryType: posDeliveryType,
         deliveryRate: posDeliveryRate,
         deliveryZoneName: selectedPosZone?.name,
@@ -1081,6 +1207,10 @@ export default function PosPage({ params }: PosPageProps) {
       setIsCheckoutOpen(false);
       setPaymentRef('');
       setTenderAmount('');
+      setCxcDownPaymentUsd('');
+      setCxcExternalRef('');
+      setCxcNotes('');
+      setCxcDocNumber('');
       setActiveQuoteId(null);
       setActiveQuoteNumber(null);
       setSelectedSalesRepId('');
@@ -1684,7 +1814,7 @@ export default function PosPage({ params }: PosPageProps) {
           {/* Footer del Ticket y Botón de Cobro */}
           <div className="p-4 border-t border-slate-200 dark:border-zinc-800 bg-slate-50/80 dark:bg-zinc-900/40 space-y-3">
             {/* Selector de Modo de Entrega (Mostrador vs Mesa vs Delivery) */}
-            {(isDeliveryActive || isFoodServiceActive) && ticket.length > 0 && (
+            {(isDeliveryActive || (isFoodServiceActive && tablesEnabled)) && ticket.length > 0 && (
               <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-zinc-800/80 space-y-2 border border-slate-200 dark:border-zinc-700">
                 <div className="flex items-center gap-1 p-0.5 rounded-lg bg-slate-200 dark:bg-zinc-700 text-xs font-bold">
                   <button
@@ -1697,7 +1827,7 @@ export default function PosPage({ params }: PosPageProps) {
                     <Store className="w-3.5 h-3.5" />
                     <span>Mostrador</span>
                   </button>
-                  {isFoodServiceActive && (
+                  {isFoodServiceActive && tablesEnabled && (
                     <button
                       type="button"
                       onClick={() => setPosDeliveryType('DINE_IN')}
@@ -1917,7 +2047,7 @@ export default function PosPage({ params }: PosPageProps) {
               </button>
             ) : (
               <button
-                onClick={() => setIsCheckoutOpen(true)}
+                onClick={handleOpenCheckout}
                 disabled={ticket.length === 0}
                 className="w-full py-3.5 px-4 rounded-xl font-extrabold text-base bg-lime-500 hover:bg-lime-600 disabled:bg-slate-200 dark:disabled:bg-zinc-800 disabled:text-slate-500 dark:disabled:text-zinc-600 text-black shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
               >
@@ -2132,7 +2262,7 @@ export default function PosPage({ params }: PosPageProps) {
 
             {/* Selector de Modo de Entrega Móvil (Mostrador vs Delivery) */}
             {/* Selector de Modo de Entrega Móvil (Mostrador vs Mesa vs Delivery) */}
-            {(isDeliveryActive || isFoodServiceActive) && ticket.length > 0 && (
+            {(isDeliveryActive || (isFoodServiceActive && tablesEnabled)) && ticket.length > 0 && (
               <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-zinc-800/80 space-y-2 border border-slate-200 dark:border-zinc-700">
                 <div className="flex items-center gap-1 p-0.5 rounded-lg bg-slate-200 dark:bg-zinc-700 text-xs font-bold">
                   <button
@@ -2145,7 +2275,7 @@ export default function PosPage({ params }: PosPageProps) {
                     <Store className="w-3.5 h-3.5" />
                     <span>Mostrador</span>
                   </button>
-                  {isFoodServiceActive && (
+                  {isFoodServiceActive && tablesEnabled && (
                     <button
                       type="button"
                       onClick={() => setPosDeliveryType('DINE_IN')}
@@ -2345,7 +2475,7 @@ export default function PosPage({ params }: PosPageProps) {
                   type="button"
                   onClick={() => {
                     setIsMobileTicketOpen(false);
-                    setIsCheckoutOpen(true);
+                    handleOpenCheckout();
                   }}
                   disabled={ticket.length === 0}
                   className="w-full py-3.5 px-4 rounded-xl font-extrabold text-sm bg-lime-500 hover:bg-lime-600 text-black shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
@@ -2813,8 +2943,43 @@ export default function PosPage({ params }: PosPageProps) {
                 )}
               </div>
 
-              {/* Calculadora de Vuelto / Importe Recibido */}
-              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 space-y-2.5">
+              {/* Selector de Modalidad: Contado vs Apartado/Crédito (si plugin CxC activo) */}
+              {isCreditCxcActive && (
+                <div className="flex items-center p-1 bg-slate-100 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl">
+                  <button
+                    type="button"
+                    onClick={() => setSaleCategory('IMMEDIATE')}
+                    className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                      saleCategory === 'IMMEDIATE'
+                        ? 'bg-white dark:bg-zinc-800 text-slate-900 dark:text-white shadow-xs'
+                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <Banknote className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <span>Contado (Inmediato)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSaleCategory('CREDIT_CARTERA');
+                      if (customerName === 'Cliente Mostrador') setCustomerName('');
+                    }}
+                    className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                      saleCategory === 'CREDIT_CARTERA'
+                        ? 'bg-white dark:bg-zinc-800 text-purple-700 dark:text-purple-300 shadow-xs font-black'
+                        : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    <Lock className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                    <span>Apartado / Crédito</span>
+                  </button>
+                </div>
+              )}
+
+              {saleCategory === 'IMMEDIATE' ? (
+                <>
+                  {/* Calculadora de Vuelto / Importe Recibido */}
+                  <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 space-y-2.5">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-slate-800 dark:text-zinc-200">
                     Calculadora de Vuelto
@@ -3096,6 +3261,346 @@ export default function PosPage({ params }: PosPageProps) {
                   />
                 </div>
               )}
+                </>
+              ) : (
+                /* MODALIDAD CARTERA / CRÉDITO / APARTADO / CASHEA */
+                <div className="space-y-4 animate-in fade-in duration-150">
+                  {/* Selector de Modalidad */}
+                  <div>
+                    <label className="text-xs font-bold text-slate-800 dark:text-zinc-200 mb-1.5 block">
+                      Modalidad de Cartera
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCxcAccountType('LAYAWAY');
+                          setCxcTermDays('30');
+                          setCxcDownPaymentUsd((totalUsd * 0.3).toFixed(2));
+                        }}
+                        className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
+                          cxcAccountType === 'LAYAWAY'
+                            ? 'border-purple-500 bg-purple-500/15 text-purple-800 dark:text-purple-300 font-bold ring-1 ring-purple-500/30'
+                            : 'border-slate-200 dark:border-zinc-800 text-slate-600 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-900'
+                        }`}
+                      >
+                        <Lock className="w-4 h-4 mx-auto mb-1 text-purple-600 dark:text-purple-400" />
+                        <span className="text-xs block leading-tight">Apartado</span>
+                        <span className="text-[9px] text-slate-400 block mt-0.5">Custodia</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCxcAccountType('BNPL_FINANCING');
+                          setCxcTermDays('30');
+                          setCxcDownPaymentUsd((totalUsd * 0.4).toFixed(2));
+                          setCxcDocumentType('FISCAL_INVOICE');
+                        }}
+                        className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
+                          cxcAccountType === 'BNPL_FINANCING'
+                            ? 'border-sky-500 bg-sky-500/15 text-sky-800 dark:text-sky-300 font-bold ring-1 ring-sky-500/30'
+                            : 'border-slate-200 dark:border-zinc-800 text-slate-600 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-900'
+                        }`}
+                      >
+                        <Layers className="w-4 h-4 mx-auto mb-1 text-sky-600 dark:text-sky-400" />
+                        <span className="text-xs block leading-tight">Cashea</span>
+                        <span className="text-[9px] text-slate-400 block mt-0.5">3 cuotas</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCxcAccountType('DIRECT_CREDIT');
+                          setCxcTermDays('15');
+                          setCxcDownPaymentUsd('');
+                        }}
+                        className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
+                          cxcAccountType === 'DIRECT_CREDIT'
+                            ? 'border-blue-500 bg-blue-500/15 text-blue-800 dark:text-blue-300 font-bold ring-1 ring-blue-500/30'
+                            : 'border-slate-200 dark:border-zinc-800 text-slate-600 dark:text-zinc-400 hover:bg-slate-50 dark:hover:bg-zinc-900'
+                        }`}
+                      >
+                        <CreditCard className="w-4 h-4 mx-auto mb-1 text-blue-600 dark:text-blue-400" />
+                        <span className="text-xs block leading-tight">Crédito</span>
+                        <span className="text-[9px] text-slate-400 block mt-0.5">Directo</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Cálculo de Inicial y Saldo */}
+                  {(() => {
+                    const downNum = Math.min(totalUsd, Math.max(0, parseFloat(cxcDownPaymentUsd) || 0));
+                    const balanceNum = Math.max(0, totalUsd - downNum);
+                    const downBs = effectiveRate > 0 ? downNum * effectiveRate : 0;
+                    const balanceBs = effectiveRate > 0 ? balanceNum * effectiveRate : 0;
+
+                    return (
+                      <div className="space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-slate-800 dark:text-zinc-200">
+                            Inicial a Cobrar en Caja ($ USD)
+                          </label>
+                          <div className="flex items-center gap-1 text-[10px] font-bold">
+                            <button
+                              type="button"
+                              onClick={() => setCxcDownPaymentUsd((totalUsd * 0.3).toFixed(2))}
+                              className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300 cursor-pointer"
+                            >
+                              30%
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setCxcDownPaymentUsd((totalUsd * 0.4).toFixed(2))}
+                              className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300 cursor-pointer"
+                            >
+                              40%
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setCxcDownPaymentUsd((totalUsd * 0.5).toFixed(2))}
+                              className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-300 cursor-pointer"
+                            >
+                              50%
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setCxcDownPaymentUsd('0')}
+                              className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-500 cursor-pointer"
+                            >
+                              $0
+                            </button>
+                          </div>
+                        </div>
+
+                        <div className="relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                            $
+                          </span>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={cxcDownPaymentUsd}
+                            onChange={(e) => setCxcDownPaymentUsd(sanitizeDecimalInput(e.target.value))}
+                            placeholder="0.00"
+                            className="w-full pl-8 pr-3.5 py-2.5 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl text-sm font-mono font-black text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
+                          />
+                        </div>
+
+                        {/* Resumen 2 celdas: Cobro en Caja vs Saldo CxC */}
+                        <div className="grid grid-cols-2 gap-2 p-3 bg-slate-50 dark:bg-zinc-900/80 rounded-2xl border border-slate-200/80 dark:border-zinc-800 text-xs">
+                          <div>
+                            <span className="text-[10px] uppercase font-bold text-slate-400 block">
+                              Entrada en Caja Hoy
+                            </span>
+                            <span className="text-base font-black font-mono text-emerald-600 dark:text-emerald-400">
+                              ${downNum.toFixed(2)}
+                            </span>
+                            {downBs > 0 && (
+                              <span className="text-[10px] font-mono text-slate-400 block">
+                                ≈ Bs. {downBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <span className="text-[10px] uppercase font-bold text-slate-400 block">
+                              Saldo a Cartera / CxC
+                            </span>
+                            <span className="text-base font-black font-mono text-purple-600 dark:text-purple-400">
+                              ${balanceNum.toFixed(2)}
+                            </span>
+                            {balanceBs > 0 && (
+                              <span className="text-[10px] font-mono text-slate-400 block">
+                                ≈ Bs. {balanceBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Método de Cobro de la Inicial si es > 0 */}
+                        {downNum > 0 && (
+                          <div className="space-y-1.5 p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
+                            <label className="text-[11px] font-bold text-emerald-900 dark:text-emerald-300 block">
+                              Método de Cobro de la Inicial (${downNum.toFixed(2)})
+                            </label>
+                            <div className="grid grid-cols-2 gap-2">
+                              <select
+                                value={cxcDownPaymentMethod}
+                                onChange={(e) => setCxcDownPaymentMethod(e.target.value)}
+                                className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-zinc-950 text-xs font-bold font-mono"
+                              >
+                                <option value="CASH_USD">💵 Efectivo USD ($)</option>
+                                <option value="PAGO_MOVIL">📲 Pago Móvil (Bs)</option>
+                                <option value="CARD">💳 Punto / Tarjeta</option>
+                                <option value="ZELLE">🇺🇸 Zelle (USD)</option>
+                                <option value="BINANCE">🪙 Binance USDT</option>
+                              </select>
+                              <input
+                                type="text"
+                                value={paymentRef}
+                                onChange={(e) => setPaymentRef(e.target.value)}
+                                placeholder="Ref. inicial (opcional)"
+                                className="w-full px-3 py-2 rounded-xl border border-emerald-300 dark:border-emerald-800 bg-white dark:bg-zinc-950 text-xs font-mono"
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Campos específicos según modalidad */}
+                  {cxcAccountType === 'BNPL_FINANCING' && (
+                    <div className="p-3 bg-sky-500/10 border border-sky-500/20 rounded-2xl space-y-2 text-xs">
+                      <div className="flex items-center gap-1.5 text-sky-800 dark:text-sky-300 font-bold">
+                        <Layers className="w-4 h-4 shrink-0" />
+                        <span>Venta Cashea (Financiamiento BNPL 3 Cuotas)</span>
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 dark:text-zinc-300 mb-1 block">
+                          Código de Aprobación Cashea * (OTP / Solicitud)
+                        </label>
+                        <div className="relative">
+                          <Hash className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-sky-500" />
+                          <input
+                            type="text"
+                            value={cxcExternalRef}
+                            onChange={(e) => setCxcExternalRef(e.target.value)}
+                            placeholder="Ej. CSH-88492"
+                            className="w-full pl-9 pr-3 py-2 bg-white dark:bg-zinc-950 border border-sky-300 dark:border-sky-800 rounded-xl text-xs font-mono font-bold"
+                            required
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {cxcAccountType === 'LAYAWAY' && (
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 dark:text-zinc-300 mb-1 block">
+                          Vigencia de Custodia
+                        </label>
+                        <select
+                          value={cxcTermDays}
+                          onChange={(e) => setCxcTermDays(e.target.value)}
+                          className="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl text-xs font-semibold"
+                        >
+                          <option value="15">15 días de apartado</option>
+                          <option value="30">30 días de apartado</option>
+                          <option value="45">45 días de apartado</option>
+                          <option value="60">60 días de apartado</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 dark:text-zinc-300 mb-1 block">
+                          Ubicación en Almacén
+                        </label>
+                        <input
+                          type="text"
+                          value={cxcNotes}
+                          onChange={(e) => setCxcNotes(e.target.value)}
+                          placeholder="Ej: Estante A-04"
+                          className="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl text-xs"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {cxcAccountType === 'DIRECT_CREDIT' && (
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 dark:text-zinc-300 mb-1 block">
+                          Plazo de Crédito
+                        </label>
+                        <select
+                          value={cxcTermDays}
+                          onChange={(e) => setCxcTermDays(e.target.value)}
+                          className="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl text-xs font-semibold"
+                        >
+                          <option value="7">7 días (Semanal)</option>
+                          <option value="15">15 días (Quincenal)</option>
+                          <option value="30">30 días (Mensual)</option>
+                          <option value="45">45 días</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-700 dark:text-zinc-300 mb-1 block">
+                          Tipo de Emisión
+                        </label>
+                        <select
+                          value={cxcDocumentType}
+                          onChange={(e) => setCxcDocumentType(e.target.value as any)}
+                          className="w-full px-3 py-2 bg-white dark:bg-zinc-950 border border-slate-200 dark:border-zinc-800 rounded-xl text-xs font-semibold"
+                        >
+                          <option value="COMMERCIAL_NOTE">Nota Comercial</option>
+                          <option value="FISCAL_INVOICE">Factura Fiscal</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Datos Requeridos del Cliente */}
+                  <div className="space-y-2.5 pt-1 border-t border-slate-100 dark:border-zinc-800">
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-slate-800 dark:text-zinc-200">
+                        Nombre Completo o Razón Social *
+                      </label>
+                      <input
+                        type="text"
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        placeholder="Ej. David Torrealba o Muebles El Roble C.A."
+                        className="w-full px-3.5 py-2 bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl text-xs text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
+                        required
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-xs font-bold text-slate-800 dark:text-zinc-200 mb-1 block">
+                          Teléfono / WhatsApp * (Solo dígitos)
+                        </label>
+                        <input
+                          type="tel"
+                          inputMode="numeric"
+                          value={customerPhone}
+                          onChange={(e) => setCustomerPhone(sanitizePhoneInput(e.target.value))}
+                          placeholder="04121234567"
+                          className="w-full px-3 py-2 bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl text-xs font-mono text-slate-900 dark:text-white"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-bold text-slate-800 dark:text-zinc-200 mb-1 block">
+                          Cédula / RIF (Opcional)
+                        </label>
+                        <div className="flex gap-1.5">
+                          <select
+                            value={cxcDocType}
+                            onChange={(e) => setCxcDocType(e.target.value as any)}
+                            className="w-14 px-1.5 py-2 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-xs font-mono font-bold"
+                          >
+                            <option value="V">V-</option>
+                            <option value="J">J-</option>
+                            <option value="G">G-</option>
+                            <option value="E">E-</option>
+                          </select>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={cxcDocNumber}
+                            onChange={(e) => setCxcDocNumber(sanitizeDocNumberInput(e.target.value))}
+                            placeholder="18291029"
+                            className="flex-1 px-2.5 py-2 bg-slate-50 dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl text-xs font-mono"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Footer Fijo */}
@@ -3111,9 +3616,17 @@ export default function PosPage({ params }: PosPageProps) {
                 type="button"
                 onClick={handleCompleteSale}
                 disabled={isProcessing}
-                className="flex-1 py-3 px-4 rounded-xl font-extrabold text-xs bg-lime-500 hover:bg-lime-600 text-black shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className={`flex-1 py-3 px-4 rounded-xl font-extrabold text-xs shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 ${
+                  saleCategory === 'CREDIT_CARTERA'
+                    ? 'bg-purple-600 hover:bg-purple-700 text-white'
+                    : 'bg-lime-500 hover:bg-lime-600 text-black'
+                }`}
               >
-                {isProcessing ? 'Procesando...' : `Confirmar y Cobrar (${currencySymbol}${totalUsd.toFixed(2)})`}
+                {isProcessing
+                  ? 'Procesando...'
+                  : saleCategory === 'CREDIT_CARTERA'
+                    ? `Confirmar ${cxcAccountType === 'LAYAWAY' ? 'Apartado' : cxcAccountType === 'BNPL_FINANCING' ? 'Cashea' : 'Crédito'} (Inicial: $${(Math.min(totalUsd, Math.max(0, parseFloat(cxcDownPaymentUsd) || 0))).toFixed(2)})`
+                    : `Confirmar y Cobrar (${currencySymbol}${totalUsd.toFixed(2)})`}
               </button>
             </div>
           </div>
@@ -3212,6 +3725,39 @@ export default function PosPage({ params }: PosPageProps) {
                   </span>
                 </div>
               )}
+              {completedSale.cxcInfo && (
+                <div className="p-2.5 rounded-xl bg-purple-500/10 border border-purple-500/20 text-xs text-left space-y-1">
+                  <div className="flex items-center justify-between font-bold text-purple-800 dark:text-purple-300">
+                    <span className="flex items-center gap-1">
+                      <Lock className="w-3.5 h-3.5" />
+                      {completedSale.cxcInfo.accountType === 'LAYAWAY'
+                        ? 'Apartado en Custodia'
+                        : completedSale.cxcInfo.accountType === 'BNPL_FINANCING'
+                          ? 'Financiamiento Cashea'
+                          : 'Crédito Directo Tienda'}
+                    </span>
+                    <span>Plazo: {completedSale.cxcInfo.termDays}d</span>
+                  </div>
+                  <div className="flex justify-between text-[11px] text-slate-600 dark:text-zinc-300">
+                    <span>Inicial Cobrada:</span>
+                    <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                      ${completedSale.cxcInfo.downPaymentUsd.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-[11px] text-slate-600 dark:text-zinc-300">
+                    <span>Saldo en Cartera / CxC:</span>
+                    <span className="font-mono font-bold text-purple-600 dark:text-purple-400">
+                      ${completedSale.cxcInfo.balanceUsd.toFixed(2)}
+                    </span>
+                  </div>
+                  {completedSale.cxcInfo.externalRef && (
+                    <div className="flex justify-between text-[10px] text-slate-500 dark:text-zinc-400">
+                      <span>Ref. Cashea:</span>
+                      <span className="font-mono">{completedSale.cxcInfo.externalRef}</span>
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="pt-1 flex justify-end">
                 {completedSale.syncStatus === 'synced' ? (
                   <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md">
@@ -3303,6 +3849,27 @@ export default function PosPage({ params }: PosPageProps) {
               <p className="text-[9px] text-zinc-600 font-mono">
                 Tasa BCV: Bs. {effectiveRate.toFixed(2)} / USD
               </p>
+            )}
+            {completedSale.cxcInfo && (
+              <div className="py-1.5 border-t border-dashed border-black text-[10px] space-y-0.5 text-left">
+                <p><strong>MODALIDAD:</strong> {completedSale.cxcInfo.accountType === 'LAYAWAY' ? 'SISTEMA DE APARTADO' : completedSale.cxcInfo.accountType === 'BNPL_FINANCING' ? 'CASHEA BNPL (3 CUOTAS)' : 'CRÉDITO DIRECTO'}</p>
+                <p><strong>INICIAL COBRADA EN CAJA:</strong> ${completedSale.cxcInfo.downPaymentUsd.toFixed(2)}</p>
+                <p><strong>SALDO PENDIENTE:</strong> ${completedSale.cxcInfo.balanceUsd.toFixed(2)}</p>
+                <p><strong>PLAZO ACORDADO:</strong> {completedSale.cxcInfo.termDays} DÍAS</p>
+                {completedSale.cxcInfo.externalRef && (
+                  <p><strong>REF. OPERACIÓN:</strong> {completedSale.cxcInfo.externalRef}</p>
+                )}
+                {completedSale.cxcInfo.accountType === 'LAYAWAY' && (
+                  <p className="text-[9px] pt-1 italic">* Mercancía en custodia física en tienda hasta su liquidación total.</p>
+                )}
+                {completedSale.cxcInfo.accountType === 'DIRECT_CREDIT' && (
+                  <div className="pt-2 text-center text-[9px]">
+                    <p>Firma de Conformidad del Cliente:</p>
+                    <p className="mt-4">_____________________________</p>
+                    <p>{completedSale.customerName}</p>
+                  </div>
+                )}
+              </div>
             )}
           </div>
           <div className="text-center pt-4 text-[9px] text-zinc-600">

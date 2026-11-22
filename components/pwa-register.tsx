@@ -18,6 +18,18 @@ export function PwaRegister() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
+    // En desarrollo local, desregistrar cualquier Service Worker previo en localhost para evitar bucles de recarga
+    if (process.env.NODE_ENV !== 'production') {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+          for (const registration of registrations) {
+            registration.unregister();
+          }
+        });
+      }
+      return;
+    }
+
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker
         .register('/sw.js', { scope: '/' })

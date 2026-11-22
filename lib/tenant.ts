@@ -36,6 +36,11 @@ export interface TenantShellSettings {
   tax_rate?: number;
   prices_include_tax?: boolean;
   social_media?: Record<string, string>;
+  features?: {
+    tables_enabled?: boolean;
+    recipes_enabled?: boolean;
+    banner_style?: 'clean' | 'card';
+  };
 }
 
 export interface TenantShellData {
@@ -196,6 +201,11 @@ export const getCachedTenantShell = cache(
             tax_rate: typeof taxes.tax_rate === 'number' ? taxes.tax_rate : 16.0,
             prices_include_tax: taxes.prices_include_tax ?? false,
             social_media: rawSettings?.value?.social_media || {},
+            features: {
+              tables_enabled: rawSettings?.value?.features?.tables_enabled !== false,
+              recipes_enabled: rawSettings?.value?.features?.recipes_enabled === true,
+              banner_style: (rawSettings?.value?.features?.banner_style as 'clean' | 'card') || 'clean',
+            },
           },
           inContingency,
           bufferUnits,
@@ -286,7 +296,7 @@ export const getCachedStorefrontCatalog = cache(
             FROM products p
             LEFT JOIN categories c ON p.category_id = c.id
             WHERE p.is_active = true
-            ORDER BY p.name ASC
+            ORDER BY COALESCE(c.sort_order, 999) ASC, c.name ASC, p.name ASC
           `);
 
           const categoriesRes = await client.query(`

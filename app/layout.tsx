@@ -78,7 +78,10 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="bg-[#FAF8F5] dark:bg-[#0D0D0E] text-stone-900 dark:text-zinc-100 font-sans text-[15px] leading-relaxed antialiased min-h-screen transition-colors duration-200">
+      <body
+        className="bg-[#FAF8F5] dark:bg-[#0D0D0E] text-stone-900 dark:text-zinc-100 font-sans text-[15px] leading-relaxed antialiased min-h-screen transition-colors duration-200"
+        suppressHydrationWarning
+      >
         {children}
         <Toaster
           richColors
