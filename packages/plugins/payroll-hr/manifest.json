@@ -1,0 +1,50 @@
+{
+  "id": "payroll_hr",
+  "name": "Nómina & Personal",
+  "category": "fintech",
+  "version": "1.0.0",
+  "description": "Gestión de colaboradores, períodos y corridas de nómina bimoneda, importación de comisiones por ventas cobradas, retenciones de ley (IVSS / FAOV), amortización de adelantos y recibos de pago con tasa snapshot inmutable.",
+  "is_core_addon": true,
+  "pricing_tier": "GROWTH",
+  "price_usd_monthly": 12.00,
+  "dependencies": [],
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "roles_manage_payroll": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": ["OWNER", "MANAGER"]
+      },
+      "default_period_days": {
+        "type": "integer",
+        "default": 15
+      },
+      "default_payment_frequency": {
+        "type": "string",
+        "enum": ["WEEKLY", "BIWEEKLY", "MONTHLY"],
+        "default": "BIWEEKLY"
+      },
+      "receipt_footer": {
+        "type": "string",
+        "default": "Recibí conforme el pago correspondiente al período indicado."
+      },
+      "statutory_deductions": {
+        "type": "object",
+        "properties": {
+          "ivss_pct": { "type": "number", "default": 4.0 },
+          "faov_pct": { "type": "number", "default": 1.0 }
+        }
+      }
+    }
+  },
+  "hooks": {
+    "nav_items": [
+      {
+        "title": "Nómina & Personal",
+        "href": "/admin/payroll",
+        "icon": "Banknote"
+      }
+    ]
+  }
+}

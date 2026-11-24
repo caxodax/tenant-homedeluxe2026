@@ -1,0 +1,33 @@
+{
+  "id": "payables_cxp",
+  "name": "Cuentas por Pagar (CxP)",
+  "category": "fintech",
+  "version": "1.0.0",
+  "description": "Gestión de proveedores, facturas por pagar bimoneda, cuentas de tesorería, programación de pagos, amortización de anticipos y retenciones de ISLR / IVA.",
+  "is_core_addon": true,
+  "pricing_tier": "GROWTH",
+  "price_usd_monthly": 15.00,
+  "dependencies": [],
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "default_payment_term_days": {
+        "type": "integer",
+        "default": 15
+      },
+      "require_bill_approval": {
+        "type": "boolean",
+        "default": true
+      }
+    }
+  },
+  "hooks": {
+    "nav_items": [
+      {
+        "title": "Cuentas por Pagar",
+        "href": "/admin/cxp",
+        "icon": "Building2"
+      }
+    ]
+  }
+}

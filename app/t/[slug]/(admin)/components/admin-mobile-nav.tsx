@@ -26,6 +26,7 @@ import {
   Briefcase,
   Receipt,
   Truck,
+  Banknote,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { LogoutButton } from '@/components/auth/logout-button';
@@ -88,6 +89,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { label: 'Tasas (BCV)', href: '/rates', icon: Coins, permission: 'settings', badgeColor: 'emerald' },
       { label: 'Reportes', href: '/reports', icon: BarChart3, permission: 'reports', badgeColor: 'emerald' },
+      { label: 'Nómina & Personal', href: '/payroll', icon: Banknote, permission: 'staff', badgeColor: 'rose', plugin: 'payroll_hr' },
       { label: 'Equipo & Roles', href: '/staff', icon: ShieldCheck, permission: 'staff', badgeColor: 'rose' },
       { label: 'Vendedores', href: '/sales/reps', icon: Briefcase, permission: 'staff', badgeColor: 'purple', plugin: 'sales_team' },
       { label: 'Configuración', href: '/settings', icon: Settings, permission: 'settings', badgeColor: 'stone' },
@@ -186,7 +188,8 @@ export function AdminMobileNav({
                   hasPermission(role, item.permission, customPermissions) &&
                   (!item.plugin || (activePlugins && (
                     activePlugins.includes(item.plugin) ||
-                    (item.plugin === 'payables_cxp' && activePlugins.includes('supplier_cxp'))
+                    (item.plugin === 'payables_cxp' && activePlugins.includes('supplier_cxp')) ||
+                    (item.plugin === 'payroll_hr' && activePlugins.includes('payroll_personal'))
                   ))) &&
                   !(item.href === '/food-service' && tablesEnabled === false)
                 );
