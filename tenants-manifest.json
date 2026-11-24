@@ -26,6 +26,12 @@
       "slug": "machatexmex",
       "channel": "stable",
       "enabled": true
+    },
+    {
+      "repo": "tenant-garagechilling53",
+      "slug": "garagechilling53",
+      "channel": "stable",
+      "enabled": true
     }
   ]
 }
