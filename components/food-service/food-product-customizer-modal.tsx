@@ -203,19 +203,41 @@ export function FoodProductCustomizerModal({
       if (next[option.product_id]) {
         delete next[option.product_id];
       } else {
-        // Si max_select === 1 (ej. Bebida única o Combo Upgrade), desmarcar otras del mismo grupo
+        // Si max_select === 1 (ej. Tipo de Pan o Proteína), desmarcar otras del mismo grupo
         if (group.max_select === 1) {
           group.options.forEach((opt) => {
             delete next[opt.product_id];
           });
+          next[option.product_id] = option;
+        } else {
+          // Contar cuántos modificadores de este grupo ya están seleccionados
+          const currentCountInGroup = group.options.filter(
+            (opt) => Boolean(prev[opt.product_id])
+          ).length;
+          if (group.max_select > 0 && currentCountInGroup >= group.max_select) {
+            // Ya alcanzó el límite máximo (ej. 3 contornos); no permitir agregar más
+            return prev;
+          }
+          next[option.product_id] = option;
         }
-        next[option.product_id] = option;
       }
       return next;
     });
   };
 
+  // Grupos obligatorios que aún no cumplen con el mínimo requerido
+  const pendingRequiredGroups = useMemo(() => {
+    return modifierGroups.filter((g) => {
+      if (!g.required) return false;
+      const count = g.options.filter((opt) => Boolean(selectedModifiers[opt.product_id])).length;
+      return count < (g.min_select || 1);
+    });
+  }, [modifierGroups, selectedModifiers]);
+
+  const canSubmit = pendingRequiredGroups.length === 0;
+
   const handleAdd = () => {
+    if (!canSubmit) return;
     const modifierList = Object.values(selectedModifiers).map((m) => ({
       id: m.product_id,
       name: m.name,
@@ -472,54 +494,87 @@ export function FoodProductCustomizerModal({
           )}
 
           {/* Modificadores y Extras (Salsas, Bebidas Opcionales, Hazlo Combo) */}
-          {modifierGroups.map((group) => (
-            <div key={group.group_id} className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-zinc-300">
-                  {group.group_name}
-                </label>
-                <span className="text-[11px] text-slate-400">
-                  {group.max_select === 1 ? 'Elige hasta 1' : `Opcional (máx ${group.max_select})`}
-                </span>
-              </div>
-              <div className="space-y-1.5">
-                {group.options.map((opt) => {
-                  const isSelected = Boolean(selectedModifiers[opt.product_id]);
-                  const price = Number(opt.price_primary || 0);
-                  return (
-                    <button
-                      key={opt.product_id}
-                      type="button"
-                      onClick={() => toggleModifier(group, opt)}
-                      className={`w-full p-3 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${
-                        isSelected
-                          ? 'border-orange-500 bg-orange-50/40 dark:bg-orange-950/20'
-                          : 'border-slate-200/80 dark:border-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 bg-white dark:bg-zinc-900'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className={`w-4 h-4 rounded-md border flex items-center justify-center ${
-                            isSelected
-                              ? 'border-orange-500 bg-orange-500 text-white'
-                              : 'border-slate-300 dark:border-zinc-700'
-                          }`}
-                        >
-                          {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
-                        </div>
-                        <span className="text-xs sm:text-sm font-medium text-slate-800 dark:text-zinc-200">
-                          {opt.name}
-                        </span>
-                      </div>
-                      <span className="font-mono font-bold text-xs text-slate-700 dark:text-zinc-300">
-                        +{currencySymbol}{price.toFixed(2)}
+          {modifierGroups.map((group) => {
+            const currentCount = group.options.filter((opt) => Boolean(selectedModifiers[opt.product_id])).length;
+            const isGroupMaxReached = group.max_select > 0 && currentCount >= group.max_select;
+
+            return (
+              <div key={group.group_id} className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-zinc-200">
+                      {group.group_name}
+                    </label>
+                    {group.required && (
+                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/20">
+                        Obligatorio
                       </span>
-                    </button>
-                  );
-                })}
+                    )}
+                  </div>
+                  <span className="text-[11px] font-semibold text-slate-500 dark:text-zinc-400">
+                    {group.max_select === 1 ? (
+                      group.required ? 'Elige 1' : 'Opcional (máx 1)'
+                    ) : group.min_select === group.max_select ? (
+                      <>
+                        Elige {group.max_select}{' '}
+                        <span className={`font-mono font-bold ${currentCount === group.max_select ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-500'}`}>
+                          ({currentCount}/{group.max_select})
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        {group.required ? `Mínimo ${group.min_select}` : `Opcional (máx ${group.max_select})`}{' '}
+                        <span className="font-mono">({currentCount}/{group.max_select})</span>
+                      </>
+                    )}
+                  </span>
+                </div>
+                <div className="space-y-1.5">
+                  {group.options.map((opt) => {
+                    const isSelected = Boolean(selectedModifiers[opt.product_id]);
+                    const isBlocked = !isSelected && group.max_select > 1 && isGroupMaxReached;
+                    const price = Number(opt.price_primary || 0);
+
+                    return (
+                      <button
+                        key={opt.product_id}
+                        type="button"
+                        disabled={isBlocked}
+                        onClick={() => toggleModifier(group, opt)}
+                        className={`w-full p-3 rounded-xl border text-left transition flex items-center justify-between cursor-pointer ${
+                          isSelected
+                            ? 'border-orange-500 bg-orange-50/40 dark:bg-orange-950/20 ring-1 ring-orange-500/30'
+                            : isBlocked
+                            ? 'opacity-40 border-slate-200/50 dark:border-zinc-800/50 bg-slate-50/50 dark:bg-zinc-900/30 cursor-not-allowed'
+                            : 'border-slate-200/80 dark:border-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700 bg-white dark:bg-zinc-900'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={`w-4 h-4 rounded-md border flex items-center justify-center transition ${
+                              isSelected
+                                ? 'border-orange-500 bg-orange-500 text-white'
+                                : 'border-slate-300 dark:border-zinc-700'
+                            }`}
+                          >
+                            {isSelected && <Check className="w-2.5 h-2.5 stroke-[3]" />}
+                          </div>
+                          <span className="text-xs sm:text-sm font-medium text-slate-800 dark:text-zinc-200">
+                            {opt.name}
+                          </span>
+                        </div>
+                        {price > 0 && (
+                          <span className="font-mono font-bold text-xs text-slate-700 dark:text-zinc-300">
+                            +{currencySymbol}{price.toFixed(2)}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           {/* Notas especiales para la cocina */}
           <div className="space-y-1.5">
@@ -563,14 +618,31 @@ export function FoodProductCustomizerModal({
           {/* Botón de Agregar con Precio Final Neto */}
           <button
             type="button"
+            disabled={!canSubmit}
             onClick={handleAdd}
-            className="flex-1 py-3 px-4 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs sm:text-sm flex items-center justify-between shadow-lg shadow-orange-600/20 transition cursor-pointer"
+            className={`flex-1 py-3 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-between transition cursor-pointer ${
+              canSubmit
+                ? 'shadow-lg shadow-orange-600/20'
+                : 'bg-slate-200 dark:bg-zinc-800 text-slate-400 dark:text-zinc-500 cursor-not-allowed shadow-none'
+            }`}
+            style={
+              canSubmit
+                ? {
+                    backgroundColor: 'var(--tenant-primary, #ea580c)',
+                    color: 'var(--tenant-contrast, #ffffff)',
+                  }
+                : undefined
+            }
           >
-            <span>Agregar al Pedido</span>
+            <span>
+              {!canSubmit
+                ? `Falta: ${pendingRequiredGroups[0].group_name}`
+                : 'Agregar al Pedido'}
+            </span>
             <div className="text-right font-mono">
               <span>{currencySymbol}{totalPrice.toFixed(2)}</span>
               {totalVes && effectiveRate > 0 && (
-                <span className="block text-[10px] font-normal text-orange-200">
+                <span className="block text-[10px] font-normal opacity-80">
                   Bs. {totalVes}
                 </span>
               )}
