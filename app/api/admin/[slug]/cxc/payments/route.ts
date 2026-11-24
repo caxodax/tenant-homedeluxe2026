@@ -89,24 +89,27 @@ export async function POST(
             ? amountUsd
             : Number((amountUsd * exRate).toFixed(2));
 
-        // 3. Insertar abono en cxc_payments
+        // 3. Insertar abono en cxc_payments (Estándar multimoneda _primary + compatibilidad _usd)
         const insertPaymentRes = await client.query(`
           INSERT INTO ${tenant.db_schema_name}.cxc_payments (
             receipt_number,
             account_id,
             tranche_id,
+            amount_primary,
             amount_usd,
             amount_original,
             currency,
             exchange_rate_applied,
             payment_method,
             reference,
+            balance_before_primary,
             balance_before_usd,
+            balance_after_primary,
             balance_after_usd,
             received_by,
             notes
           ) VALUES (
-            $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
+            $1, $2, $3, $4, $4, $5, $6, $7, $8, $9, $10, $10, $11, $11, $12, $13
           ) RETURNING *
         `, [
           receiptNumber,
@@ -135,7 +138,9 @@ export async function POST(
         await client.query(`
           UPDATE ${tenant.db_schema_name}.cxc_accounts
           SET 
+            balance_primary = $1,
             balance_usd = $1,
+            total_paid_primary = $2,
             total_paid_usd = $2,
             status = $3,
             custody_status = $4,
@@ -155,7 +160,9 @@ export async function POST(
           await client.query(`
             UPDATE ${tenant.db_schema_name}.cxc_financing_tranches
             SET 
+              settled_amount_primary = settled_amount_primary + $1,
               settled_amount_usd = settled_amount_usd + $1,
+              fee_amount_primary = fee_amount_primary + $2,
               fee_amount_usd = fee_amount_usd + $2,
               settled_date = CURRENT_DATE,
               status = 'SETTLED',

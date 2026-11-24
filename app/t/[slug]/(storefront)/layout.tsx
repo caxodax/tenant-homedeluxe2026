@@ -6,6 +6,7 @@ import { StorefrontHeader } from './components/storefront-header';
 import { ContingencyBanner } from './components/contingency-banner';
 import { TenantThemeInjector } from '@/components/tenant-theme-injector';
 import { FavoritesProvider } from '@/lib/favorites/favorites-store';
+import { CartTenantSync } from '@/lib/cart/cart-tenant-sync';
 import { PwaSplashScreen } from '@/components/storefront/pwa-splash-screen';
 import { Store, MapPin, Phone, ShieldCheck } from 'lucide-react';
 
@@ -61,6 +62,7 @@ export default async function StorefrontLayout({
 
   return (
     <FavoritesProvider slug={slug}>
+      <CartTenantSync slug={slug} />
       <TenantThemeInjector
         primaryColor={settings?.primary_color}
         secondaryColor={settings?.secondary_color}

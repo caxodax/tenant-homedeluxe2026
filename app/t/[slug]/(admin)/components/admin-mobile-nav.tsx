@@ -25,6 +25,7 @@ import {
   FileText,
   Briefcase,
   Receipt,
+  Truck,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { LogoutButton } from '@/components/auth/logout-button';
@@ -67,6 +68,7 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'Pedidos', href: '/orders', icon: ShoppingCart, permission: 'orders', badgeColor: 'blue' },
       { label: 'Cotizaciones', href: '/sales/quotes', icon: FileText, permission: 'quotes', badgeColor: 'blue', plugin: 'sales_team' },
       { label: 'CxC / Crédito', href: '/cxc', icon: Receipt, permission: 'pos', badgeColor: 'blue', plugin: 'credit_cxc' },
+      { label: 'CxP / Proveedores', href: '/cxp', icon: Truck, permission: 'pos', badgeColor: 'purple', plugin: 'payables_cxp' },
       { label: 'Cocina (KDS)', href: '/kds', icon: ChefHat, permission: 'orders', badgeColor: 'amber', plugin: 'food_service' },
       { label: 'Salón & Mesas', href: '/food-service', icon: UtensilsCrossed, permission: 'pos', badgeColor: 'amber', plugin: 'food_service' },
       { label: 'Delivery', href: '/delivery', icon: Bike, permission: 'orders', badgeColor: 'emerald', plugin: 'delivery_fleet' },
@@ -182,7 +184,10 @@ export function AdminMobileNav({
               {NAV_SECTIONS.map((section) => {
                 const visibleItems = section.items.filter((item) =>
                   hasPermission(role, item.permission, customPermissions) &&
-                  (!item.plugin || (activePlugins && activePlugins.includes(item.plugin))) &&
+                  (!item.plugin || (activePlugins && (
+                    activePlugins.includes(item.plugin) ||
+                    (item.plugin === 'payables_cxp' && activePlugins.includes('supplier_cxp'))
+                  ))) &&
                   !(item.href === '/food-service' && tablesEnabled === false)
                 );
                 if (visibleItems.length === 0) return null;

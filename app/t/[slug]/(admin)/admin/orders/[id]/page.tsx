@@ -74,6 +74,16 @@ interface OrderItemRow {
   quantity: number;
   unit_price_usd: string;
   total_price_usd: string;
+  metadata?: {
+    modifiers?: Array<{
+      id?: string;
+      name?: string;
+      option_name?: string;
+      group_name?: string;
+      price?: number;
+    }>;
+    variant_name?: string;
+  } | null;
 }
 
 interface PaymentRow {
@@ -488,7 +498,17 @@ export default function AdminOrderDetailPage() {
     )}`;
 
     const itemsSummary = items
-      .map((item) => `• ${item.quantity}x ${item.product_name}`)
+      .map((item) => {
+        let line = `• ${item.quantity}x ${item.product_name}`;
+        if (item.metadata?.modifiers && item.metadata.modifiers.length > 0) {
+          const mods = item.metadata.modifiers
+            .map((m) => m.name || m.option_name || (typeof m === 'string' ? m : ''))
+            .filter(Boolean)
+            .join(', ');
+          if (mods) line += `\n   └ Adicionales: + ${mods}`;
+        }
+        return line;
+      })
       .join('\n');
 
     const message = [
@@ -1081,7 +1101,28 @@ export default function AdminOrderDetailPage() {
                         <p className="text-sm font-bold text-slate-950 dark:text-white break-words">
                           {item.product_name}
                         </p>
-                        <p className="text-xs font-mono text-slate-600 dark:text-zinc-400">
+                        {item.metadata?.modifiers && item.metadata.modifiers.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {item.metadata.modifiers.map((mod, mIdx) => {
+                              const modName = mod.name || mod.option_name || (typeof mod === 'string' ? mod : '');
+                              const modPrice = typeof mod.price === 'number' ? mod.price : 0;
+                              return (
+                                <div
+                                  key={mIdx}
+                                  className="flex items-center justify-between text-xs font-semibold text-amber-950 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800/80 rounded-lg px-2.5 py-1"
+                                >
+                                  <span>+ {modName}</span>
+                                  {modPrice > 0 && (
+                                    <span className="font-mono font-bold text-amber-800 dark:text-amber-300 ml-2 shrink-0">
+                                      +${modPrice.toFixed(2)}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        <p className="text-xs font-mono text-slate-600 dark:text-zinc-400 mt-1">
                           {item.sku ? `SKU: ${item.sku} · ` : ''}
                           {item.quantity} × ${unitPriceUsd.toFixed(2)} USD
                           {rate > 0 && (
@@ -1768,6 +1809,13 @@ export default function AdminOrderDetailPage() {
                             <td className="py-1.5 align-top font-bold">{Number(it.quantity).toFixed(0)}x</td>
                             <td className="py-1.5 align-top">
                               <div className="font-semibold text-black">{it.product_name}</div>
+                              {it.metadata?.modifiers && it.metadata.modifiers.length > 0 && (
+                                <div className="text-[9px] font-medium text-black pl-1">
+                                  {it.metadata.modifiers.map((m, mIdx) => (
+                                    <div key={mIdx}>+ {m.name || m.option_name || (typeof m === 'string' ? m : '')}</div>
+                                  ))}
+                                </div>
+                              )}
                               <div className="text-[9px] text-zinc-600">
                                 @ ${unitPriceUsd.toFixed(2)} USD
                                 {rate > 0 && ` (Bs. ${unitPriceBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })})`}

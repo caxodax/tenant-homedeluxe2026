@@ -113,11 +113,16 @@ export async function GET(
           a.financing_provider,
           a.external_reference,
           a.custody_status,
+          a.original_amount_primary,
           a.original_amount_usd,
+          a.down_payment_primary,
           a.down_payment_usd,
           a.down_payment_percent,
+          a.financed_amount_primary,
           a.financed_amount_usd,
+          a.balance_primary,
           a.balance_usd,
+          a.total_paid_primary,
           a.total_paid_usd,
           a.term_days,
           a.issue_date,
@@ -132,8 +137,11 @@ export async function GET(
                 'id', t.id,
                 'tranche_number', t.tranche_number,
                 'tranche_name', t.tranche_name,
+                'expected_amount_primary', t.expected_amount_primary,
                 'expected_amount_usd', t.expected_amount_usd,
+                'settled_amount_primary', t.settled_amount_primary,
                 'settled_amount_usd', t.settled_amount_usd,
+                'fee_amount_primary', t.fee_amount_primary,
                 'fee_amount_usd', t.fee_amount_usd,
                 'expected_date', t.expected_date,
                 'settled_date', t.settled_date,
@@ -162,16 +170,25 @@ export async function GET(
       const listValues = [...values, pageSize, offset];
       const listRes = await client.query(listQuery, listValues);
 
-      // KPI Aggregates
+      // KPI Aggregates (Estándar multimoneda _primary con alias de compatibilidad)
       const kpisRes = await client.query(`
         SELECT 
-          COALESCE(sum(CASE WHEN status IN ('CURRENT', 'OVERDUE') THEN balance_usd ELSE 0 END), 0.00)::numeric(12,2) as total_receivable_usd,
-          COALESCE(sum(CASE WHEN status = 'OVERDUE' THEN balance_usd ELSE 0 END), 0.00)::numeric(12,2) as overdue_amount_usd,
+          COALESCE(sum(CASE WHEN status IN ('CURRENT', 'OVERDUE') THEN balance_primary ELSE 0 END), 0.00)::numeric(12,2) as total_receivable_primary,
+          COALESCE(sum(CASE WHEN status IN ('CURRENT', 'OVERDUE') THEN balance_primary ELSE 0 END), 0.00)::numeric(12,2) as total_receivable_usd,
+          COALESCE(sum(CASE WHEN status = 'OVERDUE' THEN balance_primary ELSE 0 END), 0.00)::numeric(12,2) as overdue_amount_primary,
+          COALESCE(sum(CASE WHEN status = 'OVERDUE' THEN balance_primary ELSE 0 END), 0.00)::numeric(12,2) as overdue_amount_usd,
           count(CASE WHEN account_type = 'LAYAWAY' AND custody_status = 'IN_CUSTODY' THEN 1 END)::int as layaways_in_custody_count,
-          COALESCE(sum(CASE WHEN account_type = 'LAYAWAY' AND custody_status = 'IN_CUSTODY' THEN balance_usd ELSE 0 END), 0.00)::numeric(12,2) as layaways_in_custody_balance_usd,
-          COALESCE(sum(CASE WHEN account_type = 'BNPL_FINANCING' AND status IN ('CURRENT', 'OVERDUE') THEN balance_usd ELSE 0 END), 0.00)::numeric(12,2) as cashea_pending_usd,
+          COALESCE(sum(CASE WHEN account_type = 'LAYAWAY' AND custody_status = 'IN_CUSTODY' THEN balance_primary ELSE 0 END), 0.00)::numeric(12,2) as layaways_in_custody_balance_primary,
+          COALESCE(sum(CASE WHEN account_type = 'LAYAWAY' AND custody_status = 'IN_CUSTODY' THEN balance_primary ELSE 0 END), 0.00)::numeric(12,2) as layaways_in_custody_balance_usd,
+          COALESCE(sum(CASE WHEN account_type = 'BNPL_FINANCING' AND status IN ('CURRENT', 'OVERDUE') THEN balance_primary ELSE 0 END), 0.00)::numeric(12,2) as cashea_pending_primary,
+          COALESCE(sum(CASE WHEN account_type = 'BNPL_FINANCING' AND status IN ('CURRENT', 'OVERDUE') THEN balance_primary ELSE 0 END), 0.00)::numeric(12,2) as cashea_pending_usd,
           (
-            SELECT COALESCE(sum(amount_usd), 0.00)::numeric(12,2)
+            SELECT COALESCE(sum(amount_primary), 0.00)::numeric(12,2)
+            FROM ${tenant.db_schema_name}.cxc_payments
+            WHERE created_at >= date_trunc('month', CURRENT_DATE)
+          ) as month_collected_primary,
+          (
+            SELECT COALESCE(sum(amount_primary), 0.00)::numeric(12,2)
             FROM ${tenant.db_schema_name}.cxc_payments
             WHERE created_at >= date_trunc('month', CURRENT_DATE)
           ) as month_collected_usd
@@ -186,11 +203,16 @@ export async function GET(
         pageSize,
         totalPages: Math.ceil(totalCount / pageSize),
         kpis: kpisRes.rows[0] || {
+          total_receivable_primary: 0,
           total_receivable_usd: 0,
+          overdue_amount_primary: 0,
           overdue_amount_usd: 0,
           layaways_in_custody_count: 0,
+          layaways_in_custody_balance_primary: 0,
           layaways_in_custody_balance_usd: 0,
+          cashea_pending_primary: 0,
           cashea_pending_usd: 0,
+          month_collected_primary: 0,
           month_collected_usd: 0,
         },
       });
@@ -268,7 +290,7 @@ export async function POST(
         const initialStatus = balanceUsd <= 0.00 ? 'SETTLED' : 'CURRENT';
         const custodyStatus = data.account_type === 'LAYAWAY' ? 'IN_CUSTODY' : 'NOT_APPLICABLE';
 
-        // 4. Insertar cuenta CxC
+        // 4. Insertar cuenta CxC (Estándar multimoneda _primary + compatibilidad _usd)
         const insertAccRes = await client.query(`
           INSERT INTO ${tenant.db_schema_name}.cxc_accounts (
             account_number,
@@ -280,11 +302,16 @@ export async function POST(
             financing_provider,
             external_reference,
             custody_status,
+            original_amount_primary,
             original_amount_usd,
+            down_payment_primary,
             down_payment_usd,
             down_payment_percent,
+            financed_amount_primary,
             financed_amount_usd,
+            balance_primary,
             balance_usd,
+            total_paid_primary,
             total_paid_usd,
             term_days,
             issue_date,
@@ -294,8 +321,9 @@ export async function POST(
             opened_by
           ) VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-            $11, $12, $13, $14, $15, $16, CURRENT_DATE, CURRENT_DATE + $16 * INTERVAL '1 day',
-            $17, $18, $19
+            $10, $11, $11, $12, $13, $13, $14, $14, 0.00, 0.00,
+            $15, CURRENT_DATE, CURRENT_DATE + $15 * INTERVAL '1 day',
+            $16, $17, $18
           ) RETURNING *
         `, [
           accountNumber,
@@ -312,7 +340,6 @@ export async function POST(
           downPercent,
           financedAmount,
           balanceUsd,
-          0.00, // total_paid_usd inicial
           data.term_days,
           initialStatus,
           data.notes || null,
@@ -328,10 +355,10 @@ export async function POST(
 
           await client.query(`
             INSERT INTO ${tenant.db_schema_name}.cxc_financing_tranches (
-              account_id, tranche_number, tranche_name, expected_amount_usd, expected_date, status
+              account_id, tranche_number, tranche_name, expected_amount_primary, expected_amount_usd, expected_date, status
             ) VALUES 
-            ($1, 1, 'Bloque 1 (14 días)', $2, CURRENT_DATE + INTERVAL '14 days', 'PENDING'),
-            ($1, 2, 'Bloque 2 (30 días)', $3, CURRENT_DATE + INTERVAL '30 days', 'PENDING')
+            ($1, 1, 'Bloque 1 (14 días)', $2, $2, CURRENT_DATE + INTERVAL '14 days', 'PENDING'),
+            ($1, 2, 'Bloque 2 (30 días)', $3, $3, CURRENT_DATE + INTERVAL '30 days', 'PENDING')
           `, [newAccount.id, tranche1Amount, tranche2Amount]);
         }
 
@@ -348,18 +375,21 @@ export async function POST(
             INSERT INTO ${tenant.db_schema_name}.cxc_payments (
               receipt_number,
               account_id,
+              amount_primary,
               amount_usd,
               amount_original,
               currency,
               exchange_rate_applied,
               payment_method,
               reference,
+              balance_before_primary,
               balance_before_usd,
+              balance_after_primary,
               balance_after_usd,
               received_by,
               notes
             ) VALUES (
-              $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+              $1, $2, $3, $3, $4, $5, $6, $7, $8, $9, $9, $10, $10, $11, $12
             )
           `, [
             recNumber,
@@ -376,10 +406,10 @@ export async function POST(
             'Abono inicial en mostrador',
           ]);
 
-          // Actualizar total_paid_usd
+          // Actualizar total_paid_primary / total_paid_usd
           await client.query(`
             UPDATE ${tenant.db_schema_name}.cxc_accounts
-            SET total_paid_usd = $1
+            SET total_paid_primary = $1, total_paid_usd = $1
             WHERE id = $2
           `, [downPayment, newAccount.id]);
         }

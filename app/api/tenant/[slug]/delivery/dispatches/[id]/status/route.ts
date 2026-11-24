@@ -19,13 +19,17 @@ export async function POST(
       return NextResponse.json({ error: 'Se requiere status' }, { status: 400 });
     }
 
+    const isUuid = (val?: string | null) =>
+      typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+    const actorId = isUuid(staff.id) ? staff.id : null;
+
     const res = await pool.query(
       `SELECT platform.rpc_df_update_status($1, $2, $3, $4, $5, $6) AS result`,
       [
         schema,
         id,
         status,
-        staff.id,
+        actorId,
         `${staff.role}: ${staff.full_name}`,
         failure_reason || null,
       ]

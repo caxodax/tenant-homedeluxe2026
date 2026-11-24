@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useTransition, useCallback } from 'react';
+import { useState, useEffect, useTransition, useCallback, useMemo } from 'react';
 import {
   Receipt,
   Search,
@@ -102,11 +102,16 @@ export interface CxcAccountRow {
   financing_provider?: string | null;
   external_reference?: string | null;
   custody_status: 'NOT_APPLICABLE' | 'IN_CUSTODY' | 'RELEASED_FOR_DELIVERY' | 'DELIVERED' | 'CANCELLED_FORFEITED';
+  original_amount_primary?: number | string;
   original_amount_usd: number | string;
+  down_payment_primary?: number | string;
   down_payment_usd: number | string;
   down_payment_percent: number | string;
+  financed_amount_primary?: number | string;
   financed_amount_usd: number | string;
+  balance_primary?: number | string;
   balance_usd: number | string;
+  total_paid_primary?: number | string;
   total_paid_usd: number | string;
   term_days: number;
   issue_date: string;
@@ -120,8 +125,11 @@ export interface CxcAccountRow {
     id: string;
     tranche_number: number;
     tranche_name: string;
+    expected_amount_primary?: number;
     expected_amount_usd: number;
+    settled_amount_primary?: number;
     settled_amount_usd: number;
+    fee_amount_primary?: number;
     fee_amount_usd: number;
     expected_date: string;
     settled_date?: string | null;
@@ -130,11 +138,16 @@ export interface CxcAccountRow {
 }
 
 interface CxcKpis {
+  total_receivable_primary?: number | string;
   total_receivable_usd: number | string;
+  overdue_amount_primary?: number | string;
   overdue_amount_usd: number | string;
   layaways_in_custody_count: number;
+  layaways_in_custody_balance_primary?: number | string;
   layaways_in_custody_balance_usd: number | string;
+  cashea_pending_primary?: number | string;
   cashea_pending_usd: number | string;
+  month_collected_primary?: number | string;
   month_collected_usd: number | string;
 }
 
@@ -235,16 +248,27 @@ export function CxcManager({
     loadAccounts();
   }, [loadAccounts]);
 
-  // Formato de moneda
-  const formatUSD = (val: number | string) => {
+  // Formato multimoneda canónico dinámico (_primary / _secondary)
+  const currencySymbol = useMemo(() => {
+    if (primaryCurrency === 'EUR') return '€';
+    if (primaryCurrency === 'USD') return '$';
+    return `${primaryCurrency} `;
+  }, [primaryCurrency]);
+
+  const formatPrimary = (val: number | string) => {
     const num = Number(val) || 0;
-    return `$${num.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    return `${currencySymbol}${num.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
-  const formatBs = (valUSD: number | string) => {
-    const num = (Number(valUSD) || 0) * exchangeRate;
-    return `Bs. ${num.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const formatSecondary = (valPrimary: number | string) => {
+    const num = (Number(valPrimary) || 0) * (exchangeRate || 1.0);
+    const secPrefix = secondaryCurrency === 'VES' ? 'Bs.' : `${secondaryCurrency} `;
+    return `${secPrefix}${num.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
+
+  // Alias retrocompatibles
+  const formatUSD = formatPrimary;
+  const formatBs = formatSecondary;
 
   return (
     <div className="space-y-6 pb-20 sm:pb-8">

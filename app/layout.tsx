@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
+import Script from "next/script";
 import { Toaster } from "sonner";
 import { PwaRegister } from "@/components/pwa-register";
 import "./globals.css";
@@ -56,8 +57,13 @@ export default function RootLayout({
       className={`${plusJakarta.variable} ${jetbrainsMono.variable}`}
       suppressHydrationWarning
     >
-      <head>
-        <script
+      <body
+        className="bg-[#FAF8F5] dark:bg-[#0D0D0E] text-stone-900 dark:text-zinc-100 font-sans text-[15px] leading-relaxed antialiased min-h-screen transition-colors duration-200"
+        suppressHydrationWarning
+      >
+        <Script
+          id="theme-initializer"
+          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `
               try {
@@ -77,11 +83,6 @@ export default function RootLayout({
             `,
           }}
         />
-      </head>
-      <body
-        className="bg-[#FAF8F5] dark:bg-[#0D0D0E] text-stone-900 dark:text-zinc-100 font-sans text-[15px] leading-relaxed antialiased min-h-screen transition-colors duration-200"
-        suppressHydrationWarning
-      >
         {children}
         <Toaster
           richColors

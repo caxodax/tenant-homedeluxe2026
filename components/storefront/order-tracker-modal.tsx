@@ -36,6 +36,13 @@ interface TrackedOrder {
     product_name: string;
     quantity: number;
     unit_price: number;
+    metadata?: {
+      modifiers?: Array<{
+        name?: string;
+        option_name?: string;
+        price?: number;
+      }>;
+    } | null;
   }>;
   payment?: {
     status: string;
@@ -370,14 +377,18 @@ export function OrderTrackerModal({
                   {ord.items && ord.items.length > 0 && (
                     <div className="text-xs text-zinc-600 dark:text-zinc-400 border-t border-zinc-200/50 dark:border-zinc-800/60 pt-2 flex flex-wrap gap-1.5 items-center">
                       <span className="font-semibold text-zinc-800 dark:text-zinc-200">Productos:</span>
-                      {ord.items.map((it, idx) => (
-                        <span
-                          key={idx}
-                          className="bg-white dark:bg-zinc-800 px-2 py-0.5 rounded-md border border-zinc-200 dark:border-zinc-700 text-[11px]"
-                        >
-                          {it.quantity}x {it.product_name}
-                        </span>
-                      ))}
+                      {ord.items.map((it, idx) => {
+                        const mods = it.metadata?.modifiers?.map((m) => m.name || m.option_name).filter(Boolean).join(', ');
+                        return (
+                          <span
+                            key={idx}
+                            className="bg-white dark:bg-zinc-800 px-2 py-0.5 rounded-md border border-zinc-200 dark:border-zinc-700 text-[11px]"
+                          >
+                            {it.quantity}x {it.product_name}
+                            {mods ? ` (+ ${mods})` : ''}
+                          </span>
+                        );
+                      })}
                     </div>
                   )}
 

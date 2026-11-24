@@ -49,11 +49,13 @@ export async function PATCH(
 
         const tranche = trancheRes.rows[0];
 
-        // 1. Actualizar tranche
+        // 1. Actualizar tranche (Estándar multimoneda _primary + compatibilidad _usd)
         await client.query(`
           UPDATE ${tenant.db_schema_name}.cxc_financing_tranches
           SET 
+            settled_amount_primary = $1,
             settled_amount_usd = $1,
+            fee_amount_primary = $2,
             fee_amount_usd = $2,
             settled_date = CURRENT_DATE,
             status = 'SETTLED',
@@ -78,9 +80,9 @@ export async function PATCH(
           SELECT nextval('${tenant.db_schema_name}.cxc_receipt_seq') as seq
         `);
         const receiptNumber = `REC-${yyyymm}-${String(seqRes.rows[0].seq).padStart(5, '0')}`;
-        const balanceBefore = Number(tranche.balance_usd);
+        const balanceBefore = Number(tranche.balance_primary ?? tranche.balance_usd);
         const balanceAfter = Math.max(0, Number((balanceBefore - data.settled_amount_usd).toFixed(2)));
-        const newTotalPaid = Number((Number(tranche.total_paid_usd) + data.settled_amount_usd).toFixed(2));
+        const newTotalPaid = Number((Number(tranche.total_paid_primary ?? tranche.total_paid_usd) + data.settled_amount_usd).toFixed(2));
         const isSettled = balanceAfter <= 0.00;
 
         await client.query(`
@@ -88,18 +90,21 @@ export async function PATCH(
             receipt_number,
             account_id,
             tranche_id,
+            amount_primary,
             amount_usd,
             amount_original,
             currency,
             exchange_rate_applied,
             payment_method,
             reference,
+            balance_before_primary,
             balance_before_usd,
+            balance_after_primary,
             balance_after_usd,
             received_by,
             notes
           ) VALUES (
-            $1, $2, $3, $4, $4, 'USD', 1.0, 'CASHEA_SETTLEMENT', $5, $6, $7, $8, $9
+            $1, $2, $3, $4, $4, $4, 'USD', 1.0, 'CASHEA_SETTLEMENT', $5, $6, $6, $7, $7, $8, $9
           )
         `, [
           receiptNumber,
@@ -117,7 +122,9 @@ export async function PATCH(
         await client.query(`
           UPDATE ${tenant.db_schema_name}.cxc_accounts
           SET 
+            balance_primary = $1,
             balance_usd = $1,
+            total_paid_primary = $2,
             total_paid_usd = $2,
             status = $3,
             closed_at = CASE WHEN $3 = 'SETTLED' THEN now() ELSE closed_at END,

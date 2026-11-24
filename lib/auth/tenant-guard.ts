@@ -116,7 +116,7 @@ async function resolveTenantContext(
             user,
             tenant,
             staff: {
-              id: 'super_admin',
+              id: adminRes.rows[0].id,
               role: 'OWNER',
               full_name: adminRes.rows[0].full_name || 'Super Admin',
               email: adminRes.rows[0].email,
@@ -170,7 +170,7 @@ async function resolveTenantContext(
             user: { id: adm.id, email: adm.email },
             tenant,
             staff: {
-              id: 'super_admin',
+              id: adm.id,
               role: 'OWNER',
               full_name: adm.full_name || 'Super Admin',
               email: adm.email,

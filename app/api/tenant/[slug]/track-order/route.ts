@@ -41,7 +41,7 @@ export async function GET(
                o.subtotal_primary, o.shipping_primary, o.total_primary, o.total_secondary,
                o.exchange_rate_applied, o.notes, o.created_at,
                (
-                 SELECT json_agg(json_build_object('product_name', oi.product_name, 'quantity', oi.quantity, 'unit_price', oi.unit_price_primary))
+                 SELECT json_agg(json_build_object('product_name', oi.product_name, 'quantity', oi.quantity, 'unit_price', oi.unit_price_primary, 'metadata', oi.metadata))
                  FROM order_items oi WHERE oi.order_id = o.id
                ) as items,
                (

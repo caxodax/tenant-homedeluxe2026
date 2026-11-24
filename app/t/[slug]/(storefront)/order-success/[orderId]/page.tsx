@@ -37,7 +37,8 @@ async function getOrderDetails(slug: string, orderId: string) {
       client.query(`
         SELECT product_name, quantity, 
                unit_price_primary, unit_price_primary as unit_price_usd, 
-               total_price_primary, total_price_primary as total_price_usd
+               total_price_primary, total_price_primary as total_price_usd,
+               metadata
         FROM order_items
         WHERE order_id = $1
       `, [orderId]),

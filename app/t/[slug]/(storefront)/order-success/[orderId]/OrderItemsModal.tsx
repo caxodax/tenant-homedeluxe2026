@@ -9,6 +9,16 @@ interface OrderItem {
   quantity: string;
   unit_price_usd: string;
   total_price_usd: string;
+  metadata?: {
+    modifiers?: Array<{
+      id?: string;
+      name?: string;
+      option_name?: string;
+      group_name?: string;
+      price?: number;
+    }>;
+    variant_name?: string;
+  } | null;
 }
 
 interface OrderItemsModalProps {
@@ -104,7 +114,28 @@ export function OrderItemsModal({
                       <p className="font-bold text-sm text-slate-900 dark:text-white break-words">
                         {item.product_name}
                       </p>
-                      <p className="text-xs font-mono text-slate-500 dark:text-zinc-400 mt-0.5">
+                      {item.metadata?.modifiers && item.metadata.modifiers.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          {item.metadata.modifiers.map((mod, mIdx) => {
+                            const modName = mod.name || mod.option_name || (typeof mod === 'string' ? mod : '');
+                            const modPrice = typeof mod.price === 'number' ? mod.price : 0;
+                            return (
+                              <div
+                                key={mIdx}
+                                className="flex items-center justify-between text-xs font-semibold text-amber-950 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800/80 rounded-lg px-2.5 py-1"
+                              >
+                                <span>+ {modName}</span>
+                                {modPrice > 0 && (
+                                  <span className="font-mono font-bold text-amber-800 dark:text-amber-300 ml-2 shrink-0">
+                                    +${modPrice.toFixed(2)}
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <p className="text-xs font-mono text-slate-500 dark:text-zinc-400 mt-1">
                         {itemQty} × ${itemUnitUsd.toFixed(2)} USD
                         {itemUnitBs && (
                           <span className="text-slate-600 dark:text-zinc-400 font-semibold ml-1.5">

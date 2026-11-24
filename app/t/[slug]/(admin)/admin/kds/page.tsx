@@ -16,6 +16,9 @@ import {
   Utensils,
   Ban,
   Bike,
+  ShoppingBag,
+  PackageCheck,
+  RotateCcw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { createClient } from '@/lib/supabase/client';
@@ -30,7 +33,7 @@ export default function KitchenDisplayPage() {
   const [loading, setLoading] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [now, setNow] = useState(Date.now());
-  const [filter, setFilter] = useState<'ALL' | 'PREPARING' | 'READY'>('ALL');
+  const [filter, setFilter] = useState<'ALL' | 'PREPARING' | 'READY' | 'SERVED'>('ALL');
   const [printingTicket, setPrintingTicket] = useState<FsKitchenTicket | null>(null);
 
   const prevTicketCount = useRef<number>(0);
@@ -142,20 +145,64 @@ export default function KitchenDisplayPage() {
     }
   };
 
-  const handleUpdateTicket = async (ticketId: string, action: 'READY_ALL' | 'SERVED' | 'VOID') => {
+  const getDispatchAction = (ticket: FsKitchenTicket) => {
+    const isDelivery = ticket.delivery_type === 'DELIVERY' || ticket.table_label === 'DELIVERY';
+    const isPickup = ticket.delivery_type === 'PICKUP' || ticket.table_label === 'PARA LLEVAR';
+    const isTable = Boolean(ticket.ticket_id || ticket.table_label?.toLowerCase().includes('mesa'));
+
+    if (isDelivery) {
+      return {
+        label: 'Empacar para Envío',
+        icon: <Bike className="w-3.5 h-3.5" />,
+        className: 'bg-emerald-600 hover:bg-emerald-500',
+        successMsg: 'Pedido empacado y listo para envío (Delivery)',
+      };
+    }
+
+    if (isPickup) {
+      return {
+        label: 'Empacar para Llevar',
+        icon: <ShoppingBag className="w-3.5 h-3.5" />,
+        className: 'bg-teal-600 hover:bg-teal-500',
+        successMsg: 'Pedido empacado y listo para retiro en mostrador',
+      };
+    }
+
+    if (isTable) {
+      return {
+        label: 'Servir a Mesa',
+        icon: <Utensils className="w-3.5 h-3.5" />,
+        className: 'bg-emerald-600 hover:bg-emerald-500',
+        successMsg: 'Comanda servida a mesa',
+      };
+    }
+
+    return {
+      label: 'Empacar para Entrega',
+      icon: <PackageCheck className="w-3.5 h-3.5" />,
+      className: 'bg-emerald-600 hover:bg-emerald-500',
+      successMsg: 'Pedido preparado y empacado para entrega',
+    };
+  };
+
+  const handleUpdateTicket = async (ticket: FsKitchenTicket, action: 'READY_ALL' | 'SERVED' | 'VOID' | 'RECALL') => {
     try {
-      const res = await fetch(`/api/tenant/${slug}/food-service/kds/${ticketId}`, {
+      const res = await fetch(`/api/tenant/${slug}/food-service/kds/${ticket.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error al actualizar comanda');
+
+      const dispatchInfo = getDispatchAction(ticket);
       toast.success(
         action === 'READY_ALL'
           ? 'Comanda completa lista'
           : action === 'SERVED'
-          ? 'Comanda servida a mesa'
+          ? dispatchInfo.successMsg
+          : action === 'RECALL'
+          ? 'Comanda recuperada a cocina activa'
           : 'Comanda anulada'
       );
       loadTickets();
@@ -171,10 +218,16 @@ export default function KitchenDisplayPage() {
     }, 150);
   };
 
+  const activeTickets = tickets.filter((t) => t.status !== 'SERVED' && t.status !== 'VOIDED');
+  const preparingTickets = tickets.filter((t) => t.status === 'FIRED' || t.status === 'PREPARING' || t.status === 'PENDING');
+  const readyTickets = tickets.filter((t) => t.status === 'READY');
+  const servedTickets = tickets.filter((t) => t.status === 'SERVED');
+
   const filteredTickets = tickets.filter((t) => {
-    if (filter === 'PREPARING') return t.status === 'FIRED' || t.status === 'PREPARING';
+    if (filter === 'PREPARING') return t.status === 'FIRED' || t.status === 'PREPARING' || t.status === 'PENDING';
     if (filter === 'READY') return t.status === 'READY';
-    return true;
+    if (filter === 'SERVED') return t.status === 'SERVED';
+    return t.status !== 'SERVED' && t.status !== 'VOIDED';
   });
 
   return (
@@ -201,14 +254,14 @@ export default function KitchenDisplayPage() {
 
         {/* Controles de Vista y Audio */}
         <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-          <div className="inline-flex rounded-xl bg-stone-800 p-1 border border-stone-700">
+          <div className="inline-flex rounded-xl bg-stone-800 p-1 border border-stone-700 flex-wrap gap-1">
             <button
               onClick={() => setFilter('ALL')}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 filter === 'ALL' ? 'bg-orange-600 text-white shadow-xs' : 'text-stone-400 hover:text-white'
               }`}
             >
-              Todas ({tickets.length})
+              Activas ({activeTickets.length})
             </button>
             <button
               onClick={() => setFilter('PREPARING')}
@@ -216,7 +269,7 @@ export default function KitchenDisplayPage() {
                 filter === 'PREPARING' ? 'bg-orange-600 text-white shadow-xs' : 'text-stone-400 hover:text-white'
               }`}
             >
-              En Cocina ({tickets.filter((t) => t.status === 'FIRED' || t.status === 'PREPARING').length})
+              En Cocina ({preparingTickets.length})
             </button>
             <button
               onClick={() => setFilter('READY')}
@@ -224,7 +277,15 @@ export default function KitchenDisplayPage() {
                 filter === 'READY' ? 'bg-orange-600 text-white shadow-xs' : 'text-stone-400 hover:text-white'
               }`}
             >
-              Listas ({tickets.filter((t) => t.status === 'READY').length})
+              Listas ({readyTickets.length})
+            </button>
+            <button
+              onClick={() => setFilter('SERVED')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                filter === 'SERVED' ? 'bg-emerald-600 text-white shadow-xs' : 'text-stone-400 hover:text-white'
+              }`}
+            >
+              Despachadas Hoy ({servedTickets.length})
             </button>
           </div>
 
@@ -261,9 +322,23 @@ export default function KitchenDisplayPage() {
           <div className="w-14 h-14 rounded-2xl bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 flex items-center justify-center mx-auto mb-3">
             <Utensils className="w-7 h-7" />
           </div>
-          <h3 className="text-base font-extrabold text-stone-900 dark:text-white">Cocina al día</h3>
+          <h3 className="text-base font-extrabold text-stone-900 dark:text-white">
+            {filter === 'SERVED'
+              ? 'Sin comandas despachadas'
+              : filter === 'READY'
+              ? 'Sin comandas listas'
+              : filter === 'PREPARING'
+              ? 'Sin comandas en cocción'
+              : 'Cocina al día'}
+          </h3>
           <p className="text-xs text-stone-500 dark:text-zinc-400 max-w-sm mx-auto mt-1">
-            No hay comandas pendientes en preparación en este momento. Los nuevos pedidos aparecerán aquí automáticamente.
+            {filter === 'SERVED'
+              ? 'Las comandas empacadas y entregadas hoy aparecerán aquí para auditoría y recuperación rápida.'
+              : filter === 'READY'
+              ? 'No hay comandas pendientes de empacar o servir en este momento.'
+              : filter === 'PREPARING'
+              ? 'No hay platos actualmente en fuego o preparación.'
+              : 'No hay comandas activas pendientes de preparación en este momento. Los nuevos pedidos aparecerán aquí automáticamente.'}
           </p>
         </div>
       ) : (
@@ -271,6 +346,7 @@ export default function KitchenDisplayPage() {
           {filteredTickets.map((ticket) => {
             const timeStatus = getKdsTimeStatus(ticket.fired_at || ticket.created_at, 12);
             const isReady = ticket.status === 'READY';
+            const isServed = ticket.status === 'SERVED';
 
             const badgeColorClass = isReady
               ? 'bg-emerald-500 text-white'
@@ -284,7 +360,9 @@ export default function KitchenDisplayPage() {
               <div
                 key={ticket.id}
                 className={`flex flex-col justify-between rounded-2xl border transition-all duration-200 overflow-hidden shadow-sm ${
-                  isReady
+                  isServed
+                    ? 'bg-stone-100/70 dark:bg-zinc-900/60 border-stone-200 dark:border-zinc-800 opacity-90'
+                    : isReady
                     ? 'bg-emerald-50/40 dark:bg-emerald-950/20 border-emerald-500/40'
                     : timeStatus.level === 'DANGER'
                     ? 'bg-rose-50/40 dark:bg-rose-950/20 border-rose-500/50'
@@ -298,13 +376,20 @@ export default function KitchenDisplayPage() {
                       <span className="font-mono text-xs font-black text-orange-600 dark:text-orange-400">
                         #{ticket.order_number?.slice(-6) || ticket.order_id.slice(0, 6)}
                       </span>
-                      <span className="font-extrabold text-sm text-stone-950 dark:text-white">
-                        {ticket.table_label}
-                      </span>
-                      {ticket.delivery_type === 'DELIVERY' && (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                          <Bike className="w-3 h-3" />
-                          <span>DELIVERY</span>
+                      {ticket.delivery_type === 'DELIVERY' || ticket.table_label === 'DELIVERY' ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-black bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
+                          <Bike className="w-3.5 h-3.5" />
+                          <span>ENVÍO A DOMICILIO</span>
+                        </span>
+                      ) : ticket.delivery_type === 'PICKUP' || ticket.table_label === 'PARA LLEVAR' ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-black bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30">
+                          <ShoppingBag className="w-3.5 h-3.5" />
+                          <span>PARA LLEVAR</span>
+                        </span>
+                      ) : (
+                        <span className="font-extrabold text-sm text-stone-950 dark:text-white flex items-center gap-1">
+                          <Utensils className="w-3.5 h-3.5 text-stone-500" />
+                          <span>{ticket.table_label || 'Mesa'}</span>
                         </span>
                       )}
                     </div>
@@ -313,11 +398,18 @@ export default function KitchenDisplayPage() {
                     </span>
                   </div>
 
-                  {/* Semáforo de Tiempo */}
-                  <div className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 ${badgeColorClass}`}>
-                    <Clock className="w-3.5 h-3.5" />
-                    <span>{timeStatus.elapsedMinutes}m</span>
-                  </div>
+                  {/* Semáforo de Tiempo o Estado de Despacho */}
+                  {isServed ? (
+                    <div className="px-2.5 py-1 rounded-lg text-xs font-mono font-bold bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1 shrink-0">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>{ticket.served_at ? new Date(ticket.served_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Despachado'}</span>
+                    </div>
+                  ) : (
+                    <div className={`px-2.5 py-1 rounded-lg text-xs font-mono font-bold flex items-center gap-1 ${badgeColorClass}`}>
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>{timeStatus.elapsedMinutes}m</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Ítems y Modificadores de la Comanda */}
@@ -327,7 +419,7 @@ export default function KitchenDisplayPage() {
                     return (
                       <div
                         key={item.id}
-                        onClick={() => !isItemReady && handleUpdateItem(ticket.id, item.id)}
+                        onClick={() => !isItemReady && !isServed && handleUpdateItem(ticket.id, item.id)}
                         className={`pt-2 first:pt-0 flex items-start justify-between gap-2 cursor-pointer group ${
                           isItemReady ? 'opacity-50' : ''
                         }`}
@@ -348,10 +440,20 @@ export default function KitchenDisplayPage() {
 
                           {/* Modificadores / Adicionales seleccionados */}
                           {item.modifiers && item.modifiers.length > 0 && (
-                            <div className="mt-1 pl-6 space-y-0.5 text-[11px] text-orange-600 dark:text-orange-400 font-medium">
-                              {item.modifiers.map((mod, idx) => (
-                                <p key={idx}>• {mod.group_name || 'Opción'}: {mod.option_name || String(mod)}</p>
-                              ))}
+                            <div className="mt-1.5 pl-6 space-y-1">
+                              {item.modifiers.map((mod, idx) => {
+                                const label = String(mod.name || mod.option_name || (typeof mod === 'string' ? mod : '') || '');
+                                const group = mod.group_name ? `${mod.group_name}: ` : '';
+                                return (
+                                  <div
+                                    key={idx}
+                                    className="text-xs font-bold text-amber-950 dark:text-amber-100 bg-amber-100/90 dark:bg-amber-950/70 border border-amber-300 dark:border-amber-800/80 px-2 py-1 rounded-md flex items-center gap-1.5 shadow-xs"
+                                  >
+                                    <span className="text-amber-600 dark:text-amber-400 font-black">•</span>
+                                    <span>{group}{label}</span>
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
 
@@ -395,22 +497,36 @@ export default function KitchenDisplayPage() {
                   </button>
 
                   <div className="flex items-center gap-1.5 flex-1 justify-end">
-                    {!isReady ? (
+                    {isServed ? (
                       <button
-                        onClick={() => handleUpdateTicket(ticket.id, 'READY_ALL')}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-extrabold text-xs transition-all shadow-xs active:scale-95"
+                        onClick={() => handleUpdateTicket(ticket, 'RECALL')}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-stone-700 hover:bg-stone-600 text-white font-extrabold text-xs transition-all shadow-xs active:scale-95 cursor-pointer"
+                        title="Reabrir comanda y devolver a cocina activa"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-orange-400" />
+                        <span>Recuperar a Cocina</span>
+                      </button>
+                    ) : !isReady ? (
+                      <button
+                        onClick={() => handleUpdateTicket(ticket, 'READY_ALL')}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-extrabold text-xs transition-all shadow-xs active:scale-95 cursor-pointer"
                       >
                         <Flame className="w-3.5 h-3.5" />
                         <span>Todo Listo</span>
                       </button>
                     ) : (
-                      <button
-                        onClick={() => handleUpdateTicket(ticket.id, 'SERVED')}
-                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs transition-all shadow-xs active:scale-95"
-                      >
-                        <CheckCheck className="w-3.5 h-3.5" />
-                        <span>Servir a Mesa</span>
-                      </button>
+                      (() => {
+                        const dispatchMeta = getDispatchAction(ticket);
+                        return (
+                          <button
+                            onClick={() => handleUpdateTicket(ticket, 'SERVED')}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl ${dispatchMeta.className} text-white font-extrabold text-xs transition-all shadow-xs active:scale-95 cursor-pointer`}
+                          >
+                            {dispatchMeta.icon}
+                            <span>{dispatchMeta.label}</span>
+                          </button>
+                        );
+                      })()
                     )}
                   </div>
                 </div>
@@ -425,7 +541,13 @@ export default function KitchenDisplayPage() {
         <div className="hidden print:block font-mono text-[11px] text-black bg-white p-2 max-w-[80mm] leading-tight">
           <div className="text-center pb-2 border-b border-black">
             <h2 className="text-sm font-black uppercase">COMANDA DE COCINA</h2>
-            <p className="text-base font-black mt-1">MESA: {printingTicket.table_label}</p>
+            <p className="text-base font-black mt-1">
+              {printingTicket.delivery_type === 'DELIVERY' || printingTicket.table_label === 'DELIVERY'
+                ? 'MODALIDAD: ENVÍO A DOMICILIO (DELIVERY)'
+                : printingTicket.delivery_type === 'PICKUP' || printingTicket.table_label === 'PARA LLEVAR'
+                ? 'MODALIDAD: PARA LLEVAR (RETIRO)'
+                : `MESA: ${printingTicket.table_label}`}
+            </p>
             <p className="text-[10px]">
               Orden #{printingTicket.order_number?.slice(-6) || printingTicket.order_id.slice(0, 6)} · {new Date().toLocaleTimeString()}
             </p>
@@ -438,10 +560,13 @@ export default function KitchenDisplayPage() {
                   <span>{it.quantity}x {it.product_name}</span>
                 </div>
                 {it.modifiers && it.modifiers.length > 0 && (
-                  <div className="pl-2 text-[10px]">
-                    {it.modifiers.map((m, mIdx) => (
-                      <span key={mIdx}>+ {m.option_name || String(m)} </span>
-                    ))}
+                  <div className="pl-2 text-[10px] space-y-0.5">
+                    {it.modifiers.map((m, mIdx) => {
+                      const label = String(m.name || m.option_name || (typeof m === 'string' ? m : '') || '');
+                      return (
+                        <div key={mIdx} className="font-bold">+ {label}</div>
+                      );
+                    })}
                   </div>
                 )}
                 {it.prep_notes && (

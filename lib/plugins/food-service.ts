@@ -175,7 +175,7 @@ export async function updateKitchenStatus(
   tenantSchema: string,
   kitchenTicketId: string,
   itemIds: string[] | null = null,
-  action: 'READY_ITEM' | 'READY_ALL' | 'SERVED' | 'VOID' = 'READY_ALL'
+  action: 'READY_ITEM' | 'READY_ALL' | 'SERVED' | 'VOID' | 'RECALL' = 'READY_ALL'
 ) {
   const res = await pool.query(
     `SELECT platform.rpc_fs_kitchen_update($1, $2, $3, $4) as result`,
@@ -253,7 +253,10 @@ export async function getActiveKitchenTickets(tenantSchema: string): Promise<FsK
       LEFT JOIN fs_table_tickets tk ON tk.id = kt.ticket_id
       LEFT JOIN fs_tables t ON t.id = tk.table_id
       WHERE kt.status IN ('PENDING', 'FIRED', 'PREPARING', 'READY')
-      ORDER BY kt.created_at ASC
+         OR (kt.status = 'SERVED' AND kt.served_at >= CURRENT_DATE)
+      ORDER BY 
+        CASE WHEN kt.status = 'SERVED' THEN 1 ELSE 0 END ASC,
+        kt.created_at ASC
     `);
 
     if (ticketsRes.rows.length === 0) return [];

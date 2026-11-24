@@ -11,6 +11,8 @@ interface FavoritesContextType {
   isFavoritesOnly: boolean;
   setIsFavoritesOnly: (value: boolean) => void;
   toggleFavoritesOnly: () => void;
+  syncWithAvailableProducts: (availableProductIds: string[]) => void;
+  isInitialized: boolean;
 }
 
 const FavoritesContext = createContext<FavoritesContextType | undefined>(undefined);
@@ -27,14 +29,22 @@ export function FavoritesProvider({ children, slug }: FavoritesProviderProps) {
 
   const storageKey = useMemo(() => `marketos_favorites_${slug}`, [slug]);
 
-  // Restaurar favoritos desde localStorage en el cliente
+  // Restaurar y desinfectar favoritos desde localStorage en el cliente
   useEffect(() => {
     try {
       const saved = localStorage.getItem(storageKey);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          setFavorites(parsed);
+          // Filtrar valores no válidos, nulos, strings vacíos y duplicados
+          const sanitized = Array.from(
+            new Set(
+              parsed.filter(
+                (id): id is string => typeof id === 'string' && id.trim().length > 0
+              )
+            )
+          );
+          setFavorites(sanitized);
         }
       }
     } catch {
@@ -55,9 +65,32 @@ export function FavoritesProvider({ children, slug }: FavoritesProviderProps) {
     }
   }, [favorites, isInitialized, storageKey]);
 
-  const isFavorite = (productId: string) => favorites.includes(productId);
+  // Sincronizar y purgar automáticamente IDs huérfanos que ya no existen en el catálogo activo
+  const syncWithAvailableProducts = React.useCallback(
+    (availableProductIds: string[]) => {
+      if (!isInitialized || !availableProductIds || availableProductIds.length === 0) return;
+      const validSet = new Set(availableProductIds.filter((id) => typeof id === 'string' && id.trim().length > 0));
+
+      setFavorites((prev) => {
+        const purged = prev.filter((id) => validSet.has(id));
+        if (purged.length === prev.length) {
+          return prev;
+        }
+        return purged;
+      });
+    },
+    [isInitialized]
+  );
+
+  const isFavorite = (productId: string) => {
+    if (!productId || typeof productId !== 'string') return false;
+    return favorites.includes(productId.trim());
+  };
 
   const toggleFavorite = (productId: string) => {
+    if (!productId || typeof productId !== 'string' || !productId.trim()) return;
+    const cleanId = productId.trim();
+
     if (typeof window !== 'undefined' && 'vibrate' in navigator) {
       try {
         navigator.vibrate(10);
@@ -67,10 +100,10 @@ export function FavoritesProvider({ children, slug }: FavoritesProviderProps) {
     }
 
     setFavorites((prev) => {
-      if (prev.includes(productId)) {
-        return prev.filter((id) => id !== productId);
+      if (prev.includes(cleanId)) {
+        return prev.filter((id) => id !== cleanId);
       } else {
-        return [...prev, productId];
+        return [...prev, cleanId];
       }
     });
   };
@@ -92,6 +125,8 @@ export function FavoritesProvider({ children, slug }: FavoritesProviderProps) {
         isFavoritesOnly,
         setIsFavoritesOnly,
         toggleFavoritesOnly,
+        syncWithAvailableProducts,
+        isInitialized,
       }}
     >
       {children}

@@ -58,7 +58,7 @@ export type FsSendToKitchenInput = z.infer<typeof FsSendToKitchenInputSchema>;
 export const FsKitchenUpdateInputSchema = z.object({
   kitchen_ticket_id: z.string().uuid('ID de comanda inválido'),
   item_ids: z.array(z.string().uuid()).optional().nullable(),
-  action: z.enum(['READY_ITEM', 'READY_ALL', 'SERVED', 'VOID']).default('READY_ALL'),
+  action: z.enum(['READY_ITEM', 'READY_ALL', 'SERVED', 'VOID', 'RECALL']).default('READY_ALL'),
 });
 export type FsKitchenUpdateInput = z.infer<typeof FsKitchenUpdateInputSchema>;
 
@@ -172,7 +172,7 @@ export interface FsKitchenTicketItem {
   order_item_id: string;
   product_name: string;
   quantity: number;
-  modifiers: Array<{ group_name?: string; option_name?: string; [key: string]: unknown }>;
+  modifiers: Array<{ name?: string; group_name?: string; option_name?: string; price?: number; [key: string]: unknown }>;
   prep_notes: string | null;
   status: 'PENDING' | 'READY' | 'VOIDED';
   ready_at: string | null;

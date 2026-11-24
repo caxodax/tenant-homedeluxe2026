@@ -209,11 +209,16 @@ export async function POST(request: NextRequest) {
               const accRes = await client.query(
                 `INSERT INTO cxc_accounts (
                    account_number, order_id, customer_id, seller_id, account_type, document_type,
-                   financing_provider, external_reference, custody_status, original_amount_usd,
-                   down_payment_usd, down_payment_percent, financed_amount_usd, balance_usd,
-                   total_paid_usd, term_days, issue_date, due_date, status, notes
+                   financing_provider, external_reference, custody_status,
+                   original_amount_primary, original_amount_usd,
+                   down_payment_primary, down_payment_usd, down_payment_percent,
+                   financed_amount_primary, financed_amount_usd,
+                   balance_primary, balance_usd,
+                   total_paid_primary, total_paid_usd,
+                   term_days, issue_date, due_date, status, notes
                  ) VALUES (
-                   $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
+                   $1, $2, $3, $4, $5, $6, $7, $8, $9,
+                   $10, $10, $11, $11, $12, $13, $13, $14, $14, $15, $15, $16,
                    CURRENT_DATE, CURRENT_DATE + ($16 || ' days')::interval, $17, $18
                  ) RETURNING id`,
                 [
@@ -248,10 +253,11 @@ export async function POST(request: NextRequest) {
 
                 await client.query(
                   `INSERT INTO cxc_payments (
-                     account_id, receipt_number, amount_usd, amount_paid_primary, amount_paid_secondary,
-                     exchange_rate, payment_method, payment_reference, payment_date, balance_after_usd
+                     account_id, receipt_number, amount_primary, amount_usd, amount_original,
+                     currency, exchange_rate_applied, payment_method, reference,
+                     balance_before_primary, balance_before_usd, balance_after_primary, balance_after_usd
                    ) VALUES (
-                     $1, $2, $3, $3, $3 * $4, $4, $5, $6, now(), $7
+                     $1, $2, $3, $3, $3 * $4, 'VES', $4, $5, $6, $7, $7, $8, $8
                    )`,
                   [
                     accountId,
@@ -260,6 +266,7 @@ export async function POST(request: NextRequest) {
                     sale.exchange_rate_applied || 1.0,
                     sale.cxc_data.down_payment_method || sale.payment.method || 'CASH_USD',
                     sale.payment.reference_number || 'INICIAL-POS',
+                    originalAmount,
                     financedAmount
                   ]
                 );
@@ -273,11 +280,13 @@ export async function POST(request: NextRequest) {
 
                 await client.query(
                   `INSERT INTO cxc_financing_tranches (
-                     account_id, tranche_number, tranche_name, expected_amount_usd, expected_date, status
+                     account_id, tranche_number, tranche_name,
+                     expected_amount_primary, expected_amount_usd,
+                     expected_date, status
                    ) VALUES
-                     ($1, 1, 'Cuota 1 (Día 14)', $2, CURRENT_DATE + interval '14 days', 'PENDING'),
-                     ($1, 2, 'Cuota 2 (Día 28)', $3, CURRENT_DATE + interval '28 days', 'PENDING'),
-                     ($1, 3, 'Cuota 3 (Día 42)', $4, CURRENT_DATE + interval '42 days', 'PENDING')`,
+                     ($1, 1, 'Cuota 1 (Día 14)', $2, $2, CURRENT_DATE + interval '14 days', 'PENDING'),
+                     ($1, 2, 'Cuota 2 (Día 28)', $3, $3, CURRENT_DATE + interval '28 days', 'PENDING'),
+                     ($1, 3, 'Cuota 3 (Día 42)', $4, $4, CURRENT_DATE + interval '42 days', 'PENDING')`,
                   [accountId, tranche1, tranche2, tranche3]
                 );
               }

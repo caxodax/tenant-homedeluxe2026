@@ -20,13 +20,13 @@ export default async function CxcPage({
         WHERE tenant_id = $1 AND plugin_id = 'credit_cxc' AND is_active = true
       `, [tenant.id]);
 
-      // 2. Lazy check de cuentas vencidas
+      // 2. Lazy check de cuentas vencidas (Estándar Multimoneda: balance_primary)
       await client.query(`
         UPDATE ${tenant.db_schema_name}.cxc_accounts
         SET status = 'OVERDUE', updated_at = now()
         WHERE status = 'CURRENT'
           AND due_date < CURRENT_DATE
-          AND balance_usd > 0.00
+          AND balance_primary > 0.00
       `);
 
       // 3. Vendedores / Personal comercial

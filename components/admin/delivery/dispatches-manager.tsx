@@ -547,11 +547,46 @@ export function DispatchesManager({
                             <div className="text-xs font-bold text-stone-900 dark:text-white truncate">
                               {dispatch.driver_name || 'Asignado'}
                             </div>
-                            {dispatch.driver_plate && (
-                              <div className="text-[10px] text-stone-400 dark:text-zinc-500">
-                                Placa: {dispatch.driver_plate}
-                              </div>
-                            )}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {dispatch.driver_plate && (
+                                <span className="text-[10px] text-stone-400 dark:text-zinc-500">
+                                  Placa: {dispatch.driver_plate}
+                                </span>
+                              )}
+                              {dispatch.driver_phone && (
+                                <a
+                                  href={(() => {
+                                    const cleanPhone = dispatch.driver_phone.replace(/\D/g, '');
+                                    const cleanCustomerPhone = (dispatch.customer_phone || '').replace(/\D/g, '');
+                                    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                                      dispatch.delivery_address || ''
+                                    )}`;
+                                    const message = [
+                                      `🛵 *HOJA DE RUTA - DESPACHO MOTORIZADO* 🛵`,
+                                      `━━━━━━━━━━━━━━━━━━━━`,
+                                      `*Orden:* #${dispatch.order_number || ''}`,
+                                      `*Cliente:* ${dispatch.customer_name || 'Sin nombre'}`,
+                                      `*Teléfono:* ${dispatch.customer_phone || 'N/A'}${cleanCustomerPhone ? ` (https://wa.me/${cleanCustomerPhone})` : ''}`,
+                                      `*Dirección:* ${dispatch.delivery_address || 'Sin dirección'}`,
+                                      dispatch.reference_point ? `*Punto de Ref:* ${dispatch.reference_point}` : '',
+                                      `*Ubicación Maps:* ${mapsUrl}`,
+                                      `*Zona:* ${dispatch.zone_name_snapshot || 'Estándar'} (Tarifa: ${currencySymbol}${Number(dispatch.zone_rate_snapshot_primary || 0).toFixed(2)})`,
+                                      `*Total a Cobrar:* ${currencySymbol}${Number(dispatch.order_total_primary || 0).toFixed(2)}`,
+                                      `━━━━━━━━━━━━━━━━━━━━`,
+                                      `_Comercio: ${storeName}_`,
+                                    ].filter(Boolean).join('\n');
+                                    return `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`;
+                                  })()}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-400 text-[10px] font-semibold hover:bg-emerald-200 transition"
+                                  title="Enviar orden al WhatsApp del motorizado"
+                                >
+                                  <MessageCircle className="w-3 h-3" />
+                                  WhatsApp Chofer
+                                </a>
+                              )}
+                            </div>
                           </div>
                         </div>
 

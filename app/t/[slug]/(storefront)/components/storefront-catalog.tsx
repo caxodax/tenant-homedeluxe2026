@@ -58,7 +58,21 @@ export function StorefrontCatalog({
   const [pageSize, setPageSize] = useState<number>(24);
   const [currentPage, setCurrentPage] = useState<number>(1);
 
-  const { favorites, favoritesCount, isFavoritesOnly, setIsFavoritesOnly } = useFavorites();
+  const {
+    favorites,
+    favoritesCount,
+    isFavoritesOnly,
+    setIsFavoritesOnly,
+    syncWithAvailableProducts,
+    clearFavorites,
+  } = useFavorites();
+
+  // Depurar y reconciliar favoritos huérfanos con los productos reales y activos del catálogo
+  useEffect(() => {
+    if (products && products.length > 0) {
+      syncWithAvailableProducts(products.map((p) => p.id));
+    }
+  }, [products, syncWithAvailableProducts]);
 
   // Si la URL contiene ?filter=favorites, activar reactivamente
   useEffect(() => {
@@ -277,10 +291,10 @@ export function StorefrontCatalog({
               </div>
               <div className="truncate">
                 <p className="text-xs sm:text-sm font-extrabold tracking-tight">
-                  Tus Productos Favoritos ({favoritesCount})
+                  Tus Productos Favoritos ({totalProducts})
                 </p>
                 <p className="text-[11px] text-stone-500 dark:text-zinc-400 truncate">
-                  {favoritesCount === 0 
+                  {totalProducts === 0 
                     ? 'No has marcado productos todavía' 
                     : 'Filtrando solo los productos que te gustan'}
                 </p>
@@ -308,17 +322,31 @@ export function StorefrontCatalog({
                 : 'Intenta con otro término de búsqueda o selecciona otra categoría.'}
             </p>
             {(selectedCategory !== 'all' || isFavoritesOnly || searchQuery) && (
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedCategory('all');
-                  setIsFavoritesOnly(false);
-                  setSearchQuery('');
-                }}
-                className="mt-2 px-4 py-2 rounded-xl tenant-primary-bg text-white text-xs font-bold shadow-xs cursor-pointer"
-              >
-                Restablecer Filtros
-              </button>
+              <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategory('all');
+                    setIsFavoritesOnly(false);
+                    setSearchQuery('');
+                  }}
+                  className="px-4 py-2 rounded-xl tenant-primary-bg text-white text-xs font-bold shadow-xs cursor-pointer"
+                >
+                  Restablecer Filtros
+                </button>
+                {isFavoritesOnly && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      clearFavorites();
+                      setIsFavoritesOnly(false);
+                    }}
+                    className="px-4 py-2 rounded-xl border border-rose-200 dark:border-rose-900/60 text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/20 text-xs font-bold transition cursor-pointer"
+                  >
+                    Vaciar lista de favoritos
+                  </button>
+                )}
+              </div>
             )}
           </div>
         ) : (
