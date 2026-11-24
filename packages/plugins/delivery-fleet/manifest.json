@@ -1,0 +1,39 @@
+{
+  "id": "delivery_fleet",
+  "name": "Delivery & Flota de Repartidores",
+  "category": "logistics",
+  "version": "1.1.0",
+  "description": "Zonas perimetrales Haversine, cálculo dinámico de tarifas, guía visual de sectores cubiertos en checkout/POS, control de motorizados y despacho directo a WhatsApp.",
+  "is_core_addon": true,
+  "pricing_tier": "STARTER",
+  "price_usd_monthly": 10.00,
+  "dependencies": [],
+  "config_schema": {
+    "type": "object",
+    "properties": {
+      "default_estimated_time": {
+        "type": "string",
+        "default": "25-35 min"
+      },
+      "auto_assign_driver": {
+        "type": "boolean",
+        "default": false
+      },
+      "whatsapp_dispatch_enabled": {
+        "type": "boolean",
+        "default": true
+      }
+    }
+  },
+  "hooks": {
+    "nav_items": [
+      {
+        "title": "Delivery",
+        "href": "/admin/delivery",
+        "icon": "Bike"
+      }
+    ],
+    "pos_delivery_types": ["DELIVERY"],
+    "staff_roles": ["DRIVER"]
+  }
+}

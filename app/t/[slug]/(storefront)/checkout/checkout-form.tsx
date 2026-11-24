@@ -9,7 +9,7 @@ import {
   Store, Banknote, CreditCard, ShieldCheck, 
   ArrowLeft, CheckCircle2, AlertCircle, ShoppingBag,
   UploadCloud, Loader2, X, Copy, Check, Building2, FileCheck2,
-  Bike, MapPin, Navigation, Compass, RefreshCw
+  Bike, MapPin, Navigation, Compass, RefreshCw, HelpCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
 import Link from 'next/link';
@@ -95,6 +95,7 @@ export function CheckoutForm({
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [deliveryReferencePoint, setDeliveryReferencePoint] = useState('');
   const [selectedZoneId, setSelectedZoneId] = useState<string>(deliveryZones[0]?.id || '');
+  const [showZonesGuideModal, setShowZonesGuideModal] = useState(false);
   const [gpsConsent, setGpsConsent] = useState(false);
   const [isDetectingGps, setIsDetectingGps] = useState(false);
   const [detectedCoords, setDetectedCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -578,26 +579,80 @@ export function CheckoutForm({
                   </button>
                 </div>
 
-                {/* Selector de Zona Manual (Fallback Resiliente) */}
+                {/* Selector de Zona Manual con Cobertura y Guía de Sectores */}
                 {deliveryZones.length > 0 && (
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-800 dark:text-zinc-200 flex items-center justify-between">
-                      <span>Zona de Entrega / Municipio *</span>
-                      <span className="text-[10px] font-mono text-emerald-700 dark:text-emerald-400">
-                        {selectedZone ? `Tarifa: ${currencySymbol}${Number(selectedZone.rate_primary).toFixed(2)}` : ''}
-                      </span>
-                    </label>
-                    <select
-                      value={selectedZoneId}
-                      onChange={(e) => setSelectedZoneId(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-800 text-xs font-semibold text-slate-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500"
-                    >
-                      {deliveryZones.map((zone) => (
-                        <option key={zone.id} value={zone.id}>
-                          {zone.name} — {currencySymbol}{Number(zone.rate_primary).toFixed(2)} {primaryCurrency} {zone.estimated_time ? `(${zone.estimated_time})` : ''}
-                        </option>
-                      ))}
-                    </select>
+                  <div className="space-y-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-1.5">
+                      <label className="text-xs font-bold text-slate-800 dark:text-zinc-200 flex items-center gap-1.5">
+                        <span>Zona de Entrega / Municipio *</span>
+                        {selectedZone && (
+                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20">
+                            Tarifa: {currencySymbol}{Number(selectedZone.rate_primary).toFixed(2)}
+                          </span>
+                        )}
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setShowZonesGuideModal(true)}
+                        className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 hover:underline inline-flex items-center gap-1 transition cursor-pointer"
+                      >
+                        <HelpCircle className="w-3.5 h-3.5" />
+                        <span>¿Qué zona cubre mi dirección?</span>
+                      </button>
+                    </div>
+
+                    <div className="relative">
+                      <select
+                        value={selectedZoneId}
+                        onChange={(e) => setSelectedZoneId(e.target.value)}
+                        className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-zinc-900 border border-slate-300 dark:border-zinc-800 text-xs font-semibold text-slate-950 dark:text-white focus:outline-none focus:ring-2 focus:ring-lime-500/20 focus:border-lime-500 shadow-xs"
+                      >
+                        {deliveryZones.map((zone) => (
+                          <option key={zone.id} value={zone.id}>
+                            {zone.name} — {currencySymbol}{Number(zone.rate_primary).toFixed(2)} {primaryCurrency} {zone.estimated_time ? `(${zone.estimated_time})` : ''} {zone.description ? `· Cubre: ${zone.description}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Tarjeta Visual de Cobertura Activa (Inmediatamente visible) */}
+                    {selectedZone && (
+                      <div className="p-3 sm:p-3.5 rounded-xl bg-gradient-to-br from-emerald-50/80 via-white to-slate-50 dark:from-emerald-950/25 dark:via-zinc-900/60 dark:to-zinc-900/40 border border-emerald-200/90 dark:border-emerald-800/50 shadow-xs transition-all animate-in fade-in duration-200">
+                        <div className="flex items-start gap-2.5">
+                          <div className="w-7 h-7 rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+                            <MapPin className="w-4 h-4" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center justify-between gap-1 mb-1.5">
+                              <span className="text-xs font-extrabold text-slate-900 dark:text-zinc-100 flex items-center gap-1.5">
+                                <span>Cobertura: {selectedZone.name}</span>
+                              </span>
+                              <div className="flex items-center gap-2 text-[10px] font-mono text-emerald-700 dark:text-emerald-400 font-semibold">
+                                {selectedZone.estimated_time && (
+                                  <span>⏱️ {selectedZone.estimated_time}</span>
+                                )}
+                                {selectedZone.radius_km > 0 && (
+                                  <span>📍 Radio: {Number(selectedZone.radius_km).toFixed(1)} km</span>
+                                )}
+                              </div>
+                            </div>
+
+                            {selectedZone.description ? (
+                              <div className="text-xs text-slate-700 dark:text-zinc-300 font-medium leading-relaxed bg-white/80 dark:bg-zinc-800/60 p-2.5 rounded-lg border border-emerald-100 dark:border-emerald-900/40">
+                                <span className="font-bold text-slate-900 dark:text-white block mb-0.5 text-[11px] uppercase tracking-wide">
+                                  Sectores y avenidas incluidas:
+                                </span>
+                                {selectedZone.description}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-slate-500 dark:text-zinc-400 italic">
+                                Cobertura perimetral estándar dentro del radio de despacho de la tienda ({Number(selectedZone.radius_km || 5).toFixed(1)} km).
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1087,6 +1142,125 @@ export function CheckoutForm({
           </div>
         </div>
       </div>
+
+      {/* Modal Guía de Zonas y Cobertura (Responsive Desktop / Mobile) */}
+      {showZonesGuideModal && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150"
+          onClick={() => setShowZonesGuideModal(false)}
+        >
+          <div 
+            className="w-full max-w-lg bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header del Modal */}
+            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-zinc-800 flex items-center justify-between bg-slate-50/70 dark:bg-zinc-900/70">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                  <Compass className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                    Zonas y Sectores de Cobertura
+                  </h3>
+                  <p className="text-[11px] text-slate-500 dark:text-zinc-400">
+                    Toca una zona para seleccionarla directamente
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowZonesGuideModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Lista de Zonas */}
+            <div className="p-4 sm:p-5 overflow-y-auto space-y-3">
+              {deliveryZones.map((zone) => {
+                const isCurrent = zone.id === selectedZoneId;
+                return (
+                  <div
+                    key={zone.id}
+                    onClick={() => {
+                      setSelectedZoneId(zone.id);
+                      setShowZonesGuideModal(false);
+                      toast.success(`Zona seleccionada: ${zone.name}`);
+                    }}
+                    className={`p-3.5 rounded-xl border transition cursor-pointer flex flex-col gap-2 ${
+                      isCurrent
+                        ? 'bg-emerald-500/10 border-emerald-500 ring-1 ring-emerald-500/30 shadow-xs'
+                        : 'bg-white dark:bg-zinc-900/70 border-slate-200 dark:border-zinc-800 hover:border-emerald-300 dark:hover:border-emerald-700/60 hover:bg-slate-50/60 dark:hover:bg-zinc-800/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="font-extrabold text-sm text-slate-900 dark:text-white">
+                          {zone.name}
+                        </span>
+                        {isCurrent && (
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500 text-white">
+                            Seleccionada
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                          {currencySymbol}{Number(zone.rate_primary).toFixed(2)} {primaryCurrency}
+                        </span>
+                        {zone.estimated_time && (
+                          <p className="text-[10px] text-slate-500 dark:text-zinc-400">
+                            ⏱️ {zone.estimated_time}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {zone.description ? (
+                      <div className="text-xs text-slate-600 dark:text-zinc-300 bg-slate-50 dark:bg-zinc-800/70 p-2.5 rounded-lg border border-slate-100 dark:border-zinc-800">
+                        <span className="font-bold text-slate-800 dark:text-zinc-200 block mb-0.5 text-[11px]">
+                          📍 Sectores cubiertos:
+                        </span>
+                        {zone.description}
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-slate-400 italic">
+                        Radio perimetral de {Number(zone.radius_km || 5).toFixed(1)} km
+                      </p>
+                    )}
+
+                    <div className="flex justify-end pt-1">
+                      <button
+                        type="button"
+                        className={`text-xs font-bold px-3 py-1.5 rounded-lg transition ${
+                          isCurrent
+                            ? 'bg-emerald-600 text-white shadow-xs'
+                            : 'bg-slate-100 hover:bg-emerald-500 hover:text-white dark:bg-zinc-800 text-slate-700 dark:text-zinc-300'
+                        }`}
+                      >
+                        {isCurrent ? 'Zona Seleccionada' : 'Elegir esta zona'}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer del Modal */}
+            <div className="p-3 sm:p-4 bg-slate-50/80 dark:bg-zinc-900/80 border-t border-slate-200 dark:border-zinc-800 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowZonesGuideModal(false)}
+                className="py-2 px-5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white dark:bg-zinc-100 dark:hover:bg-white dark:text-zinc-900 text-xs font-bold transition cursor-pointer"
+              >
+                Cerrar Guía
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }

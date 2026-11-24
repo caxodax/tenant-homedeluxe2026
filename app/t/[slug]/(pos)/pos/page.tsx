@@ -287,7 +287,7 @@ export default function PosPage({ params }: PosPageProps) {
 
   // Plugins Delivery Fleet y Food Service en POS
   const [isDeliveryActive, setIsDeliveryActive] = useState(false);
-  const [deliveryZones, setDeliveryZones] = useState<Array<{ id: string; name: string; rate_primary: number; estimated_time?: string }>>([]);
+  const [deliveryZones, setDeliveryZones] = useState<Array<{ id: string; name: string; rate_primary: number; estimated_time?: string; description?: string | null }>>([]);
   const [isFoodServiceActive, setIsFoodServiceActive] = useState(false);
   const [tablesEnabled, setTablesEnabled] = useState(true);
   const [foodServiceTables, setFoodServiceTables] = useState<Array<{ id: string; label: string; status: string; seats: number }>>([]);
@@ -1885,10 +1885,15 @@ export default function PosPage({ params }: PosPageProps) {
                     >
                       {deliveryZones.map((z) => (
                         <option key={z.id} value={z.id}>
-                          {z.name} (+{currencySymbol}{Number(z.rate_primary).toFixed(2)})
+                          {z.name} (+{currencySymbol}{Number(z.rate_primary).toFixed(2)}) {z.description ? `· ${z.description}` : ''}
                         </option>
                       ))}
                     </select>
+                    {selectedPosZone?.description && (
+                      <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium px-1 leading-tight">
+                        📍 Cobertura: {selectedPosZone.description}
+                      </p>
+                    )}
                     <input
                       type="text"
                       value={posDeliveryAddress}
@@ -2333,10 +2338,15 @@ export default function PosPage({ params }: PosPageProps) {
                     >
                       {deliveryZones.map((z) => (
                         <option key={z.id} value={z.id}>
-                          {z.name} (+{currencySymbol}{Number(z.rate_primary).toFixed(2)})
+                          {z.name} (+{currencySymbol}{Number(z.rate_primary).toFixed(2)}) {z.description ? `· ${z.description}` : ''}
                         </option>
                       ))}
                     </select>
+                    {selectedPosZone?.description && (
+                      <p className="text-[10px] text-emerald-700 dark:text-emerald-400 font-medium px-1 leading-tight">
+                        📍 Cobertura: {selectedPosZone.description}
+                      </p>
+                    )}
                     <input
                       type="text"
                       value={posDeliveryAddress}
