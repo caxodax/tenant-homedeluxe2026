@@ -89,7 +89,10 @@ jobs:
           git fetch --tags template main
           git fetch template "${{ github.event.inputs.core_ref }}"
           fetch_sha=$(git rev-parse 'FETCH_HEAD^{commit}')
-          base_sha=$(git rev-parse "${last_sha}^{commit}")
+          if ! base_sha=$(git rev-parse "${last_sha}^{commit}" 2>/dev/null); then
+            echo "::warning::SHA $last_sha no encontrado en ${{ matrix.repo }}; usando commit inicial como base."
+            base_sha=$(git rev-list --max-parents=0 HEAD | tail -1)
+          fi
 
           echo "last_sha=$base_sha" >> "$GITHUB_ENV"
           echo "fetch_sha=$fetch_sha" >> "$GITHUB_ENV"
