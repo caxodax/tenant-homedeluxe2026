@@ -36,13 +36,28 @@ export async function GET(
           }
         }
         const pmRes = await client.query(
-          `SELECT code, name, currency, config FROM payment_methods WHERE is_active = true ORDER BY name ASC`
+          `SELECT code, name, currency FROM payment_methods WHERE is_active = true ORDER BY name ASC`
         );
+        let pagoMovilConfig: Record<string, unknown> | null = null;
+        try {
+          const pmSettingsRes = await client.query(
+            `SELECT value FROM settings WHERE key IN ('payment_methods', 'pago_movil') LIMIT 1`
+          );
+          if (pmSettingsRes.rows[0]?.value) {
+            const val = pmSettingsRes.rows[0].value;
+            pagoMovilConfig = val?.pago_movil || val || null;
+          }
+        } catch {
+          // opcional
+        }
         return {
           exchange_rate: rate > 0 ? rate : 0,
           primary_currency: sRes.rows[0]?.primary_currency || 'USD',
           secondary_currency: sRes.rows[0]?.secondary_currency || 'VES',
-          payment_methods: pmRes.rows,
+          payment_methods: pmRes.rows.map((r) => ({
+            ...r,
+            config: r.code === 'PAGO_MOVIL' ? pagoMovilConfig : undefined,
+          })),
         };
       }),
     ]);
