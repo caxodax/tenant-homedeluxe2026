@@ -24,6 +24,7 @@ export interface TenantShellSettings {
   phone: string | null;
   whatsapp_number: string | null;
   address: string | null;
+  business_hours?: string | null;
   logo_url: string | null;
   banner_url: string | null;
   primary_color: string;
@@ -189,6 +190,7 @@ export const getCachedTenantShell = cache(
             phone: rawSettings?.phone || null,
             whatsapp_number: rawSettings?.whatsapp_number || null,
             address: rawSettings?.address || 'Dirección física de mostrador',
+            business_hours: rawSettings?.business_hours || rawSettings?.value?.business_hours || null,
             logo_url: rawSettings?.logo_url || null,
             banner_url: rawSettings?.banner_url || null,
             primary_color: rawSettings?.primary_color || TENANT_DEFAULTS.PRIMARY_COLOR,

@@ -55,6 +55,7 @@ const settingsSchema = z.object({
   phone: z.string().optional().nullable(),
   whatsapp_number: z.string().optional().nullable(),
   address: z.string().optional().nullable(),
+  business_hours: z.string().optional().nullable(),
   logo_url: z.string().optional().nullable(),
   banner_url: z.string().optional().nullable(),
   primary_color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Color hexadecimal inválido'),
@@ -146,6 +147,7 @@ export default function SettingsPage() {
       phone: '',
       whatsapp_number: '',
       address: '',
+      business_hours: '',
       logo_url: '',
       banner_url: '',
       primary_color: TENANT_DEFAULTS.PRIMARY_COLOR,
@@ -200,6 +202,7 @@ export default function SettingsPage() {
           phone: s.phone || '',
           whatsapp_number: s.whatsapp_number || '',
           address: s.address || '',
+          business_hours: s.business_hours || '',
           logo_url: s.logo_url || '',
           banner_url: s.banner_url || '',
           primary_color: s.primary_color || TENANT_DEFAULTS.PRIMARY_COLOR,
@@ -385,6 +388,21 @@ export default function SettingsPage() {
                     placeholder="Ej. Dirección física para retiro en tienda"
                     className="bg-slate-50 dark:bg-zinc-900 border-slate-300 dark:border-zinc-800 text-slate-950 dark:text-white text-sm font-medium"
                   />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="business_hours" className="text-sm font-bold text-slate-800 dark:text-zinc-200">
+                    Horario de Atención / Trabajo
+                  </Label>
+                  <Input
+                    id="business_hours"
+                    {...form.register('business_hours')}
+                    placeholder="Ej. Lunes a Sábado: 8:00 AM - 6:00 PM · Domingos: 9:00 AM - 2:00 PM"
+                    className="bg-slate-50 dark:bg-zinc-900 border-slate-300 dark:border-zinc-800 text-slate-950 dark:text-white text-sm font-medium h-11"
+                  />
+                  <p className="text-xs text-slate-700 dark:text-zinc-400">
+                    Se reflejará en el pie de página y secciones informativas de tu tienda web.
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">

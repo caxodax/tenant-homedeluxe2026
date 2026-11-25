@@ -22,6 +22,7 @@ const settingsUpdateSchema = z.object({
   secondary_currency: z.string().optional(),
   contingency_offline_mode: z.string().optional(),
   offline_safety_buffer: z.number().min(0).optional(),
+  business_hours: z.string().max(300).optional().nullable(),
   social_media: z.record(z.string(), z.string()).optional(),
   taxes: z.object({
     tax_enabled: z.boolean(),
@@ -70,7 +71,8 @@ export async function GET(
       return NextResponse.json({ error: 'Configuración no encontrada' }, { status: 404 });
     }
 
-    // Aplanar social_media, taxes, discounts y features desde el JSONB 'value' para el frontend
+    // Aplanar social_media, taxes, discounts, features y business_hours desde el JSONB 'value' para el frontend
+    const businessHours = settings.business_hours || settings.value?.business_hours || null;
     const socialMedia = settings.value?.social_media || {};
     const taxes = settings.value?.taxes || { tax_enabled: true, tax_rate: 16.0, prices_include_tax: false };
     const discounts = settings.value?.discounts || { allow_stacked: false, presets: [] };
@@ -81,6 +83,7 @@ export async function GET(
     return NextResponse.json({ 
       settings: {
         ...settings,
+        business_hours: businessHours,
         social_media: socialMedia,
         taxes,
         discounts,
@@ -122,13 +125,14 @@ export async function PATCH(
 
     // Agrupar campos JSONB para fusionar en una única asignación atómica sin colisiones SQL
     const jsonPatch: Record<string, any> = {};
+    if (data.business_hours !== undefined) jsonPatch.business_hours = data.business_hours;
     if (data.social_media !== undefined) jsonPatch.social_media = data.social_media;
     if (data.taxes !== undefined) jsonPatch.taxes = data.taxes;
     if (data.discounts !== undefined) jsonPatch.discounts = data.discounts;
     if (data.features !== undefined) jsonPatch.features = data.features;
 
     for (const [key, value] of Object.entries(data)) {
-      if (value !== undefined && key !== 'social_media' && key !== 'taxes' && key !== 'discounts' && key !== 'features') {
+      if (value !== undefined && key !== 'social_media' && key !== 'taxes' && key !== 'discounts' && key !== 'features' && key !== 'business_hours') {
         fields.push(`${key} = $${paramIndex}`);
         values.push(value);
         paramIndex++;

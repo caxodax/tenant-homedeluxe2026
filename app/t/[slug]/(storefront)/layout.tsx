@@ -8,7 +8,7 @@ import { TenantThemeInjector } from '@/components/tenant-theme-injector';
 import { FavoritesProvider } from '@/lib/favorites/favorites-store';
 import { CartTenantSync } from '@/lib/cart/cart-tenant-sync';
 import { PwaSplashScreen } from '@/components/storefront/pwa-splash-screen';
-import { Store, MapPin, Phone, ShieldCheck } from 'lucide-react';
+import { Store, MapPin, Phone, ShieldCheck, Clock } from 'lucide-react';
 
 export async function generateMetadata({
   params,
@@ -173,6 +173,12 @@ export default async function StorefrontLayout({
                 <MapPin className="w-4 h-4 shrink-0 mt-0.5" style={{ color: 'var(--tenant-primary, #B3511E)' }} />
                 <span>{settings.address || 'Tienda física'}</span>
               </p>
+              {settings.business_hours && (
+                <p className="flex items-start gap-2 opacity-90">
+                  <Clock className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+                  <span className="leading-tight">{settings.business_hours}</span>
+                </p>
+              )}
               {settings.phone && (
                 <p className="flex items-center gap-2 opacity-80">
                   <Phone className="w-4 h-4" />

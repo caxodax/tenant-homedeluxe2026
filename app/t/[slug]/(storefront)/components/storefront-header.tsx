@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useCart } from '@/lib/cart/cart-store';
 import { useFavorites } from '@/lib/favorites/favorites-store';
 import { useHasMounted } from '@/lib/cart/use-cart-hydrated';
-import { ShoppingBag, Store, Phone, Heart, Truck } from 'lucide-react';
+import { ShoppingCart, Store, Phone, Heart, Truck } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { OrderTrackerModal } from '@/components/storefront/order-tracker-modal';
 
@@ -151,11 +151,13 @@ export function StorefrontHeader({
           {/* Botón Carrito en Header con Badge Despegado y Espaciado Óptico */}
           <Link
             href={`/t/${slug}/cart`}
+            title={totalItems > 0 ? `Ver carrito de compras (${totalItems} ${totalItems === 1 ? 'producto' : 'productos'})` : 'Ver carrito de compras'}
+            aria-label="Ver carrito de compras"
             className="relative flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3.5 sm:py-2.5 rounded-xl sm:rounded-2xl tenant-primary-bg text-white font-extrabold text-xs shadow-md hover:brightness-105 active:scale-[0.98] transition-all group select-none shrink-0"
             style={{ backgroundColor: 'var(--tenant-primary, #dc2626)', color: 'var(--tenant-contrast, #ffffff)' }}
           >
             <div className="relative flex items-center justify-center">
-              <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
+              <ShoppingCart className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
               {totalItems > 0 && (
                 <span 
                   className="absolute -top-2.5 -right-2.5 sm:-right-3 min-w-[18px] sm:min-w-[20px] h-[18px] sm:h-[20px] px-1 rounded-full bg-white text-stone-950 font-black font-mono text-[9px] sm:text-[10px] flex items-center justify-center shadow-md border"

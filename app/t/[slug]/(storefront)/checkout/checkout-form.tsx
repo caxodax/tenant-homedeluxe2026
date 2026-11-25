@@ -1048,39 +1048,39 @@ export function CheckoutForm({
               ))}
             </div>
 
-            {/* Desglose de Totales e Impuestos */}
-            <div className="space-y-2 pt-3 border-t border-slate-200 dark:border-zinc-800 text-sm">
-              <div className="flex justify-between text-slate-700 dark:text-zinc-300 font-medium">
+            {/* Desglose de Totales e Impuestos (Alto Contraste Impeccable) */}
+            <div className="space-y-2 pt-3 border-t border-stone-200 dark:border-zinc-800 text-sm">
+              <div className="flex justify-between text-stone-800 dark:text-zinc-200 font-bold">
                 <span>Subtotal Artículos</span>
-                <span className="font-mono font-bold text-slate-950 dark:text-white">
+                <span className="font-mono font-bold text-stone-950 dark:text-white">
                   {currencySymbol}{totalPrice.toFixed(2)} {primaryCurrency}
                 </span>
               </div>
 
               {isTaxActive && (
-                <div className="space-y-1 text-xs text-slate-700 dark:text-zinc-400">
+                <div className="space-y-1 text-xs text-stone-700 dark:text-zinc-300 font-semibold">
                   <div className="flex justify-between">
                     <span>Base Imponible (Gravable)</span>
-                    <span className="font-mono">{currencySymbol}{taxableSubtotal.toFixed(2)}</span>
+                    <span className="font-mono text-stone-900 dark:text-white">{currencySymbol}{taxableSubtotal.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Base Exenta</span>
-                    <span className="font-mono">{currencySymbol}{exemptSubtotal.toFixed(2)}</span>
+                    <span className="font-mono text-stone-900 dark:text-white">{currencySymbol}{exemptSubtotal.toFixed(2)}</span>
                   </div>
                 </div>
               )}
 
               {isTaxActive && activeTaxRate > 0 && vatAmountUsd > 0 && (
-                <div className="flex justify-between text-slate-700 dark:text-zinc-300 font-medium text-xs">
+                <div className="flex justify-between text-stone-800 dark:text-zinc-200 font-bold text-xs">
                   <span>IVA ({taxRate}%){isTaxIncluded ? ' (incluido en precio)' : ''}</span>
-                  <span className="font-mono font-bold">
+                  <span className="font-mono font-bold text-stone-950 dark:text-white">
                     {isTaxIncluded ? '' : '+'}{currencySymbol}{vatAmountUsd.toFixed(2)} {primaryCurrency}
                   </span>
                 </div>
               )}
 
               {isIgtfApplicable && (
-                <div className="flex justify-between text-amber-700 dark:text-amber-400 font-medium text-xs">
+                <div className="flex justify-between text-amber-800 dark:text-amber-400 font-bold text-xs">
                   <span>Recargo IGTF 3% (Divisas Efectivo)</span>
                   <span className="font-mono font-bold">+{currencySymbol}{igtfAmountUsd.toFixed(2)} {primaryCurrency}</span>
                 </div>
@@ -1088,32 +1088,32 @@ export function CheckoutForm({
 
               {/* Flete o Retiro */}
               {deliveryType === 'DELIVERY' ? (
-                <div className="flex justify-between text-slate-700 dark:text-zinc-300 font-medium text-xs">
+                <div className="flex justify-between text-stone-800 dark:text-zinc-200 font-bold text-xs">
                   <span className="flex items-center gap-1.5">
                     <Bike className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                     <span>Servicio Delivery ({selectedZone?.name || 'Tarifa Plana'})</span>
                   </span>
-                  <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                  <span className="font-mono font-black text-emerald-700 dark:text-emerald-400">
                     +{currencySymbol}{deliveryRate.toFixed(2)} {primaryCurrency}
                   </span>
                 </div>
               ) : (
-                <div className="flex justify-between text-slate-700 dark:text-zinc-300 font-medium text-xs">
+                <div className="flex justify-between text-stone-800 dark:text-zinc-200 font-bold text-xs">
                   <span>Retiro en Tienda (Pick-up)</span>
-                  <span className="text-emerald-700 dark:text-emerald-400 font-extrabold">Gratis</span>
+                  <span className="text-emerald-700 dark:text-emerald-400 font-black">Gratis</span>
                 </div>
               )}
 
-              <div className="flex justify-between items-baseline pt-2 border-t border-slate-200 dark:border-zinc-800">
-                <span className="text-base font-black text-slate-950 dark:text-white">Total {primaryCurrency}</span>
+              <div className="flex justify-between items-baseline pt-2 border-t border-stone-200 dark:border-zinc-800">
+                <span className="text-base font-black text-stone-950 dark:text-white">Total {primaryCurrency}</span>
                 <span className="text-2xl font-black font-mono text-lime-700 dark:text-lime-400">
                   {currencySymbol}{finalTotalUsd.toFixed(2)}
                 </span>
               </div>
               {finalTotalVes && (
                 <div className="flex justify-between items-baseline pt-1">
-                  <span className="text-xs font-bold text-slate-700 dark:text-zinc-300">Total Bolívares (BCV)</span>
-                  <span className="text-base font-extrabold font-mono text-slate-950 dark:text-white">
+                  <span className="text-xs font-black text-stone-800 dark:text-zinc-200">Total Bolívares (BCV)</span>
+                  <span className="text-base font-black font-mono text-stone-950 dark:text-white">
                     Bs. {finalTotalVes.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </div>
@@ -1135,8 +1135,8 @@ export function CheckoutForm({
               </span>
             </button>
 
-            <div className="flex items-center justify-center gap-2 text-xs font-medium text-slate-700 dark:text-zinc-400">
-              <ShieldCheck className="w-4 h-4 text-emerald-600" />
+            <div className="flex items-center justify-center gap-2 text-xs font-semibold text-stone-600 dark:text-zinc-400">
+              <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
               <span>Pedido directo a la caja del comercio</span>
             </div>
           </div>

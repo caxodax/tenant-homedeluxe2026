@@ -391,15 +391,15 @@ export function StorefrontCatalog({
           </div>
         )}
 
-        {/* BARRA DE PAGINACIÓN RESPONSIVA */}
+        {/* BARRA DE PAGINACIÓN RESPONSIVA (Alto Contraste Impeccable) */}
         {totalProducts > 0 && (
-          <div className="mt-8 p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-[#141416] border border-stone-200/80 dark:border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xs">
+          <div className="mt-8 p-3.5 sm:p-4 rounded-2xl bg-white dark:bg-[#141416] border border-stone-300/90 dark:border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xs">
             {/* Selector de cantidad por página */}
             <div className="flex items-center gap-2 text-xs w-full sm:w-auto justify-between sm:justify-start">
-              <span className="font-bold text-stone-500 dark:text-zinc-400">
+              <span className="font-bold text-stone-700 dark:text-zinc-300">
                 Mostrar:
               </span>
-              <div className="flex items-center gap-1 bg-stone-100 dark:bg-zinc-900 p-1 rounded-xl border border-stone-200/60 dark:border-zinc-800">
+              <div className="flex items-center gap-1 bg-stone-100 dark:bg-zinc-900 p-1 rounded-xl border border-stone-200 dark:border-zinc-800">
                 {[12, 24, 48].map((size) => (
                   <button
                     key={size}
@@ -412,7 +412,7 @@ export function StorefrontCatalog({
                     className={`px-3 py-1 rounded-lg font-black text-xs transition cursor-pointer ${
                       pageSize === size
                         ? 'tenant-primary-bg text-white shadow-2xs'
-                        : 'text-stone-500 dark:text-zinc-400 hover:text-stone-900 dark:hover:text-white'
+                        : 'text-stone-700 dark:text-zinc-300 hover:text-stone-950 dark:hover:text-white hover:bg-stone-200/60 dark:hover:bg-zinc-800'
                     }`}
                   >
                     {size}
@@ -422,20 +422,20 @@ export function StorefrontCatalog({
             </div>
 
             {/* Contador de rango */}
-            <div className="text-xs text-stone-500 dark:text-zinc-400 font-medium text-center">
+            <div className="text-xs text-stone-700 dark:text-zinc-300 font-semibold text-center">
               Mostrando{' '}
-              <span className="font-bold text-stone-900 dark:text-white">
+              <span className="font-extrabold text-stone-950 dark:text-white">
                 {(currentPage - 1) * pageSize + 1}
               </span>{' '}
               -{' '}
-              <span className="font-bold text-stone-900 dark:text-white">
+              <span className="font-extrabold text-stone-950 dark:text-white">
                 {Math.min(currentPage * pageSize, totalProducts)}
               </span>{' '}
               de{' '}
-              <span className="font-bold text-stone-900 dark:text-white">{totalProducts}</span> productos
+              <span className="font-extrabold text-stone-950 dark:text-white">{totalProducts}</span> productos
             </div>
 
-            {/* Botones de Navegación */}
+            {/* Botones de Navegación de Alto Contraste */}
             <div className="flex items-center gap-2 w-full sm:w-auto justify-center sm:justify-end">
               <button
                 type="button"
@@ -445,13 +445,13 @@ export function StorefrontCatalog({
                   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }}
                 disabled={currentPage === 1}
-                className="h-9 px-3.5 rounded-xl border border-stone-200 dark:border-zinc-800 bg-stone-50 dark:bg-zinc-900 hover:bg-stone-100 text-xs font-bold text-stone-700 dark:text-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1 cursor-pointer"
+                className="h-9 px-3.5 rounded-xl border border-stone-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-stone-100 dark:hover:bg-zinc-700 text-xs font-extrabold text-stone-950 dark:text-white shadow-2xs disabled:opacity-35 disabled:cursor-not-allowed disabled:bg-stone-100/60 dark:disabled:bg-zinc-900/60 disabled:border-stone-200 dark:disabled:border-zinc-800 transition flex items-center gap-1 cursor-pointer select-none"
               >
-                <ChevronLeft className="w-4 h-4" />
+                <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
                 <span>Anterior</span>
               </button>
 
-              <div className="px-3 py-1.5 rounded-xl bg-stone-100 dark:bg-zinc-900 border border-stone-200/60 dark:border-zinc-800 text-xs font-mono font-black text-stone-800 dark:text-zinc-200 min-w-[65px] text-center">
+              <div className="px-3.5 py-1.5 rounded-xl bg-stone-100 dark:bg-zinc-800 border border-stone-300 dark:border-zinc-700 text-xs font-mono font-black text-stone-950 dark:text-white min-w-[70px] text-center shadow-2xs">
                 {currentPage} / {totalPages}
               </div>
 
@@ -463,10 +463,10 @@ export function StorefrontCatalog({
                   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
                 }}
                 disabled={currentPage === totalPages}
-                className="h-9 px-3.5 rounded-xl border border-stone-200 dark:border-zinc-800 bg-stone-50 dark:bg-zinc-900 hover:bg-stone-100 text-xs font-bold text-stone-700 dark:text-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1 cursor-pointer"
+                className="h-9 px-3.5 rounded-xl border border-stone-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-stone-100 dark:hover:bg-zinc-700 text-xs font-extrabold text-stone-950 dark:text-white shadow-2xs disabled:opacity-35 disabled:cursor-not-allowed disabled:bg-stone-100/60 dark:disabled:bg-zinc-900/60 disabled:border-stone-200 dark:disabled:border-zinc-800 transition flex items-center gap-1 cursor-pointer select-none"
               >
                 <span>Siguiente</span>
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight className="w-4 h-4 stroke-[2.5]" />
               </button>
             </div>
           </div>
