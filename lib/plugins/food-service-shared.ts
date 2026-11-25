@@ -35,7 +35,7 @@ export const FsTableInputSchema = z.object({
   zone_id: z.string().uuid().nullable().optional(),
   label: z.string().min(1, 'El identificador de mesa es requerido').max(30),
   seats: z.number().int().min(1, 'Mínimo 1 comensal').default(4),
-  status: z.enum(['FREE', 'OCCUPIED', 'RESERVED', 'CLEANING']).default('FREE'),
+  status: z.enum(['FREE', 'OCCUPIED', 'RESERVED', 'CLEANING', 'BILL_REQUESTED', 'PENDING_VALIDATION']).default('FREE'),
   is_active: z.boolean().default(true),
 });
 export type FsTableInput = z.infer<typeof FsTableInputSchema>;
@@ -70,6 +70,7 @@ export const FsSplitItemSchema = z.object({
   method: z.string().default('CASH'),
   reference: z.string().max(60).optional(),
   item_refs: z.array(z.string()).optional().default([]),
+  mark_pending: z.boolean().optional().default(false),
 });
 
 export const FsPayTableInputSchema = z.object({
@@ -80,6 +81,8 @@ export const FsPayTableInputSchema = z.object({
   payment_method: z.string().default('CASH'),
   exchange_rate: z.number().positive().default(1.0),
   staff_id: z.string().uuid().optional().nullable(),
+  reference_number: z.string().max(60).optional().nullable(),
+  mark_pending: z.boolean().optional().default(false),
 });
 export type FsPayTableInput = z.infer<typeof FsPayTableInputSchema>;
 
@@ -145,10 +148,31 @@ export interface FsTable {
   zone_name?: string | null;
   label: string;
   seats: number;
-  status: 'FREE' | 'OCCUPIED' | 'RESERVED' | 'CLEANING';
+  status: 'FREE' | 'OCCUPIED' | 'RESERVED' | 'CLEANING' | 'BILL_REQUESTED' | 'PENDING_VALIDATION';
   is_active: boolean;
   created_at: string;
   current_ticket?: FsTableTicket | null;
+}
+
+export interface FsTicketOrderItem {
+  id: string;
+  order_id: string;
+  product_name: string;
+  quantity: number;
+  unit_price: number;
+  subtotal: number;
+  is_paid?: boolean;
+  is_pending?: boolean;
+}
+
+export interface FsPendingPayment {
+  payment_id: string;
+  split_id: string;
+  method: string;
+  amount_primary: number;
+  reference_number: string | null;
+  status: string;
+  created_at: string;
 }
 
 export interface FsTableTicket {
@@ -164,6 +188,11 @@ export interface FsTableTicket {
   notes: string | null;
   orders_count?: number;
   total_primary?: number;
+  paid_verified_primary?: number;
+  paid_pending_primary?: number;
+  remaining_primary?: number;
+  items?: FsTicketOrderItem[];
+  pending_payments?: FsPendingPayment[];
 }
 
 export interface FsKitchenTicketItem {

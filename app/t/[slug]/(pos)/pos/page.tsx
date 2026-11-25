@@ -315,6 +315,18 @@ export default function PosPage({ params }: PosPageProps) {
   } | null>(null);
   const [posNotes, setPosNotes] = useState<string>('');
   const [isPreordersModalOpen, setIsPreordersModalOpen] = useState<boolean>(false);
+  const [isSendingToTable, setIsSendingToTable] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const search = new URLSearchParams(window.location.search);
+      const tableIdParam = search.get('tableId');
+      if (tableIdParam) {
+        setPosDeliveryType('DINE_IN');
+        setSelectedTableId(tableIdParam);
+      }
+    }
+  }, []);
 
   // Plugin Cuentas por Cobrar (credit_cxc) en POS
   const [isCreditCxcActive, setIsCreditCxcActive] = useState<boolean>(false);
@@ -1222,6 +1234,44 @@ export default function PosPage({ params }: PosPageProps) {
     }
   }
 
+  async function handleSendToTableKitchen() {
+    if (ticket.length === 0 || !selectedTableId) {
+      toast.error('Selecciona una mesa y agrega al menos un producto.');
+      return;
+    }
+    setIsSendingToTable(true);
+    try {
+      const res = await fetch(`/api/tenant/${slug}/food-service/tables/${selectedTableId}/order`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: ticket.map((item) => ({
+            product_id: item.product.id,
+            variant_id: item.variant_id || null,
+            product_name: item.product.name,
+            quantity: item.quantity,
+            unit_price_primary: parseFloat(item.product.price_usd || '0'),
+            modifiers: item.selected_modifiers || [],
+            prep_notes: item.prep_notes || null,
+          })),
+          customer_name: customerName.trim() || undefined,
+          notes: posNotes.trim() || undefined,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error enviando comanda a mesa');
+      toast.success(`Comanda #${data.order_number} enviada a Cocina (Mesa ${data.table_label} · Ronda ${data.round})`);
+      setTicket([]);
+      setPosNotes('');
+      setIsMobileTicketOpen(false);
+      await loadProducts(true);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error enviando comanda');
+    } finally {
+      setIsSendingToTable(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-100/80 dark:bg-zinc-950 text-slate-900 dark:text-zinc-100 flex flex-col font-sans select-none transition-colors duration-200">
       <TenantThemeInjector
@@ -2040,7 +2090,21 @@ export default function PosPage({ params }: PosPageProps) {
               )}
             </div>
 
-            {!activeShift || activeShift.status !== 'OPEN' ? (
+            {posDeliveryType === 'DINE_IN' && selectedTableId ? (
+              <button
+                type="button"
+                onClick={handleSendToTableKitchen}
+                disabled={ticket.length === 0 || isSendingToTable}
+                className="w-full py-3.5 px-4 rounded-xl font-extrabold text-sm sm:text-base bg-orange-600 hover:bg-orange-700 disabled:bg-slate-200 dark:disabled:bg-zinc-800 disabled:text-slate-500 dark:disabled:text-zinc-600 text-white shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed"
+              >
+                <UtensilsCrossed className="w-5 h-5" />
+                <span>
+                  {isSendingToTable
+                    ? 'Enviando a Cocina...'
+                    : `Enviar Comanda a Mesa (${currencySymbol}${totalUsd.toFixed(2)})`}
+                </span>
+              </button>
+            ) : !activeShift || activeShift.status !== 'OPEN' ? (
               <button
                 type="button"
                 onClick={() => setShiftModalMode('open')}
@@ -2467,7 +2531,21 @@ export default function PosPage({ params }: PosPageProps) {
                 </div>
               </div>
 
-              {!activeShift || activeShift.status !== 'OPEN' ? (
+              {posDeliveryType === 'DINE_IN' && selectedTableId ? (
+                <button
+                  type="button"
+                  onClick={handleSendToTableKitchen}
+                  disabled={ticket.length === 0 || isSendingToTable}
+                  className="w-full py-3.5 px-4 rounded-xl font-extrabold text-sm bg-orange-600 hover:bg-orange-700 text-white shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  <UtensilsCrossed className="w-4 h-4" />
+                  <span>
+                    {isSendingToTable
+                      ? 'Enviando a Cocina...'
+                      : `Enviar Comanda a Mesa (${currencySymbol}${totalUsd.toFixed(2)})`}
+                  </span>
+                </button>
+              ) : !activeShift || activeShift.status !== 'OPEN' ? (
                 <button
                   type="button"
                   onClick={() => {

@@ -75,8 +75,122 @@ export async function getZonesAndTables(tenantSchema: string): Promise<FsZone[]>
       ORDER BY t.label ASC
     `);
 
+    const openTicketIds = tablesRes.rows.map((r) => r.ticket_id).filter(Boolean);
+    const splitsByTicket = new Map<string, Array<{ split_id: string; status: string; amount_primary: number; item_refs: string[]; payment_id: string | null; method?: string; reference_number?: string | null; payment_status?: string; created_at?: string }>>();
+    const itemsByTicket = new Map<string, Array<{ id: string; order_id: string; product_name: string; quantity: number; unit_price: number; subtotal: number }>>();
+
+    if (openTicketIds.length > 0) {
+      const splitsRes = await client.query(
+        `SELECT bs.id as split_id, bs.ticket_id, bs.status, bs.amount_primary, bs.item_refs, bs.payment_id,
+                p.method, p.reference_number, p.status as payment_status, bs.created_at
+         FROM fs_bill_splits bs
+         LEFT JOIN payments p ON p.id = bs.payment_id
+         WHERE bs.ticket_id = ANY($1::uuid[]) AND bs.status IN ('PAID', 'PENDING')
+         ORDER BY bs.split_no ASC`,
+        [openTicketIds]
+      );
+      for (const sr of splitsRes.rows) {
+        const arr = splitsByTicket.get(sr.ticket_id) || [];
+        arr.push({
+          split_id: sr.split_id,
+          status: sr.status,
+          amount_primary: Number(sr.amount_primary || 0),
+          item_refs: Array.isArray(sr.item_refs) ? sr.item_refs : [],
+          payment_id: sr.payment_id,
+          method: sr.method,
+          reference_number: sr.reference_number,
+          payment_status: sr.payment_status,
+          created_at: sr.created_at,
+        });
+        splitsByTicket.set(sr.ticket_id, arr);
+      }
+
+      const itemsRes = await client.query(
+        `SELECT oi.id, oi.order_id, tko.ticket_id, oi.product_name, oi.quantity, oi.unit_price_primary, oi.total_price_primary
+         FROM fs_ticket_orders tko
+         JOIN orders o ON o.id = tko.order_id AND o.status != 'CANCELLED'
+         JOIN order_items oi ON oi.order_id = o.id
+         WHERE tko.ticket_id = ANY($1::uuid[])
+         ORDER BY oi.created_at ASC`,
+        [openTicketIds]
+      );
+      for (const ir of itemsRes.rows) {
+        const arr = itemsByTicket.get(ir.ticket_id) || [];
+        arr.push({
+          id: ir.id,
+          order_id: ir.order_id,
+          product_name: ir.product_name,
+          quantity: Number(ir.quantity || 1),
+          unit_price: Number(ir.unit_price_primary || 0),
+          subtotal: Number(ir.total_price_primary || 0),
+        });
+        itemsByTicket.set(ir.ticket_id, arr);
+      }
+    }
+
     const tablesByZone = new Map<string | null, FsTable[]>();
     for (const row of tablesRes.rows) {
+      let ticketData: FsTable['current_ticket'] = null;
+      if (row.ticket_id) {
+        const totalPrimary = Number(row.ticket_total_primary || 0);
+        const ticketSplits = splitsByTicket.get(row.ticket_id) || [];
+        const paidVerified = ticketSplits
+          .filter((s) => s.status === 'PAID')
+          .reduce((acc, s) => acc + s.amount_primary, 0);
+        const paidPending = ticketSplits
+          .filter((s) => s.status === 'PENDING')
+          .reduce((acc, s) => acc + s.amount_primary, 0);
+        const remaining = Math.max(0, Math.round((totalPrimary - paidVerified - paidPending) * 100) / 100);
+
+        const paidItemIds = new Set<string>();
+        const pendingItemIds = new Set<string>();
+        ticketSplits.forEach((s) => {
+          s.item_refs.forEach((refId) => {
+            if (s.status === 'PAID') paidItemIds.add(refId);
+            else if (s.status === 'PENDING') pendingItemIds.add(refId);
+          });
+        });
+
+        const rawItems = itemsByTicket.get(row.ticket_id) || [];
+        const ticketItems = rawItems.map((it) => ({
+          ...it,
+          is_paid: paidItemIds.has(it.id),
+          is_pending: pendingItemIds.has(it.id),
+        }));
+
+        const pendingPayments = ticketSplits
+          .filter((s) => s.status === 'PENDING' && s.payment_id)
+          .map((s) => ({
+            payment_id: s.payment_id!,
+            split_id: s.split_id,
+            method: s.method || 'PAGO_MOVIL',
+            amount_primary: s.amount_primary,
+            reference_number: s.reference_number || null,
+            status: s.payment_status || 'PENDING',
+            created_at: s.created_at || new Date().toISOString(),
+          }));
+
+        ticketData = {
+          id: row.ticket_id,
+          table_id: row.id,
+          table_label: row.label,
+          opened_by: null,
+          opened_by_name: row.opened_by_name,
+          covers: row.ticket_covers,
+          status: 'OPEN',
+          opened_at: row.ticket_opened_at,
+          closed_at: null,
+          notes: row.ticket_notes,
+          orders_count: Number(row.orders_count || 0),
+          total_primary: totalPrimary,
+          paid_verified_primary: Math.round(paidVerified * 100) / 100,
+          paid_pending_primary: Math.round(paidPending * 100) / 100,
+          remaining_primary: remaining,
+          items: ticketItems,
+          pending_payments: pendingPayments,
+        };
+      }
+
       const table: FsTable = {
         id: row.id,
         zone_id: row.zone_id,
@@ -86,22 +200,7 @@ export async function getZonesAndTables(tenantSchema: string): Promise<FsZone[]>
         status: row.status,
         is_active: row.is_active,
         created_at: row.created_at,
-        current_ticket: row.ticket_id
-          ? {
-              id: row.ticket_id,
-              table_id: row.id,
-              table_label: row.label,
-              opened_by: null,
-              opened_by_name: row.opened_by_name,
-              covers: row.ticket_covers,
-              status: 'OPEN',
-              opened_at: row.ticket_opened_at,
-              closed_at: null,
-              notes: row.ticket_notes,
-              orders_count: Number(row.orders_count || 0),
-              total_primary: Number(row.ticket_total_primary || 0),
-            }
-          : null,
+        current_ticket: ticketData,
       };
 
       const zoneKey = row.zone_id || '__unassigned__';
@@ -185,11 +284,11 @@ export async function updateKitchenStatus(
 }
 
 /**
- * Cobra y liquida la cuenta de una mesa llamando a `platform.rpc_fs_pay_table`.
+ * Cobra y liquida (total o parcialmente) la cuenta de una mesa llamando a `platform.rpc_fs_pay_table`.
  */
 export async function payTable(tenantSchema: string, payload: FsPayTableInput) {
   const res = await pool.query(
-    `SELECT platform.rpc_fs_pay_table($1, $2, $3, $4::jsonb, $5, $6, $7, $8) as result`,
+    `SELECT platform.rpc_fs_pay_table($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10) as result`,
     [
       tenantSchema,
       payload.ticket_id,
@@ -199,7 +298,49 @@ export async function payTable(tenantSchema: string, payload: FsPayTableInput) {
       payload.payment_method || 'CASH',
       payload.exchange_rate || 1.0,
       payload.staff_id || null,
+      payload.reference_number || null,
+      Boolean(payload.mark_pending),
     ]
+  );
+  return res.rows[0]?.result;
+}
+
+/**
+ * Valida o rechaza un pago reportado por mesero en mesa (Pago Móvil / Transferencia).
+ */
+export async function validateTablePayment(
+  tenantSchema: string,
+  ticketId: string,
+  paymentId: string,
+  approve: boolean,
+  staffId: string | null,
+  rejectionReason: string | null = null
+) {
+  const res = await pool.query(
+    `SELECT platform.rpc_fs_validate_table_payment($1, $2, $3, $4, $5, $6) as result`,
+    [tenantSchema, ticketId, paymentId, approve, staffId, rejectionReason]
+  );
+  return res.rows[0]?.result;
+}
+
+/**
+ * Traslada una comanda abierta de una mesa a otra mesa libre.
+ */
+export async function moveTable(tenantSchema: string, fromTableId: string, toTableId: string) {
+  const res = await pool.query(
+    `SELECT platform.rpc_fs_move_table($1, $2, $3) as result`,
+    [tenantSchema, fromTableId, toTableId]
+  );
+  return res.rows[0]?.result;
+}
+
+/**
+ * Libera una mesa vacía que no tiene órdenes activas.
+ */
+export async function releaseEmptyTable(tenantSchema: string, tableId: string) {
+  const res = await pool.query(
+    `SELECT platform.rpc_fs_release_empty_table($1, $2) as result`,
+    [tenantSchema, tableId]
   );
   return res.rows[0]?.result;
 }
