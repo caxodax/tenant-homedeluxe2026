@@ -207,59 +207,79 @@ export function StorefrontCatalog({
         </section>
       )}
 
-      {/* BARRA STICKY FIJA AL HACER SCROLL (Buscador + Selector de Categorías) */}
+      {/* BARRA STICKY FIJA AL HACER SCROLL (Buscador + Selector de Categorías Estilo Brand Capsule) */}
       <div 
         id="catalog-filters-sticky"
-        className="sticky top-[70px] z-30 bg-white/95 dark:bg-[#121214]/95 backdrop-blur-md py-3 px-2 sm:px-4 -mx-2 sm:-mx-4 border-b border-stone-200/80 dark:border-zinc-800/80 shadow-2xs space-y-2.5"
+        className="sticky top-[70px] z-30 bg-white/95 dark:bg-[#121214]/95 backdrop-blur-md py-3 px-2 sm:px-4 -mx-2 sm:-mx-4 border-b border-stone-200/90 dark:border-zinc-800 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06)] space-y-2.5 transition-colors"
       >
         {/* Buscador reactivo principal */}
         <div className="relative w-full">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-stone-400 dark:text-zinc-500" />
+          <Search 
+            className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors" 
+            style={{ color: 'var(--tenant-primary, #ea580c)' }}
+          />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Buscar productos en el catálogo..."
-            className="w-full h-11 pl-10 pr-10 rounded-2xl bg-white dark:bg-zinc-900 border border-stone-200/90 dark:border-zinc-800 text-stone-900 dark:text-white placeholder:text-stone-400 dark:placeholder:text-zinc-500 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[var(--tenant-primary)]/30 focus:border-[var(--tenant-primary)] transition-all shadow-2xs"
+            className="w-full h-11 pl-10 pr-10 rounded-2xl bg-white dark:bg-zinc-900 border border-stone-300/90 dark:border-zinc-700 text-stone-900 dark:text-white placeholder:text-stone-400 dark:placeholder:text-zinc-500 text-xs sm:text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[var(--tenant-primary)]/25 focus:border-[var(--tenant-primary)] hover:border-[var(--tenant-primary)]/40 transition-all shadow-xs"
           />
           {searchQuery && (
             <button
               type="button"
               onClick={() => setSearchQuery('')}
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-stone-200 dark:bg-zinc-700 text-stone-600 dark:text-zinc-300 flex items-center justify-center text-xs cursor-pointer"
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-stone-200 dark:bg-zinc-700 text-stone-600 dark:text-zinc-300 flex items-center justify-center text-xs cursor-pointer hover:bg-stone-300 dark:hover:bg-zinc-600 transition"
             >
               <X className="w-3 h-3" />
             </button>
           )}
         </div>
 
-        {/* Botón Disparador del Selector de Categorías (Exacto a Imagen 1 y 3) */}
+        {/* Botón Disparador del Selector de Categorías (Estilo Brand Capsule con Elevación) */}
         <div className="flex items-center justify-between gap-2">
           <button
             type="button"
             onClick={() => setIsCategoryModalOpen(true)}
-            className="flex-1 flex items-center justify-between px-3.5 py-2.5 rounded-2xl bg-white dark:bg-zinc-900 border border-stone-200/90 dark:border-zinc-800 text-stone-900 dark:text-white font-extrabold text-xs shadow-2xs hover:border-[var(--tenant-primary)]/50 transition cursor-pointer select-none"
+            className="flex-1 group flex items-center justify-between p-1.5 pr-3.5 rounded-2xl bg-white dark:bg-zinc-900 border border-stone-300/90 dark:border-zinc-700 hover:border-[var(--tenant-primary)] dark:hover:border-[var(--tenant-primary)] shadow-xs transition-all cursor-pointer select-none active:scale-[0.99]"
           >
-            <div className="flex items-center gap-2 truncate">
-              <LayoutGrid className="w-4 h-4 tenant-primary-text shrink-0" />
-              <span className="text-stone-400 dark:text-zinc-500 uppercase font-mono text-[10px] tracking-wider shrink-0">
-                CATEGORÍAS:
-              </span>
-              <span className="truncate">
-                {isFavoritesOnly ? 'Solo Mis Favoritos' : selectedCategory === 'all' ? 'Todas las categorías' : selectedCategory}
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5 shrink-0 ml-2">
-              <span 
-                className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full"
+            <div className="flex items-center gap-2.5 min-w-0">
+              {/* Badge icónico con el color primario del comercio */}
+              <div 
+                className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 shadow-2xs transition-transform group-hover:scale-105"
                 style={{
-                  backgroundColor: 'var(--tenant-warm-tint, rgba(252,232,200,0.3))',
-                  color: 'var(--tenant-brand-title, #4D2109)',
+                  backgroundColor: 'var(--tenant-primary, #ea580c)',
+                  color: 'var(--tenant-contrast, #ffffff)',
                 }}
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </div>
+
+              {/* Etiqueta y chip de categoría activa */}
+              <div className="flex items-center gap-2 truncate">
+                <span className="text-stone-500 dark:text-zinc-400 uppercase font-mono text-[10px] font-bold tracking-wider shrink-0 hidden sm:inline">
+                  CATEGORÍAS:
+                </span>
+                <span 
+                  className="px-2.5 py-1 rounded-lg text-xs font-black tracking-tight truncate border"
+                  style={{
+                    backgroundColor: 'var(--tenant-warm-tint, rgba(252,232,200,0.35))',
+                    color: 'var(--tenant-brand-title, #4D2109)',
+                    borderColor: 'var(--tenant-primary, #ea580c)33',
+                  }}
+                >
+                  {isFavoritesOnly ? 'Solo Mis Favoritos' : selectedCategory === 'all' ? 'Todas las categorías' : selectedCategory}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0 ml-2">
+              <span 
+                className="text-[11px] font-mono font-black px-2 py-0.5 rounded-full border border-stone-200 dark:border-zinc-700 bg-stone-100 dark:bg-zinc-800 text-stone-800 dark:text-zinc-200"
               >
                 {totalProducts}
               </span>
-              <ChevronDown className="w-4 h-4 text-stone-400" />
+              <ChevronDown className="w-4 h-4 text-stone-400 group-hover:text-[var(--tenant-primary)] group-hover:translate-y-0.5 transition-all" />
             </div>
           </button>
 
@@ -267,18 +287,26 @@ export function StorefrontCatalog({
           <button
             type="button"
             onClick={() => setIsFavoritesOnly(!isFavoritesOnly)}
-            className={`h-10 px-3 rounded-2xl border flex items-center gap-1.5 text-xs font-bold transition cursor-pointer ${
+            className={`h-11 px-3 sm:px-3.5 rounded-2xl border flex items-center gap-1.5 text-xs font-bold transition-all cursor-pointer shadow-xs active:scale-[0.98] ${
               isFavoritesOnly
-                ? 'bg-rose-500 text-white border-rose-500 shadow-xs'
-                : 'bg-stone-100 dark:bg-zinc-900 border-stone-200/80 dark:border-zinc-800 text-stone-700 dark:text-zinc-300 hover:text-rose-500'
+                ? 'bg-rose-500 text-white border-rose-500 ring-2 ring-rose-500/20'
+                : 'bg-white dark:bg-zinc-900 border-stone-300/90 dark:border-zinc-700 text-stone-700 dark:text-zinc-300 hover:text-rose-500 hover:border-rose-300'
             }`}
             title="Filtrar por favoritos"
           >
             <Heart className={`w-3.5 h-3.5 ${isFavoritesOnly ? 'fill-white' : ''}`} />
             <span className="hidden sm:inline">Favoritos</span>
-            <span className="font-mono text-[11px]">{favoritesCount}</span>
+            <span className="font-mono text-[11px] font-black">{favoritesCount}</span>
           </button>
         </div>
+
+        {/* Línea sutil de anclaje de marca */}
+        <div 
+          className="h-[2px] w-full -mb-3 opacity-70"
+          style={{
+            background: 'linear-gradient(90deg, var(--tenant-primary, #ea580c) 0%, var(--tenant-primary, #ea580c) 30%, transparent 90%)',
+          }}
+        />
       </div>
 
       {/* Grid de Productos (2 Columnas en móvil, 3 en tablet, 4 en desktop) */}
