@@ -421,7 +421,7 @@ export default function AdminOrdersPage() {
             <div className="hidden lg:block overflow-x-auto rounded-xl border border-slate-200 dark:border-zinc-800">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-slate-100 dark:bg-zinc-900/90 text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-zinc-300 border-b border-slate-200 dark:border-zinc-800">
+                  <tr className="bg-stone-100 dark:bg-zinc-900/90 text-xs font-extrabold uppercase tracking-wider text-stone-900 dark:text-zinc-100 border-b border-stone-200 dark:border-zinc-800">
                     <th className="py-3 px-4">Orden</th>
                     <th className="py-3 px-4">Cliente</th>
                     <th className="py-3 px-4">Canal / Pago</th>
@@ -451,16 +451,16 @@ export default function AdminOrdersPage() {
                           <div className="font-mono font-extrabold text-[var(--tenant-primary)]">
                             {order.order_number}
                           </div>
-                          <div className="text-xs text-slate-600 dark:text-zinc-400">
+                          <div className="text-xs font-semibold text-stone-700 dark:text-zinc-300">
                             {order.items_count} {order.items_count === 1 ? 'producto' : 'productos'}
                           </div>
                         </td>
 
                         <td className="py-3.5 px-4">
-                          <div className="font-bold text-slate-950 dark:text-white">
+                          <div className="font-extrabold text-stone-950 dark:text-white">
                             {order.customer_name}
                           </div>
-                          <div className="text-xs font-mono text-slate-600 dark:text-zinc-400">
+                          <div className="text-xs font-mono font-semibold text-stone-700 dark:text-zinc-300">
                             {order.customer_phone}
                           </div>
                         </td>

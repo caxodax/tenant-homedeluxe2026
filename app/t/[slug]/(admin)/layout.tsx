@@ -166,11 +166,11 @@ export default async function TenantAdminLayout({
                 <img src={logoUrl} alt={storeName} className="max-h-7 max-w-full object-contain" />
               </Link>
             )}
-            <span className="px-2 py-0.5 rounded text-[11px] uppercase tracking-wider bg-stone-100 dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 text-stone-700 dark:text-zinc-300 font-mono font-bold truncate">
+            <span className="px-2 py-0.5 rounded text-[11px] uppercase tracking-wider bg-stone-100 dark:bg-zinc-800 border border-stone-300 dark:border-zinc-700 text-stone-900 dark:text-zinc-100 font-mono font-extrabold truncate">
               {storeName}
             </span>
-            <span className="text-stone-300 dark:text-zinc-700 hidden sm:inline">/</span>
-            <span className="text-xs text-stone-600 dark:text-zinc-400 font-semibold hidden sm:inline truncate">
+            <span className="text-stone-400 dark:text-zinc-600 hidden sm:inline">/</span>
+            <span className="text-xs text-stone-800 dark:text-zinc-200 font-bold hidden sm:inline truncate">
               Panel Administrativo
             </span>
           </div>

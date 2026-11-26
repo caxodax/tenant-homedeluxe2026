@@ -18,11 +18,11 @@ export function CardHeader({ className, ...props }: React.HTMLAttributes<HTMLDiv
 }
 
 export function CardTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <h3 className={cn("text-base font-bold text-stone-900 dark:text-zinc-100 tracking-tight", className)} {...props} />;
+  return <h3 className={cn("text-base font-extrabold text-stone-950 dark:text-white tracking-tight", className)} {...props} />;
 }
 
 export function CardDescription({ className, ...props }: React.HTMLAttributes<HTMLParagraphElement>) {
-  return <p className={cn("text-xs text-stone-500 dark:text-zinc-400 font-medium", className)} {...props} />;
+  return <p className={cn("text-xs text-stone-700 dark:text-zinc-200 font-semibold", className)} {...props} />;
 }
 
 export function CardContent({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {

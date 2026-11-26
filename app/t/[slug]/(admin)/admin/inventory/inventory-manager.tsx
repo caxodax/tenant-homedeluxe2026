@@ -317,7 +317,7 @@ export function InventoryManager({ slug, initialProducts, categories }: Inventor
                     <h3 className="font-extrabold text-sm text-slate-900 dark:text-white truncate">
                       {product.name}
                     </h3>
-                    <p className="text-xs text-slate-500 dark:text-zinc-400 font-mono mt-0.5">
+                    <p className="text-xs text-stone-700 dark:text-zinc-300 font-mono font-semibold mt-0.5">
                       SKU: {product.sku || '-'}
                     </p>
                   </div>
@@ -325,7 +325,7 @@ export function InventoryManager({ slug, initialProducts, categories }: Inventor
 
                 <div className="grid grid-cols-2 gap-2 text-xs pt-2 border-t border-slate-100 dark:border-zinc-850">
                   <div>
-                    <span className="text-[10px] uppercase font-mono font-bold text-slate-400 dark:text-zinc-500 block">
+                    <span className="text-[10px] uppercase font-mono font-bold text-stone-700 dark:text-zinc-300 block">
                       Precio USD
                     </span>
                     <span className="font-mono font-extrabold text-slate-900 dark:text-white text-sm">
@@ -334,7 +334,7 @@ export function InventoryManager({ slug, initialProducts, categories }: Inventor
                   </div>
 
                   <div>
-                    <span className="text-[10px] uppercase font-mono font-bold text-slate-400 dark:text-zinc-500 block">
+                    <span className="text-[10px] uppercase font-mono font-bold text-stone-700 dark:text-zinc-300 block">
                       Stock Actual
                     </span>
                     <span
@@ -381,20 +381,20 @@ export function InventoryManager({ slug, initialProducts, categories }: Inventor
       {/* VISTA ESCRITORIO / TABLET (>= sm): Tabla */}
       <div className="hidden sm:block rounded-2xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-[#121214] overflow-hidden shadow-xs">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 dark:bg-zinc-900/60 border-b border-slate-200 dark:border-zinc-800 text-slate-600 dark:text-zinc-400">
+          <thead className="bg-stone-100/90 dark:bg-zinc-900/80 border-b border-stone-200 dark:border-zinc-800 text-stone-900 dark:text-zinc-100 font-extrabold">
             <tr>
-              <th className="text-left text-xs font-bold uppercase tracking-wider px-4 py-3.5">Producto</th>
-              <th className="text-left text-xs font-bold uppercase tracking-wider px-4 py-3.5">SKU / Barcode</th>
-              <th className="text-left text-xs font-bold uppercase tracking-wider px-4 py-3.5">Precio USD</th>
-              <th className="text-left text-xs font-bold uppercase tracking-wider px-4 py-3.5">Stock Real</th>
-              <th className="text-left text-xs font-bold uppercase tracking-wider px-4 py-3.5">Estado</th>
-              <th className="text-right text-xs font-bold uppercase tracking-wider px-4 py-3.5">Acciones</th>
+              <th className="text-left text-xs font-extrabold uppercase tracking-wider px-4 py-3.5">Producto</th>
+              <th className="text-left text-xs font-extrabold uppercase tracking-wider px-4 py-3.5">SKU / Barcode</th>
+              <th className="text-left text-xs font-extrabold uppercase tracking-wider px-4 py-3.5">Precio USD</th>
+              <th className="text-left text-xs font-extrabold uppercase tracking-wider px-4 py-3.5">Stock Real</th>
+              <th className="text-left text-xs font-extrabold uppercase tracking-wider px-4 py-3.5">Estado</th>
+              <th className="text-right text-xs font-extrabold uppercase tracking-wider px-4 py-3.5">Acciones</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-zinc-800/60">
             {filteredProducts.length === 0 ? (
               <tr>
-                <td colSpan={6} className="text-center py-12 text-slate-500 text-xs">
+                <td colSpan={6} className="text-center py-12 text-stone-700 dark:text-zinc-300 font-semibold text-xs">
                   No se encontraron productos registrados con los filtros aplicados.
                 </td>
               </tr>
@@ -422,7 +422,7 @@ export function InventoryManager({ slug, initialProducts, categories }: Inventor
                               loading="lazy"
                             />
                           ) : (
-                            <Package className="w-4 h-4 text-slate-400 dark:text-zinc-500" />
+                            <Package className="w-4 h-4 text-stone-500 dark:text-zinc-400" />
                           )}
                         </div>
                         <span className="font-extrabold text-sm text-slate-900 dark:text-white">
@@ -430,10 +430,10 @@ export function InventoryManager({ slug, initialProducts, categories }: Inventor
                         </span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-xs text-slate-500 dark:text-zinc-400 font-mono">
+                    <td className="px-4 py-3 text-xs text-stone-700 dark:text-zinc-300 font-mono font-semibold">
                       <div>{product.sku || '-'}</div>
                       {product.barcode && (
-                        <div className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
+                        <div className="text-[11px] text-stone-600 dark:text-zinc-400 flex items-center gap-1 mt-0.5">
                           <Barcode className="w-3 h-3" />
                           {product.barcode}
                         </div>

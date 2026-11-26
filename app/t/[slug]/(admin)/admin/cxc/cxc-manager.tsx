@@ -320,7 +320,7 @@ export function CxcManager({
               <div className="text-xl sm:text-2xl font-black font-mono text-slate-900 dark:text-white">
                 {formatUSD(kpis.total_receivable_usd)}
               </div>
-              <div className="text-[10px] sm:text-xs font-mono text-slate-400 dark:text-zinc-500 mt-0.5">
+              <div className="text-[10px] sm:text-xs font-mono text-stone-700 dark:text-zinc-300 font-semibold mt-0.5">
                 ≈ {formatBs(kpis.total_receivable_usd)}
               </div>
             </div>
@@ -558,14 +558,14 @@ export function CxcManager({
                   {/* Nombre del cliente y WhatsApp */}
                   <div className="mt-3 flex items-start justify-between gap-2">
                     <div>
-                      <h4 className="text-sm font-extrabold text-slate-900 dark:text-white leading-tight">
+                      <h4 className="text-sm font-extrabold text-stone-950 dark:text-white leading-tight">
                         {acc.customer_name}
                       </h4>
-                      <div className="flex items-center gap-2 mt-1 text-xs text-slate-500 dark:text-zinc-400">
-                        <Phone className="w-3.5 h-3.5 text-slate-400" />
+                      <div className="flex items-center gap-2 mt-1 text-xs text-stone-700 dark:text-zinc-300 font-semibold">
+                        <Phone className="w-3.5 h-3.5 text-stone-600 dark:text-zinc-400" />
                         <span>{acc.customer_phone}</span>
                         {acc.customer_id_number && (
-                          <span className="font-mono text-[11px] text-slate-400">
+                          <span className="font-mono text-[11px] text-stone-600 dark:text-zinc-400">
                             • {acc.customer_id_number}
                           </span>
                         )}

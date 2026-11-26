@@ -52,15 +52,20 @@ function formatSecondary(val: number, symbol: string = 'Bs.'): string {
 }
 
 function translateFrequency(freq?: string): string {
-  switch (freq) {
+  const normalized = String(freq || '').trim().toUpperCase();
+  switch (normalized) {
     case 'BIWEEKLY':
+    case 'BI-WEEKLY':
+    case 'QUINCENAL':
       return 'Quincenal';
     case 'WEEKLY':
+    case 'SEMANAL':
       return 'Semanal';
     case 'MONTHLY':
+    case 'MENSUAL':
       return 'Mensual';
     default:
-      return freq || 'Quincenal';
+      return 'Quincenal';
   }
 }
 
@@ -463,15 +468,15 @@ export function PayrollManager({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-200 dark:border-zinc-800 pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold tracking-tight text-stone-900 dark:text-white flex items-center gap-2.5">
+            <h1 className="text-2xl font-black tracking-tight text-stone-950 dark:text-white flex items-center gap-2.5">
               <Banknote className="w-7 h-7 text-rose-600 dark:text-rose-400" />
               Nómina & Personal
             </h1>
-            <Badge variant="outline" className="text-xs bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border-rose-200 font-medium">
+            <Badge variant="outline" className="text-xs bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border-rose-200 font-bold">
               Nómina Activa
             </Badge>
           </div>
-          <p className="text-sm text-stone-500 dark:text-zinc-400 mt-1">
+          <p className="text-sm text-stone-700 dark:text-zinc-300 font-semibold mt-1">
             Gestión de colaboradores, corridas bimoneda, retenciones de ley (IVSS / FAOV) y liquidación de sueldos.
           </p>
         </div>
@@ -536,22 +541,22 @@ export function PayrollManager({
         </div>
       )}
 
-      {/* TARJETAS KPI BIMONEDA */}
+      {/* TARJETAS KPI BIMONEDA (Alto Contraste Impeccable) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* KPI 1: Masa salarial */}
         <Card className="rounded-2xl border-stone-200 dark:border-zinc-800 bg-white dark:bg-[#18181b] shadow-xs hover:border-rose-300 transition-colors">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Última Corrida</span>
+              <span className="text-xs font-bold text-stone-700 dark:text-zinc-300 uppercase tracking-wider">Última Corrida</span>
               <div className="w-8 h-8 rounded-lg bg-rose-50 dark:bg-rose-950/50 text-rose-600 flex items-center justify-center">
                 <Banknote className="w-4 h-4" />
               </div>
             </div>
             <div className="mt-2">
-              <div className="text-2xl font-extrabold text-stone-900 dark:text-white font-mono">
+              <div className="text-2xl font-black text-stone-950 dark:text-white font-mono">
                 {latestRun ? formatPrimary(latestRun.total_net_primary) : '$0.00'}
               </div>
-              <p className="text-xs text-stone-500 mt-0.5 font-mono">
+              <p className="text-xs text-stone-600 dark:text-zinc-400 mt-0.5 font-mono font-medium">
                 {latestRun
                   ? formatSecondary(latestRun.total_net_secondary)
                   : formatSecondary(0)}
@@ -564,16 +569,16 @@ export function PayrollManager({
         <Card className="rounded-2xl border-stone-200 dark:border-zinc-800 bg-white dark:bg-[#18181b] shadow-xs hover:border-blue-300 transition-colors">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Personal Activo</span>
+              <span className="text-xs font-bold text-stone-700 dark:text-zinc-300 uppercase tracking-wider">Personal Activo</span>
               <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-600 flex items-center justify-center">
                 <Users className="w-4 h-4" />
               </div>
             </div>
             <div className="mt-2">
-              <div className="text-2xl font-extrabold text-stone-900 dark:text-white font-mono">
+              <div className="text-2xl font-black text-stone-950 dark:text-white font-mono">
                 {totalActiveEmployees}
               </div>
-              <p className="text-xs text-stone-500 mt-0.5">En plantilla de pago</p>
+              <p className="text-xs text-stone-600 dark:text-zinc-400 mt-0.5 font-medium">En plantilla de pago</p>
             </div>
           </CardContent>
         </Card>
@@ -582,16 +587,16 @@ export function PayrollManager({
         <Card className="rounded-2xl border-stone-200 dark:border-zinc-800 bg-white dark:bg-[#18181b] shadow-xs hover:border-amber-300 transition-colors">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Adelantos Activos</span>
+              <span className="text-xs font-bold text-stone-700 dark:text-zinc-300 uppercase tracking-wider">Adelantos Activos</span>
               <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/50 text-amber-600 flex items-center justify-center">
                 <Coins className="w-4 h-4" />
               </div>
             </div>
             <div className="mt-2">
-              <div className="text-2xl font-extrabold text-amber-600 dark:text-amber-400 font-mono">
+              <div className="text-2xl font-black text-amber-700 dark:text-amber-400 font-mono">
                 {formatPrimary(totalAdvancesPending)}
               </div>
-              <p className="text-xs text-stone-500 mt-0.5">Saldo por amortizar</p>
+              <p className="text-xs text-stone-600 dark:text-zinc-400 mt-0.5 font-medium">Saldo por amortizar</p>
             </div>
           </CardContent>
         </Card>
@@ -600,16 +605,16 @@ export function PayrollManager({
         <Card className="rounded-2xl border-stone-200 dark:border-zinc-800 bg-white dark:bg-[#18181b] shadow-xs hover:border-emerald-300 transition-colors">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Períodos Abiertos</span>
+              <span className="text-xs font-bold text-stone-700 dark:text-zinc-300 uppercase tracking-wider">Períodos Abiertos</span>
               <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 flex items-center justify-center">
                 <Calendar className="w-4 h-4" />
               </div>
             </div>
             <div className="mt-2">
-              <div className="text-2xl font-extrabold text-stone-900 dark:text-white font-mono">
+              <div className="text-2xl font-black text-stone-950 dark:text-white font-mono">
                 {openPeriodsCount}
               </div>
-              <p className="text-xs text-stone-500 mt-0.5">Pendientes de liquidar</p>
+              <p className="text-xs text-stone-600 dark:text-zinc-400 mt-0.5 font-medium">Pendientes de liquidar</p>
             </div>
           </CardContent>
         </Card>
@@ -623,10 +628,10 @@ export function PayrollManager({
             setActiveTab('periods');
             setSelectedRun(null);
           }}
-          className={`pb-3 px-3 text-sm font-semibold transition border-b-2 flex items-center gap-2 ${
+          className={`pb-3 px-3 text-sm font-bold transition border-b-2 flex items-center gap-2 ${
             activeTab === 'periods'
-              ? 'border-rose-600 text-rose-600 dark:text-rose-400'
-              : 'border-transparent text-stone-500 hover:text-stone-800 dark:hover:text-zinc-300'
+              ? 'border-rose-600 text-rose-600 dark:text-rose-400 font-extrabold'
+              : 'border-transparent text-stone-700 dark:text-zinc-300 hover:text-stone-950 dark:hover:text-white'
           }`}
         >
           <Calendar className="w-4 h-4" />
@@ -636,10 +641,10 @@ export function PayrollManager({
         <button
           type="button"
           onClick={() => setActiveTab('employees')}
-          className={`pb-3 px-3 text-sm font-semibold transition border-b-2 flex items-center gap-2 ${
+          className={`pb-3 px-3 text-sm font-bold transition border-b-2 flex items-center gap-2 ${
             activeTab === 'employees'
-              ? 'border-rose-600 text-rose-600 dark:text-rose-400'
-              : 'border-transparent text-stone-500 hover:text-stone-800 dark:hover:text-zinc-300'
+              ? 'border-rose-600 text-rose-600 dark:text-rose-400 font-extrabold'
+              : 'border-transparent text-stone-700 dark:text-zinc-300 hover:text-stone-950 dark:hover:text-white'
           }`}
         >
           <Users className="w-4 h-4" />
@@ -649,10 +654,10 @@ export function PayrollManager({
         <button
           type="button"
           onClick={() => setActiveTab('advances')}
-          className={`pb-3 px-3 text-sm font-semibold transition border-b-2 flex items-center gap-2 ${
+          className={`pb-3 px-3 text-sm font-bold transition border-b-2 flex items-center gap-2 ${
             activeTab === 'advances'
-              ? 'border-rose-600 text-rose-600 dark:text-rose-400'
-              : 'border-transparent text-stone-500 hover:text-stone-800 dark:hover:text-zinc-300'
+              ? 'border-rose-600 text-rose-600 dark:text-rose-400 font-extrabold'
+              : 'border-transparent text-stone-700 dark:text-zinc-300 hover:text-stone-950 dark:hover:text-white'
           }`}
         >
           <Coins className="w-4 h-4" />
@@ -662,10 +667,10 @@ export function PayrollManager({
         <button
           type="button"
           onClick={() => setActiveTab('concepts')}
-          className={`pb-3 px-3 text-sm font-semibold transition border-b-2 flex items-center gap-2 ${
+          className={`pb-3 px-3 text-sm font-bold transition border-b-2 flex items-center gap-2 ${
             activeTab === 'concepts'
-              ? 'border-rose-600 text-rose-600 dark:text-rose-400'
-              : 'border-transparent text-stone-500 hover:text-stone-800 dark:hover:text-zinc-300'
+              ? 'border-rose-600 text-rose-600 dark:text-rose-400 font-extrabold'
+              : 'border-transparent text-stone-700 dark:text-zinc-300 hover:text-stone-950 dark:hover:text-white'
           }`}
         >
           <FileText className="w-4 h-4" />
@@ -678,7 +683,7 @@ export function PayrollManager({
         <div className="space-y-4">
           <div className="rounded-2xl border border-stone-200 dark:border-zinc-800 overflow-hidden bg-white dark:bg-[#18181b] shadow-xs">
             <table className="w-full text-left text-sm">
-              <thead className="bg-stone-50 dark:bg-zinc-800/50 text-stone-600 dark:text-zinc-400 text-xs uppercase font-semibold">
+              <thead className="bg-stone-100/80 dark:bg-zinc-800/80 text-stone-800 dark:text-zinc-100 text-xs uppercase font-extrabold border-b border-stone-200 dark:border-zinc-700">
                 <tr>
                   <th className="py-3 px-4">Código / Período</th>
                   <th className="py-3 px-4">Fechas</th>
@@ -906,7 +911,7 @@ export function PayrollManager({
           {/* Tabla de colaboradores en la corrida */}
           <div className="rounded-2xl border border-stone-200 dark:border-zinc-800 overflow-hidden bg-white dark:bg-[#18181b] shadow-xs">
             <table className="w-full text-left text-sm">
-              <thead className="bg-stone-50 dark:bg-zinc-800/50 text-stone-600 dark:text-zinc-400 text-xs uppercase font-semibold">
+              <thead className="bg-stone-100/80 dark:bg-zinc-800/80 text-stone-800 dark:text-zinc-100 text-xs uppercase font-extrabold border-b border-stone-200 dark:border-zinc-700">
                 <tr>
                   <th className="py-3 px-4">Recibo / Colaborador</th>
                   <th className="py-3 px-4">Días</th>
@@ -1019,7 +1024,7 @@ export function PayrollManager({
 
           <div className="rounded-2xl border border-stone-200 dark:border-zinc-800 overflow-hidden bg-white dark:bg-[#18181b] shadow-xs">
             <table className="w-full text-left text-sm">
-              <thead className="bg-stone-50 dark:bg-zinc-800/50 text-stone-600 dark:text-zinc-400 text-xs uppercase font-semibold">
+              <thead className="bg-stone-100/80 dark:bg-zinc-800/80 text-stone-800 dark:text-zinc-100 text-xs uppercase font-extrabold border-b border-stone-200 dark:border-zinc-700">
                 <tr>
                   <th className="py-3 px-4">Colaborador</th>
                   <th className="py-3 px-4">Cédula</th>
@@ -1057,32 +1062,32 @@ export function PayrollManager({
                             </div>
                             <div>
                               <div>{emp.first_name} {emp.last_name}</div>
-                              {emp.phone && <div className="text-xs text-stone-400">{emp.phone}</div>}
+                              {emp.phone && <div className="text-xs text-stone-600 dark:text-zinc-400 font-medium">{emp.phone}</div>}
                             </div>
                           </div>
                         </td>
-                        <td className="py-3.5 px-4 font-mono text-stone-700 dark:text-zinc-300">
+                        <td className="py-3.5 px-4 font-mono font-semibold text-stone-800 dark:text-zinc-200">
                           {emp.id_document}
                         </td>
                         <td className="py-3.5 px-4">
-                          <div className="text-stone-900 dark:text-white">{emp.job_title}</div>
-                          <div className="text-xs text-stone-400">{emp.department}</div>
+                          <div className="font-bold text-stone-900 dark:text-white">{emp.job_title}</div>
+                          <div className="text-xs text-stone-600 dark:text-zinc-400 font-medium">{emp.department}</div>
                         </td>
-                        <td className="py-3.5 px-4 font-semibold text-stone-900 dark:text-white font-mono">
+                        <td className="py-3.5 px-4 font-bold text-stone-950 dark:text-white font-mono">
                           {formatPrimary(emp.base_salary_primary)}
                         </td>
                         <td className="py-3.5 px-4">
-                          <span className="text-xs bg-stone-100 dark:bg-zinc-800 px-2.5 py-1 rounded-md text-stone-700 dark:text-zinc-300 font-medium">
+                          <span className="text-xs bg-stone-100 dark:bg-zinc-800 border border-stone-200 dark:border-zinc-700 px-2.5 py-1 rounded-md text-stone-800 dark:text-zinc-200 font-bold">
                             {translateFrequency(emp.payment_frequency)}
                           </span>
                         </td>
                         <td className="py-3.5 px-4">
                           {emp.active_advances_balance > 0 ? (
-                            <span className="text-xs font-semibold text-amber-600 font-mono">
+                            <span className="text-xs font-bold text-amber-700 dark:text-amber-400 font-mono">
                               {formatPrimary(emp.active_advances_balance)}
                             </span>
                           ) : (
-                            <span className="text-xs text-stone-400">—</span>
+                            <span className="text-xs text-stone-500 font-bold">—</span>
                           )}
                         </td>
                         <td className="py-3.5 px-4">
@@ -1120,7 +1125,7 @@ export function PayrollManager({
         <div className="space-y-4">
           <div className="rounded-2xl border border-stone-200 dark:border-zinc-800 overflow-hidden bg-white dark:bg-[#18181b] shadow-xs">
             <table className="w-full text-left text-sm">
-              <thead className="bg-stone-50 dark:bg-zinc-800/50 text-stone-600 dark:text-zinc-400 text-xs uppercase font-semibold">
+              <thead className="bg-stone-100/80 dark:bg-zinc-800/80 text-stone-800 dark:text-zinc-100 text-xs uppercase font-extrabold border-b border-stone-200 dark:border-zinc-700">
                 <tr>
                   <th className="py-3 px-4">Nº Adelanto</th>
                   <th className="py-3 px-4">Colaborador</th>
@@ -1187,7 +1192,7 @@ export function PayrollManager({
         <div className="space-y-4">
           <div className="rounded-2xl border border-stone-200 dark:border-zinc-800 overflow-hidden bg-white dark:bg-[#18181b] shadow-xs">
             <table className="w-full text-left text-sm">
-              <thead className="bg-stone-50 dark:bg-zinc-800/50 text-stone-600 dark:text-zinc-400 text-xs uppercase font-semibold">
+              <thead className="bg-stone-100/80 dark:bg-zinc-800/80 text-stone-800 dark:text-zinc-100 text-xs uppercase font-extrabold border-b border-stone-200 dark:border-zinc-700">
                 <tr>
                   <th className="py-3 px-4">Código</th>
                   <th className="py-3 px-4">Nombre del Concepto</th>
