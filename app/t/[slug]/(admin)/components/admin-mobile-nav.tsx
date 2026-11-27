@@ -27,6 +27,7 @@ import {
   Receipt,
   Truck,
   Banknote,
+  ArrowLeftRight,
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { LogoutButton } from '@/components/auth/logout-button';
@@ -47,6 +48,7 @@ interface AdminMobileNavProps {
   activePlugins?: string[];
   customPermissions?: string[] | null;
   tablesEnabled?: boolean;
+  multiBranchEnabled?: boolean;
 }
 
 interface NavSection {
@@ -80,6 +82,7 @@ const NAV_SECTIONS: NavSection[] = [
     title: 'CATÁLOGO & CLIENTES',
     items: [
       { label: 'Inventario', href: '/inventory', icon: Package, permission: 'inventory', badgeColor: 'purple' },
+      { label: 'Traslados', href: '/transfers', icon: ArrowLeftRight, permission: 'inventory', badgeColor: 'purple' },
       { label: 'Categorías', href: '/categories', icon: Tag, permission: 'inventory', badgeColor: 'purple' },
       { label: 'Clientes', href: '/customers', icon: Users, permission: 'customers', badgeColor: 'stone' },
     ],
@@ -92,6 +95,7 @@ const NAV_SECTIONS: NavSection[] = [
       { label: 'Nómina & Personal', href: '/payroll', icon: Banknote, permission: 'staff', badgeColor: 'rose', plugin: 'payroll_hr' },
       { label: 'Equipo & Roles', href: '/staff', icon: ShieldCheck, permission: 'staff', badgeColor: 'rose' },
       { label: 'Vendedores', href: '/sales/reps', icon: Briefcase, permission: 'staff', badgeColor: 'purple', plugin: 'sales_team' },
+      { label: 'Sucursales', href: '/stores', icon: Store, permission: 'settings', badgeColor: 'stone' },
       { label: 'Configuración', href: '/settings', icon: Settings, permission: 'settings', badgeColor: 'stone' },
     ],
   },
@@ -106,6 +110,7 @@ export function AdminMobileNav({
   activePlugins,
   customPermissions,
   tablesEnabled = true,
+  multiBranchEnabled = false,
 }: AdminMobileNavProps) {
   const [isOpen, setIsOpen] = useState(false);
   const pendingOrders = usePendingOrdersBadge(slug);
@@ -191,7 +196,8 @@ export function AdminMobileNav({
                     (item.plugin === 'payables_cxp' && activePlugins.includes('supplier_cxp')) ||
                     (item.plugin === 'payroll_hr' && activePlugins.includes('payroll_personal'))
                   ))) &&
-                  !(item.href === '/food-service' && tablesEnabled === false)
+                  !(item.href === '/food-service' && tablesEnabled === false) &&
+                  !((item.href === '/stores' || item.href === '/transfers') && !multiBranchEnabled)
                 );
                 if (visibleItems.length === 0) return null;
 

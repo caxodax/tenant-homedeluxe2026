@@ -35,6 +35,7 @@ export default function KitchenDisplayPage() {
   const [now, setNow] = useState(Date.now());
   const [filter, setFilter] = useState<'ALL' | 'PREPARING' | 'READY' | 'SERVED'>('ALL');
   const [printingTicket, setPrintingTicket] = useState<FsKitchenTicket | null>(null);
+  const [activeStoreId, setActiveStoreId] = useState<string | null>(null);
 
   const prevTicketCount = useRef<number>(0);
 
@@ -70,6 +71,7 @@ export default function KitchenDisplayPage() {
     try {
       const res = await fetch(`/api/tenant/${slug}/food-service/kds`);
       const data = await res.json();
+      if (data.store_id) setActiveStoreId(data.store_id);
       if (data.success && Array.isArray(data.tickets)) {
         if (data.tickets.length > prevTicketCount.current && prevTicketCount.current > 0) {
           playChime();
@@ -91,16 +93,23 @@ export default function KitchenDisplayPage() {
     return () => clearInterval(timer);
   }, []);
 
-  // Carga inicial y suscripción Realtime a comandas de cocina
+  // Carga inicial y suscripción Realtime a comandas de cocina (aislada por sede)
   useEffect(() => {
     loadTickets();
 
     const supabase = createClient();
+    const channelName = activeStoreId
+      ? `tenant_${slug}_store_${activeStoreId}_kds_realtime`
+      : `tenant_${slug}_kds_realtime`;
+    const ticketFilter = activeStoreId
+      ? { event: '*' as const, schema: `tenant_${slug}`, table: 'fs_kitchen_tickets', filter: `store_id=eq.${activeStoreId}` }
+      : { event: '*' as const, schema: `tenant_${slug}`, table: 'fs_kitchen_tickets' };
+
     const channel = supabase
-      .channel(`tenant_${slug}_kds_realtime`)
+      .channel(channelName)
       .on(
         'postgres_changes',
-        { event: '*', schema: `tenant_${slug}`, table: 'fs_kitchen_tickets' },
+        ticketFilter,
         () => {
           loadTickets();
         }
@@ -125,7 +134,7 @@ export default function KitchenDisplayPage() {
       supabase.removeChannel(channel);
       clearInterval(interval);
     };
-  }, [slug, loadTickets]);
+  }, [slug, activeStoreId, loadTickets]);
 
   const handleUpdateItem = async (ticketId: string, itemId: string) => {
     try {

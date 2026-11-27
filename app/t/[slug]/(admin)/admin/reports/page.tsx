@@ -1,4 +1,4 @@
-import { requireTenantStaff } from '@/lib/auth/tenant-guard';
+import { requireTenantStaff, resolveOperationalStoreId } from '@/lib/auth/tenant-guard';
 import { withTenantDb } from '@/lib/db';
 import { ReportsClientView, type ReportDataPayload, type ExportOrderItem } from './ReportsClientView';
 
@@ -51,7 +51,7 @@ export default async function ReportsPage({
   searchParams 
 }: { 
   params: Promise<{ slug: string }>;
-  searchParams?: Promise<{ preset?: string; from?: string; to?: string }>;
+  searchParams?: Promise<{ preset?: string; from?: string; to?: string; store_id?: string }>;
 }) {
   const { slug } = await params;
   const sParams = searchParams ? await searchParams : {};
@@ -63,9 +63,15 @@ export default async function ReportsPage({
   const startIso = start.toISOString();
   const endIso = end.toISOString();
 
-  const { tenant } = await requireTenantStaff(slug, 'reports');
+  const ctx = await requireTenantStaff(slug, 'reports');
+  const { tenant } = ctx;
+  const storeId = await resolveOperationalStoreId(ctx, sParams.store_id, { allowConsolidatedForManagers: true });
+  const canSelectStore = ['OWNER', 'MANAGER'].includes(ctx.staff.role) && !ctx.staff.assigned_store_id;
+  const queryParams = storeId ? [startIso, endIso, storeId] : [startIso, endIso];
 
   const reportData = await withTenantDb(tenant.db_schema_name, null, async (client) => {
+    const storesRes = await client.query(`SELECT id, name FROM stores WHERE is_active = true ORDER BY is_default DESC, name ASC`);
+
     // 1. Resumen general
     const summaryRes = await client.query(`
       SELECT
@@ -76,7 +82,8 @@ export default async function ReportsPage({
       FROM orders
       WHERE status != 'CANCELLED'
         AND created_at >= $1 AND created_at <= $2
-    `, [startIso, endIso]);
+        ${storeId ? 'AND store_id = $3' : ''}
+    `, queryParams);
 
     // 2. Ventas por canal (POS vs Vitrina)
     const salesByChannel = await client.query(`
@@ -90,9 +97,10 @@ export default async function ReportsPage({
       FROM orders
       WHERE status != 'CANCELLED'
         AND created_at >= $1 AND created_at <= $2
+        ${storeId ? 'AND store_id = $3' : ''}
       GROUP BY 1
       ORDER BY total_usd DESC
-    `, [startIso, endIso]);
+    `, queryParams);
 
     // 3. Ventas por método de pago
     const salesByMethod = await client.query(`
@@ -119,9 +127,10 @@ export default async function ReportsPage({
       LEFT JOIN payment_methods pm ON pm.code = py.method
       WHERE o.status != 'CANCELLED' AND py.status != 'REJECTED'
         AND o.created_at >= $1 AND o.created_at <= $2
+        ${storeId ? 'AND o.store_id = $3' : ''}
       GROUP BY py.method, pm.name
       ORDER BY total_usd DESC
-    `, [startIso, endIso]);
+    `, queryParams);
 
     // 4. Productos más vendidos
     const topProducts = await client.query(`
@@ -137,10 +146,11 @@ export default async function ReportsPage({
       LEFT JOIN products p ON oi.product_id = p.id
       WHERE o.status != 'CANCELLED'
         AND o.created_at >= $1 AND o.created_at <= $2
+        ${storeId ? 'AND o.store_id = $3' : ''}
       GROUP BY oi.product_id, COALESCE(p.name, oi.product_name), p.sku
       ORDER BY revenue_usd DESC
       LIMIT 8
-    `, [startIso, endIso]);
+    `, queryParams);
 
     // 5. Tendencia diaria
     const trendRes = await client.query(`
@@ -152,9 +162,10 @@ export default async function ReportsPage({
       FROM orders
       WHERE status != 'CANCELLED'
         AND created_at >= $1 AND created_at <= $2
+        ${storeId ? 'AND store_id = $3' : ''}
       GROUP BY 1, 2
       ORDER BY 2 ASC
-    `, [startIso, endIso]);
+    `, queryParams);
 
     // 6. Margen bruto
     const marginRes = await client.query(`
@@ -166,7 +177,8 @@ export default async function ReportsPage({
       JOIN products p ON p.id = oi.product_id
       WHERE o.status != 'CANCELLED' AND p.cost_price IS NOT NULL AND p.cost_price > 0
         AND o.created_at >= $1 AND o.created_at <= $2
-    `, [startIso, endIso]);
+        ${storeId ? 'AND o.store_id = $3' : ''}
+    `, queryParams);
 
     // 7. Settings de moneda y tasa
     const settingsRes = await client.query(`
@@ -196,9 +208,10 @@ export default async function ReportsPage({
       FROM orders o
       WHERE o.status != 'CANCELLED'
         AND o.created_at >= $1 AND o.created_at <= $2
+        ${storeId ? 'AND o.store_id = $3' : ''}
       ORDER BY o.created_at DESC
       LIMIT 1000
-    `, [startIso, endIso]);
+    `, queryParams);
 
     const settingsRow = settingsRes.rows[0];
     const rate = settingsRow ? parseFloat(settingsRow.exchange_rate || '0') : 0;
@@ -280,6 +293,9 @@ export default async function ReportsPage({
       exportOrders,
       tenantSlug: tenant.slug,
       businessName: tenant.name,
+      stores: storesRes.rows,
+      activeStoreId: storeId,
+      canSelectStore,
     };
 
     return payload;

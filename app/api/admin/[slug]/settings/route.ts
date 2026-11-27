@@ -43,6 +43,7 @@ const settingsUpdateSchema = z.object({
     tables_enabled: z.boolean().default(true),
     recipes_enabled: z.boolean().default(false),
     banner_style: z.enum(['clean', 'card']).default('clean'),
+    multi_branch_enabled: z.boolean().default(false),
   }).optional(),
 });
 
@@ -52,7 +53,8 @@ export async function GET(
 ) {
   try {
     const { slug } = await params;
-    const { tenant } = await requireTenantStaffApi(slug, 'settings');
+    const ctx = await requireTenantStaffApi(slug, 'settings');
+    const { tenant } = ctx;
     const tenantId = tenant.id;
     const schema = tenant.db_schema_name;
 
@@ -90,6 +92,7 @@ export async function GET(
         features,
       },
       active_plugins: activePlugins,
+      is_super_admin: Boolean(ctx.isSuperAdmin),
     });
   } catch (error) {
     if (error instanceof TenantAuthError) {
@@ -106,7 +109,8 @@ export async function PATCH(
 ) {
   try {
     const { slug } = await params;
-    const { tenant } = await requireTenantStaffApi(slug, 'settings');
+    const ctx = await requireTenantStaffApi(slug, 'settings');
+    const { tenant } = ctx;
     const schema = tenant.db_schema_name;
     const body = await request.json();
     const parsed = settingsUpdateSchema.safeParse(body);
@@ -129,7 +133,20 @@ export async function PATCH(
     if (data.social_media !== undefined) jsonPatch.social_media = data.social_media;
     if (data.taxes !== undefined) jsonPatch.taxes = data.taxes;
     if (data.discounts !== undefined) jsonPatch.discounts = data.discounts;
-    if (data.features !== undefined) jsonPatch.features = data.features;
+    if (data.features !== undefined) {
+      if (ctx.isSuperAdmin) {
+        jsonPatch.features = data.features;
+      } else {
+        const curFeat = await withTenantDb(schema, null, async (c) => {
+          const r = await c.query(`SELECT value->'features' AS f FROM settings WHERE key = 'general' LIMIT 1`);
+          return r.rows[0]?.f || {};
+        });
+        jsonPatch.features = {
+          ...data.features,
+          multi_branch_enabled: Boolean(curFeat?.multi_branch_enabled),
+        };
+      }
+    }
 
     for (const [key, value] of Object.entries(data)) {
       if (value !== undefined && key !== 'social_media' && key !== 'taxes' && key !== 'discounts' && key !== 'features' && key !== 'business_hours') {

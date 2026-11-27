@@ -42,7 +42,16 @@ interface StaffRow {
   has_supabase_link: boolean;
   has_password: boolean;
   custom_permissions?: string[] | null;
+  assigned_store_id?: string | null;
+  assigned_store_name?: string | null;
   created_at: string;
+}
+
+interface StoreOption {
+  id: string;
+  name: string;
+  code: string;
+  is_default: boolean;
 }
 
 export function StaffManager({
@@ -55,6 +64,7 @@ export function StaffManager({
   initialActivePlugins?: string[];
 }) {
   const [staffList, setStaffList] = useState<StaffRow[]>([]);
+  const [stores, setStores] = useState<StoreOption[]>([]);
   const [activePlugins, setActivePlugins] = useState<string[]>(initialActivePlugins);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -69,6 +79,7 @@ export function StaffManager({
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [role, setRole] = useState<StaffRole>('CASHIER');
+  const [assignedStoreId, setAssignedStoreId] = useState<string>('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [selectedPermissions, setSelectedPermissions] = useState<string[]>(
@@ -96,6 +107,12 @@ export function StaffManager({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error cargando equipo');
       setStaffList(data.staff || []);
+      if (Array.isArray(data.stores)) {
+        setStores(data.stores);
+        if (!assignedStoreId && data.stores.length > 0) {
+          setAssignedStoreId(data.stores[0].id);
+        }
+      }
       if (Array.isArray(data.active_plugins)) {
         setActivePlugins(data.active_plugins);
       }
@@ -146,6 +163,7 @@ export function StaffManager({
           phone: phone.trim() || null,
           role,
           password,
+          assigned_store_id: assignedStoreId || null,
           custom_permissions: selectedPermissions.length > 0 ? selectedPermissions : null,
         }),
       });
@@ -183,6 +201,27 @@ export function StaffManager({
       await loadStaff();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error actualizando rol');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleStoreChange = async (member: StaffRow, nextStoreId: string) => {
+    const normalized = nextStoreId || null;
+    if (normalized === (member.assigned_store_id || null)) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/${slug}/staff`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: member.id, assigned_store_id: normalized }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'No se pudo asignar la sucursal');
+      toast.success(`Sucursal de ${member.full_name} actualizada`);
+      await loadStaff();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al asignar sucursal');
     } finally {
       setSaving(false);
     }
@@ -457,6 +496,24 @@ export function StaffManager({
 
                     {/* Acciones del Usuario (Barra Simétrica y Compacta) */}
                     <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                      {/* Selector de Sede (Solo Multisede) */}
+                      {stores.length > 1 && (
+                        <select
+                          value={member.assigned_store_id || ''}
+                          disabled={saving || member.role === 'OWNER'}
+                          onChange={(e) => handleStoreChange(member, e.target.value)}
+                          title="Sede asignada"
+                          className="h-8 rounded-lg border border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2 text-xs font-medium text-stone-800 dark:text-zinc-200 focus:outline-none disabled:opacity-60"
+                        >
+                          <option value="">{member.role === 'OWNER' || member.role === 'MANAGER' ? 'Todas las sedes' : 'Sin sede'}</option>
+                          {stores.map((st) => (
+                            <option key={st.id} value={st.id}>
+                              {st.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+
                       {/* Selector de Rol Operativo */}
                       <div className="flex items-center gap-1">
                         <select
@@ -685,6 +742,28 @@ export function StaffManager({
                   ))}
                 </select>
               </div>
+
+              {stores.length > 1 && (
+                <div>
+                  <label className="text-xs font-bold text-stone-800 dark:text-zinc-200 block mb-1">
+                    Sucursal Asignada
+                  </label>
+                  <select
+                    value={assignedStoreId}
+                    onChange={(e) => setAssignedStoreId(e.target.value)}
+                    className="w-full h-9 rounded-xl border border-stone-200 dark:border-zinc-800 bg-stone-50 dark:bg-zinc-900 px-3 text-xs font-semibold text-stone-950 dark:text-white focus:outline-none"
+                  >
+                    {(role === 'OWNER' || role === 'MANAGER') && (
+                      <option value="">Todas las sedes (Global)</option>
+                    )}
+                    {stores.map((st) => (
+                      <option key={st.id} value={st.id}>
+                        {st.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div className="sm:col-span-2">
                 <label className="text-xs font-bold text-stone-800 dark:text-zinc-200 block mb-1">

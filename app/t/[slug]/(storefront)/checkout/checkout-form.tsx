@@ -41,6 +41,7 @@ interface CheckoutFormProps {
   pickupAddress: string;
   paymentMethods: TenantPaymentMethod[];
   deliveryZones?: DeliveryZoneItem[];
+  stores?: Array<{ id: string; name: string; address: string; is_default: boolean }>;
   isDeliveryFleetActive?: boolean;
   exchangeRate?: number | null;
   primaryCurrency?: string;
@@ -65,6 +66,7 @@ export function CheckoutForm({
   pickupAddress,
   paymentMethods,
   deliveryZones = [],
+  stores = [],
   isDeliveryFleetActive = false,
   exchangeRate,
   primaryCurrency = 'USD',
@@ -92,6 +94,13 @@ export function CheckoutForm({
 
   // Modo de entrega (Pick-up o Delivery)
   const [deliveryType, setDeliveryType] = useState<'PICKUP' | 'DELIVERY'>('PICKUP');
+  const [selectedStoreId, setSelectedStoreId] = useState<string>(() => stores[0]?.id || '');
+  useEffect(() => {
+    if (stores.length <= 1 || typeof window === 'undefined') return;
+    const saved = window.localStorage.getItem(`marketos_store_${slug}`);
+    if (saved && stores.some((s) => s.id === saved)) setSelectedStoreId(saved);
+  }, [slug, stores]);
+  const activeStore = stores.find((s) => s.id === selectedStoreId) || stores[0];
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [deliveryReferencePoint, setDeliveryReferencePoint] = useState('');
   const [selectedZoneId, setSelectedZoneId] = useState<string>(deliveryZones[0]?.id || '');
@@ -344,7 +353,8 @@ export function CheckoutForm({
         proof_file_hash: proofHash || undefined,
         notes: notes || undefined,
         delivery_type: deliveryType,
-        delivery_address: deliveryType === 'DELIVERY' ? deliveryAddress.trim() : pickupAddress,
+        store_id: selectedStoreId || undefined,
+        delivery_address: deliveryType === 'DELIVERY' ? deliveryAddress.trim() : (activeStore?.address || pickupAddress),
         delivery_zone_id: deliveryType === 'DELIVERY' ? (selectedZoneId || undefined) : undefined,
         delivery_reference_point: deliveryType === 'DELIVERY' ? (deliveryReferencePoint.trim() || undefined) : undefined,
         delivery_latitude: detectedCoords?.lat,
@@ -517,7 +527,7 @@ export function CheckoutForm({
                 <div>
                   <p className="text-sm font-extrabold text-slate-950 dark:text-white">Retiro en Mostrador (Pick-up)</p>
                   <p className="text-xs text-slate-700 dark:text-zinc-400 mt-0.5">
-                    {pickupAddress}
+                    {activeStore?.address || pickupAddress}
                   </p>
                 </div>
               </button>
@@ -547,6 +557,26 @@ export function CheckoutForm({
                 </button>
               )}
             </div>
+
+            {/* Selector de Sucursal para Pick-up (Solo Multisede) */}
+            {deliveryType === 'PICKUP' && stores.length > 1 && (
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-zinc-900/60 border border-slate-200 dark:border-zinc-800 space-y-2 animate-in fade-in duration-200">
+                <label className="text-xs font-bold text-slate-800 dark:text-zinc-200 block">
+                  Selecciona la sucursal para retirar tu pedido:
+                </label>
+                <select
+                  value={selectedStoreId}
+                  onChange={(e) => setSelectedStoreId(e.target.value)}
+                  className="w-full h-10 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 text-sm font-semibold text-slate-900 dark:text-zinc-100 focus:outline-none"
+                >
+                  {stores.map((st) => (
+                    <option key={st.id} value={st.id}>
+                      {st.name} — {st.address}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Campos condicionales para Delivery */}
             {deliveryType === 'DELIVERY' && (

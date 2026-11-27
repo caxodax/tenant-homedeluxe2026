@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireTenantStaffApi, TenantAuthError } from '@/lib/auth/tenant-guard';
+import { requireTenantStaffApi, resolveOperationalStoreId, TenantAuthError } from '@/lib/auth/tenant-guard';
 import { hasPermission } from '@/lib/auth/rbac';
 import {
   getZonesAndTables,
@@ -16,10 +16,12 @@ export async function GET(
 ) {
   try {
     const { slug } = await params;
-    const { tenant, staff } = await requireTenantStaffApi(slug, 'pos');
+    const ctx = await requireTenantStaffApi(slug, 'pos');
+    const { tenant, staff } = ctx;
+    const storeId = await resolveOperationalStoreId(ctx, request.nextUrl.searchParams.get('store_id'));
 
     const [zones, meta] = await Promise.all([
-      getZonesAndTables(tenant.db_schema_name),
+      getZonesAndTables(tenant.db_schema_name, storeId),
       withTenantDb(tenant.db_schema_name, null, async (client) => {
         const sRes = await client.query(
           `SELECT exchange_rate, secondary_currency, primary_currency FROM settings WHERE key = 'general' LIMIT 1`

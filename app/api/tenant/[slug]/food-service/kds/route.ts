@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireTenantStaffApi, TenantAuthError } from '@/lib/auth/tenant-guard';
+import { requireTenantStaffApi, resolveOperationalStoreId, TenantAuthError } from '@/lib/auth/tenant-guard';
 import {
   getActiveKitchenTickets,
   sendToKitchen,
@@ -15,12 +15,14 @@ export async function GET(
   try {
     const { slug } = await params;
     // Permiso orders para personal de cocina y meseros
-    const { tenant } = await requireTenantStaffApi(slug, 'orders');
+    const ctx = await requireTenantStaffApi(slug, 'orders');
+    const storeId = await resolveOperationalStoreId(ctx, request.nextUrl.searchParams.get('store_id'));
 
-    const tickets = await getActiveKitchenTickets(tenant.db_schema_name);
+    const tickets = await getActiveKitchenTickets(ctx.tenant.db_schema_name, storeId);
 
     return NextResponse.json({
       success: true,
+      store_id: storeId,
       tickets,
     });
   } catch (error) {

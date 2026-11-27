@@ -83,6 +83,7 @@ export default async function TenantAdminLayout({
   const logoUrl = settings?.logo_url || null;
   const primaryColor = settings?.primary_color || TENANT_DEFAULTS.PRIMARY_COLOR;
   const tablesEnabled = settings?.value?.features?.tables_enabled !== false;
+  const multiBranchEnabled = settings?.value?.features?.multi_branch_enabled === true;
   
   return (
     <>
@@ -125,7 +126,7 @@ export default async function TenantAdminLayout({
         </div>
         
         {/* Navegación Reactiva con Secciones estructuradas (Opción A) */}
-        <SidebarNav slug={slug} role={staff.role} activePlugins={activePlugins} customPermissions={staff.custom_permissions} tablesEnabled={tablesEnabled} />
+        <SidebarNav slug={slug} role={staff.role} activePlugins={activePlugins} customPermissions={staff.custom_permissions} tablesEnabled={tablesEnabled} multiBranchEnabled={multiBranchEnabled} />
         
         {/* Footer del Sidebar */}
         <div className="p-3 border-t border-stone-200/80 dark:border-zinc-800/80 space-y-1 bg-stone-50/50 dark:bg-zinc-900/30">
@@ -196,6 +197,7 @@ export default async function TenantAdminLayout({
               activePlugins={activePlugins}
               customPermissions={staff.custom_permissions}
               tablesEnabled={tablesEnabled}
+              multiBranchEnabled={multiBranchEnabled}
             />
           </div>
         </header>

@@ -68,6 +68,9 @@ export interface ReportDataPayload {
   exportOrders: ExportOrderItem[];
   tenantSlug: string;
   businessName: string;
+  stores?: Array<{ id: string; name: string }>;
+  activeStoreId?: string | null;
+  canSelectStore?: boolean;
   deliveryReport?: {
     delivery_revenue_primary: number;
     total_deliveries: number;
@@ -117,8 +120,15 @@ export function ReportsClientView({ data }: { data: ReportDataPayload }) {
   function handlePresetChange(newPreset: string) {
     setSelectedPreset(newPreset);
     if (newPreset !== 'custom') {
-      router.push(`${pathname}?preset=${newPreset}`);
+      const storeQuery = data.activeStoreId ? `&store_id=${data.activeStoreId}` : '';
+      router.push(`${pathname}?preset=${newPreset}${storeQuery}`);
     }
+  }
+
+  function handleStoreFilterChange(nextStoreId: string) {
+    const storeQuery = nextStoreId && nextStoreId !== 'ALL' ? `&store_id=${nextStoreId}` : '&store_id=ALL';
+    const customQuery = selectedPreset === 'custom' && customFrom ? `&from=${customFrom}&to=${customTo}` : '';
+    router.push(`${pathname}?preset=${selectedPreset}${customQuery}${storeQuery}`);
   }
 
   function handleApplyCustomRange() {
@@ -213,6 +223,26 @@ export function ReportsClientView({ data }: { data: ReportDataPayload }) {
 
           {/* Barra de Acciones: Combobox de Rango, Moneda y Exportar */}
           <div className="flex flex-wrap items-center gap-2">
+            {/* Selector de Sucursal (Solo Multisede para OWNER/MANAGER) */}
+            {data.canSelectStore && data.stores && data.stores.length > 1 && (
+              <div className="relative">
+                <select
+                  value={data.activeStoreId || 'ALL'}
+                  onChange={(e) => handleStoreFilterChange(e.target.value)}
+                  className="appearance-none pl-3 pr-8 py-2 bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-xl text-xs sm:text-sm font-bold text-slate-900 dark:text-zinc-100 shadow-xs focus:outline-none focus:ring-2 focus:ring-emerald-500/20 cursor-pointer"
+                  title="Filtrar reporte por sucursal"
+                >
+                  <option value="ALL">Todas las sedes (Consolidado)</option>
+                  {data.stores.map((st) => (
+                    <option key={st.id} value={st.id}>
+                      {st.name}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-500 dark:text-zinc-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              </div>
+            )}
+
             {/* Combobox de Fecha (Óptimo para móvil) */}
             <div className="relative">
               <select

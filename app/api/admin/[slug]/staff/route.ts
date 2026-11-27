@@ -15,6 +15,7 @@ const createStaffSchema = z.object({
   role: z.enum(['OWNER', 'MANAGER', 'CASHIER', 'INVENTORY', 'DELIVERY', 'WAITER', 'KITCHEN', 'SALES_REP']),
   password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres').max(100),
   custom_permissions: z.array(z.string()).optional().nullable(),
+  assigned_store_id: z.string().uuid().optional().nullable(),
 });
 
 const updateStaffSchema = z.object({
@@ -25,6 +26,7 @@ const updateStaffSchema = z.object({
   is_active: z.boolean().optional(),
   password: z.string().min(6).max(100).optional(),
   custom_permissions: z.array(z.string()).optional().nullable(),
+  assigned_store_id: z.string().uuid().optional().nullable(),
 });
 
 function handleAuthOrError(err: unknown) {
@@ -52,28 +54,34 @@ export async function GET(
     );
     const activePlugins = pluginsRes.rows.map((r: { plugin_id: string }) => r.plugin_id);
 
-    const staffList = await withTenantDb(tenant.db_schema_name, null, async (client) => {
-      const res = await client.query(`
-        SELECT id, email, full_name, phone, role, is_active, custom_permissions,
-               (auth_user_id IS NOT NULL) AS has_supabase_link,
-               (password_hash IS NOT NULL) AS has_password,
-               created_at, updated_at
-        FROM staff_profiles
-        ORDER BY
-          CASE role
-            WHEN 'OWNER' THEN 1
-            WHEN 'MANAGER' THEN 2
-            WHEN 'CASHIER' THEN 3
-            WHEN 'INVENTORY' THEN 4
-            ELSE 5
-          END,
-          created_at ASC
-      `);
-      return res.rows;
+    const { staffList, stores } = await withTenantDb(tenant.db_schema_name, null, async (client) => {
+      const [res, storesRes] = await Promise.all([
+        client.query(`
+          SELECT sp.id, sp.email, sp.full_name, sp.phone, sp.role, sp.is_active, sp.custom_permissions,
+                 sp.assigned_store_id, s.name AS assigned_store_name,
+                 (sp.auth_user_id IS NOT NULL) AS has_supabase_link,
+                 (sp.password_hash IS NOT NULL) AS has_password,
+                 sp.created_at, sp.updated_at
+          FROM staff_profiles sp
+          LEFT JOIN stores s ON s.id = sp.assigned_store_id
+          ORDER BY
+            CASE sp.role
+              WHEN 'OWNER' THEN 1
+              WHEN 'MANAGER' THEN 2
+              WHEN 'CASHIER' THEN 3
+              WHEN 'INVENTORY' THEN 4
+              ELSE 5
+            END,
+            sp.created_at ASC
+        `),
+        client.query(`SELECT id, name, code, is_default FROM stores WHERE is_active = true ORDER BY is_default DESC, name ASC`),
+      ]);
+      return { staffList: res.rows, stores: storesRes.rows };
     });
 
     return NextResponse.json({ 
       staff: staffList, 
+      stores,
       roles: STAFF_ROLES, 
       active_plugins: activePlugins 
     });
@@ -111,11 +119,17 @@ export async function POST(
         throw new Error(`Ya existe un miembro del equipo con el correo ${d.email}`);
       }
 
+      let assignedStoreId = d.assigned_store_id || null;
+      if (!assignedStoreId && !['OWNER', 'MANAGER'].includes(d.role)) {
+        const defStore = await client.query(`SELECT id FROM stores WHERE is_active = true ORDER BY is_default DESC, created_at ASC LIMIT 1`);
+        assignedStoreId = defStore.rows[0]?.id || null;
+      }
+
       const ins = await client.query(
-        `INSERT INTO staff_profiles (email, full_name, phone, role, password_hash, is_active, custom_permissions)
-         VALUES ($1, $2, $3, $4, $5, true, $6)
-         RETURNING id, email, full_name, phone, role, is_active, custom_permissions, created_at`,
-        [d.email, d.full_name, d.phone || null, d.role, passwordHash, d.custom_permissions || null]
+        `INSERT INTO staff_profiles (email, full_name, phone, role, password_hash, is_active, custom_permissions, assigned_store_id)
+         VALUES ($1, $2, $3, $4, $5, true, $6, $7)
+         RETURNING id, email, full_name, phone, role, is_active, custom_permissions, assigned_store_id, created_at`,
+        [d.email, d.full_name, d.phone || null, d.role, passwordHash, d.custom_permissions || null, assignedStoreId]
       );
 
       if (d.role === 'SALES_REP') {
@@ -209,9 +223,10 @@ export async function PATCH(
              is_active = COALESCE($4, is_active),
              password_hash = COALESCE($5, password_hash),
              custom_permissions = CASE WHEN $6::boolean THEN $7 ELSE custom_permissions END,
+             assigned_store_id = CASE WHEN $8::boolean THEN $9 ELSE assigned_store_id END,
              updated_at = now()
-         WHERE id = $8
-         RETURNING id, email, full_name, phone, role, is_active, custom_permissions, created_at, updated_at`,
+         WHERE id = $10
+         RETURNING id, email, full_name, phone, role, is_active, custom_permissions, assigned_store_id, created_at, updated_at`,
         [
           d.full_name ?? null,
           d.phone !== undefined ? d.phone : null,
@@ -220,6 +235,8 @@ export async function PATCH(
           newPasswordHash,
           d.custom_permissions !== undefined,
           d.custom_permissions ?? null,
+          d.assigned_store_id !== undefined,
+          d.assigned_store_id ?? null,
           d.id,
         ]
       );

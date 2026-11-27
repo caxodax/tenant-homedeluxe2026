@@ -19,12 +19,17 @@ async function getCheckoutData(slug: string) {
   const vePlugin = pluginsRes.rows.find((r: { plugin_id: string }) => r.plugin_id === 'local_venezuela');
   const igtfEnabled = Boolean(vePlugin?.config?.igtf_enabled ?? true);
 
-  const [paymentMethods, deliveryZones] = await withTenantDb(tenant.db_schema_name, null, async (client) => {
-    const pMethods = await fetchTenantPaymentMethods(client, {
-      activePlugins,
-      onlyActive: true,
-      channel: 'storefront',
-    });
+  const [paymentMethods, deliveryZones, stores] = await withTenantDb(tenant.db_schema_name, null, async (client) => {
+    const [pMethods, storesRes] = await Promise.all([
+      fetchTenantPaymentMethods(client, {
+        activePlugins,
+        onlyActive: true,
+        channel: 'storefront',
+      }),
+      client.query(
+        `SELECT id, name, address, is_default FROM stores WHERE is_active = true ORDER BY is_default DESC, created_at ASC`
+      ),
+    ]);
 
     let zones: any[] = [];
     if (isDeliveryFleetActive) {
@@ -35,7 +40,7 @@ async function getCheckoutData(slug: string) {
       zones = zRes.rows;
     }
 
-    return [pMethods, zones];
+    return [pMethods, zones, storesRes.rows];
   });
 
   return {
@@ -44,6 +49,7 @@ async function getCheckoutData(slug: string) {
     address: settings.address || 'Sede Principal del Comercio',
     paymentMethods,
     deliveryZones,
+    stores,
     isDeliveryFleetActive,
     exchangeRate: settings.exchange_rate,
     primaryCurrency: settings.primary_currency || 'USD',
@@ -76,6 +82,7 @@ export default async function CheckoutPage({
         pickupAddress={data.address}
         paymentMethods={data.paymentMethods}
         deliveryZones={data.deliveryZones}
+        stores={data.stores}
         isDeliveryFleetActive={data.isDeliveryFleetActive}
         exchangeRate={data.exchangeRate}
         primaryCurrency={data.primaryCurrency}

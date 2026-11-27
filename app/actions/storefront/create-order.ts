@@ -29,6 +29,7 @@ const CheckoutSchema = z.object({
   notes: z.string().optional(),
   items: z.array(CartItemSchema).min(1, 'El carrito no puede estar vacío'),
   delivery_type: z.enum(['PICKUP', 'DELIVERY']).default('PICKUP'),
+  store_id: z.string().uuid().optional().nullable(),
   delivery_address: z.string().optional(),
   delivery_zone_id: z.string().uuid().optional().nullable(),
   delivery_reference_point: z.string().optional().nullable(),
@@ -65,6 +66,7 @@ export async function createStorefrontOrder(data: CheckoutFormData) {
       notes, 
       items,
       delivery_type,
+      store_id: requestedStoreId,
       delivery_address,
       delivery_zone_id,
       delivery_reference_point,
@@ -108,7 +110,9 @@ export async function createStorefrontOrder(data: CheckoutFormData) {
         const productIds = items.map((i) => i.product_id);
         const [sRes, storeRes, methods, pluginConfigRes, pRes] = await Promise.all([
           client.query(`SELECT address, exchange_rate, secondary_currency, value FROM settings WHERE key = 'general' LIMIT 1`),
-          client.query(`SELECT id FROM stores WHERE is_active = true LIMIT 1`),
+          requestedStoreId
+            ? client.query(`SELECT id, address FROM stores WHERE id = $1 AND is_active = true LIMIT 1`, [requestedStoreId])
+            : client.query(`SELECT id, address FROM stores WHERE is_active = true ORDER BY is_default DESC, created_at ASC LIMIT 1`),
           fetchTenantPaymentMethods(client, {
             activePlugins,
             onlyActive: true,
@@ -132,7 +136,7 @@ export async function createStorefrontOrder(data: CheckoutFormData) {
 
         return {
           storeId: storeRes.rows[0]?.id || null,
-          storeAddress: sRes.rows[0]?.address || 'Sede Principal del Comercio',
+          storeAddress: storeRes.rows[0]?.address || sRes.rows[0]?.address || 'Sede Principal del Comercio',
           selectedMethod: matched,
           exchangeRate: rate,
           isLocalVenezuela: hasPlugin,

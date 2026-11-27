@@ -19,7 +19,23 @@ import {
   Zap,
   Truck,
   ShieldCheck,
+  MapPin,
 } from 'lucide-react';
+
+interface StoreOption {
+  id: string;
+  name: string;
+  address: string;
+  is_default: boolean;
+}
+
+interface StoreOverlayData {
+  unavailable_product_ids: string[];
+  excluded_product_ids: string[];
+  daily_86_product_ids: string[];
+  price_overrides: Record<string, number>;
+  stock_by_product: Record<string, number>;
+}
 
 interface Category {
   id: string;
@@ -30,6 +46,7 @@ interface Category {
 interface StorefrontCatalogProps {
   products: StorefrontProduct[];
   categories: Category[];
+  stores?: StoreOption[];
   businessName: string;
   logoUrl?: string | null;
   bannerUrl?: string | null;
@@ -42,6 +59,7 @@ interface StorefrontCatalogProps {
 export function StorefrontCatalog({
   products,
   categories,
+  stores = [],
   businessName,
   logoUrl,
   bannerUrl,
@@ -53,6 +71,65 @@ export function StorefrontCatalog({
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+
+  // Selector de sucursal y Overlay ligero (solo activo cuando stores.length > 1)
+  const [selectedStoreId, setSelectedStoreId] = useState<string>(() => stores[0]?.id || '');
+  const [storeOverlay, setStoreOverlay] = useState<StoreOverlayData | null>(null);
+
+  useEffect(() => {
+    if (stores.length <= 1 || typeof window === 'undefined') return;
+    const saved = window.localStorage.getItem(`marketos_store_${slug}`);
+    if (saved && stores.some((s) => s.id === saved)) {
+      setSelectedStoreId(saved);
+    }
+  }, [slug, stores]);
+
+  useEffect(() => {
+    if (stores.length <= 1 || !selectedStoreId) {
+      setStoreOverlay(null);
+      return;
+    }
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(`marketos_store_${slug}`, selectedStoreId);
+    }
+    let cancelled = false;
+    fetch(`/api/tenant/${slug}/storefront/overlay?store_id=${selectedStoreId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data && !data.error) {
+          setStoreOverlay(data);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [slug, stores.length, selectedStoreId]);
+
+  const scopedProducts = useMemo(() => {
+    if (stores.length <= 1 || !storeOverlay) return products;
+    const excluded = new Set(storeOverlay.excluded_product_ids || []);
+    const unavailable = new Set(storeOverlay.unavailable_product_ids || []);
+    const daily86 = new Set(storeOverlay.daily_86_product_ids || []);
+
+    return products
+      .filter((p) => !excluded.has(p.id) && !unavailable.has(p.id))
+      .map((p) => {
+        const overridePrice = storeOverlay.price_overrides?.[p.id];
+        const hasStockEntry = storeOverlay.stock_by_product && p.id in storeOverlay.stock_by_product;
+        const localStock = daily86.has(p.id)
+          ? '0'
+          : hasStockEntry
+            ? String(storeOverlay.stock_by_product[p.id])
+            : p.current_stock;
+
+        return {
+          ...p,
+          price_usd: overridePrice !== undefined ? String(overridePrice) : p.price_usd,
+          current_stock: localStock,
+        };
+      });
+  }, [products, stores.length, storeOverlay]);
 
   // Paginación reactiva adaptada a cuadrícula de 2 columnas
   const [pageSize, setPageSize] = useState<number>(24);
@@ -91,7 +168,7 @@ export function StorefrontCatalog({
 
   // Filtrado reactivo en cliente (instantáneo, <1ms)
   const filteredProducts = useMemo(() => {
-    return products.filter((product) => {
+    return scopedProducts.filter((product) => {
       // 1. Filtro de Favoritos
       if (isFavoritesOnly && !favorites.includes(product.id)) {
         return false;
@@ -111,7 +188,7 @@ export function StorefrontCatalog({
 
       return matchesCategory && matchesSearch;
     });
-  }, [products, selectedCategory, isFavoritesOnly, searchQuery, favorites]);
+  }, [scopedProducts, selectedCategory, isFavoritesOnly, searchQuery, favorites]);
 
   // Cálculo de paginación
   const totalProducts = filteredProducts.length;
@@ -212,6 +289,27 @@ export function StorefrontCatalog({
         id="catalog-filters-sticky"
         className="sticky top-[70px] z-30 bg-white/95 dark:bg-[#121214]/95 backdrop-blur-md py-3 px-2 sm:px-4 -mx-2 sm:-mx-4 border-b border-stone-200/90 dark:border-zinc-800 shadow-[0_4px_20px_-4px_rgba(0,0,0,0.06)] space-y-2.5 transition-colors"
       >
+        {/* Selector de Sucursal en Vitrina (Solo Multisede) */}
+        {stores.length > 1 && (
+          <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-stone-100/90 dark:bg-zinc-900 border border-stone-200/80 dark:border-zinc-800 text-xs">
+            <span className="flex items-center gap-1.5 font-semibold text-stone-600 dark:text-zinc-400 shrink-0">
+              <MapPin className="w-3.5 h-3.5 text-primary" />
+              Sucursal:
+            </span>
+            <select
+              value={selectedStoreId}
+              onChange={(e) => setSelectedStoreId(e.target.value)}
+              className="bg-transparent font-bold text-stone-900 dark:text-zinc-100 focus:outline-none cursor-pointer truncate max-w-[220px] sm:max-w-xs"
+            >
+              {stores.map((st) => (
+                <option key={st.id} value={st.id} className="bg-white dark:bg-zinc-900">
+                  {st.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* Buscador reactivo principal */}
         <div className="relative w-full">
           <Search 

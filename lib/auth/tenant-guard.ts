@@ -30,7 +30,9 @@ export interface TenantStaffContext {
     full_name: string;
     email?: string;
     custom_permissions?: string[] | null;
+    assigned_store_id?: string | null;
   };
+  isSuperAdmin?: boolean;
   isDevFallback?: boolean;
 }
 
@@ -80,7 +82,7 @@ async function resolveTenantContext(
 
     if (user && user.email) {
       let staffRes = await pool.query(
-        `SELECT id, role, full_name, email, custom_permissions FROM "${tenant.db_schema_name}".staff_profiles
+        `SELECT id, role, full_name, email, custom_permissions, assigned_store_id FROM "${tenant.db_schema_name}".staff_profiles
          WHERE auth_user_id = $1 AND is_active = true
          LIMIT 1`,
         [user.id]
@@ -92,7 +94,7 @@ async function resolveTenantContext(
           `UPDATE "${tenant.db_schema_name}".staff_profiles
            SET auth_user_id = $1, updated_at = now()
            WHERE lower(email) = lower($2) AND auth_user_id IS NULL AND is_active = true
-           RETURNING id, role, full_name, email, custom_permissions`,
+           RETURNING id, role, full_name, email, custom_permissions, assigned_store_id`,
           [user.id, user.email]
         );
       }
@@ -115,6 +117,7 @@ async function resolveTenantContext(
           ctx: {
             user,
             tenant,
+            isSuperAdmin: true,
             staff: {
               id: adminRes.rows[0].id,
               role: 'OWNER',
@@ -141,7 +144,7 @@ async function resolveTenantContext(
       sessionPayload.schemaName === tenant.db_schema_name
     ) {
       const staffRes = await pool.query(
-        `SELECT id, role, full_name, email, custom_permissions FROM "${tenant.db_schema_name}".staff_profiles
+        `SELECT id, role, full_name, email, custom_permissions, assigned_store_id FROM "${tenant.db_schema_name}".staff_profiles
          WHERE id = $1 AND is_active = true
          LIMIT 1`,
         [sessionPayload.staffId]
@@ -169,6 +172,7 @@ async function resolveTenantContext(
           ctx: {
             user: { id: adm.id, email: adm.email },
             tenant,
+            isSuperAdmin: true,
             staff: {
               id: adm.id,
               role: 'OWNER',
@@ -237,4 +241,54 @@ export async function requireTenantStaffApi(
   }
 
   return res.ctx;
+}
+
+
+const OPERATIONAL_SCOPED_ROLES = new Set([
+  'CASHIER',
+  'WAITER',
+  'KITCHEN',
+  'SELLER',
+  'SALES_REP',
+  'INVENTORY',
+  'DELIVERY',
+]);
+
+/**
+ * Resuelve la sucursal activa garantizando aislamiento por sede (Zero Data Bleed).
+ * - Roles operativos quedan anclados de forma inviolable a su `assigned_store_id`.
+ * - OWNER / MANAGER pueden consultar una sede específica o consolidado (`null`).
+ */
+export async function resolveOperationalStoreId(
+  ctx: TenantStaffContext,
+  requestedStoreId?: string | null,
+  options: { allowConsolidatedForManagers?: boolean } = {}
+): Promise<string | null> {
+  if (OPERATIONAL_SCOPED_ROLES.has(ctx.staff.role)) {
+    if (ctx.staff.assigned_store_id) {
+      return ctx.staff.assigned_store_id;
+    }
+    const storeRes = await pool.query(
+      `SELECT id FROM "${ctx.tenant.db_schema_name}".stores WHERE is_active = true ORDER BY is_default DESC, created_at ASC LIMIT 1`
+    );
+    const fallbackId = storeRes.rows[0]?.id || null;
+    if (!fallbackId) {
+      throw new TenantAuthError('Personal operativo sin sucursal asignada', 403);
+    }
+    return fallbackId;
+  }
+
+  if (requestedStoreId && requestedStoreId !== 'ALL') {
+    return requestedStoreId;
+  }
+  if (options.allowConsolidatedForManagers && (!requestedStoreId || requestedStoreId === 'ALL')) {
+    return null;
+  }
+  if (ctx.staff.assigned_store_id) {
+    return ctx.staff.assigned_store_id;
+  }
+  const defaultRes = await pool.query(
+    `SELECT id FROM "${ctx.tenant.db_schema_name}".stores WHERE is_active = true ORDER BY is_default DESC, created_at ASC LIMIT 1`
+  );
+  return defaultRes.rows[0]?.id || null;
 }

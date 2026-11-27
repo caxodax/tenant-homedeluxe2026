@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { pool, withTenantDb } from '@/lib/db';
-import { requireTenantStaffApi, TenantAuthError } from '@/lib/auth/tenant-guard';
+import { requireTenantStaffApi, resolveOperationalStoreId, TenantAuthError } from '@/lib/auth/tenant-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,10 +10,13 @@ export async function GET(
 ) {
   try {
     const { slug } = await params;
-    const { tenant } = await requireTenantStaffApi(slug, 'orders');
-    const schema = tenant.db_schema_name;
+    const ctx = await requireTenantStaffApi(slug, 'orders');
+    const schema = ctx.tenant.db_schema_name;
     const url = new URL(request.url);
     const status = url.searchParams.get('status');
+    const storeId = await resolveOperationalStoreId(ctx, url.searchParams.get('store_id'), {
+      allowConsolidatedForManagers: true,
+    });
     const limit = parseInt(url.searchParams.get('limit') || '100', 10);
 
     const dispatches = await withTenantDb(schema, null, async (client) => {
@@ -53,9 +56,18 @@ export async function GET(
       `;
 
       const values: (string | number)[] = [];
+      const conditions: string[] = [];
       if (status) {
-        query += ` WHERE r.status = $1`;
         values.push(status);
+        conditions.push(`r.status = $${values.length}`);
+      }
+      if (storeId) {
+        values.push(storeId);
+        conditions.push(`o.store_id = $${values.length}`);
+      }
+
+      if (conditions.length > 0) {
+        query += ` WHERE ${conditions.join(' AND ')}`;
       }
 
       query += ` ORDER BY r.created_at DESC LIMIT $${values.length + 1}`;

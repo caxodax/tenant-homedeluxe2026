@@ -47,16 +47,21 @@ export async function getFoodServiceConfig(tenantId: string): Promise<{ is_activ
 /**
  * Consulta todas las zonas y mesas activas de sala junto a su ticket actual abierto.
  */
-export async function getZonesAndTables(tenantSchema: string): Promise<FsZone[]> {
+export async function getZonesAndTables(tenantSchema: string, storeId?: string | null): Promise<FsZone[]> {
   return withTenantDb(tenantSchema, null, async (client) => {
-    const zonesRes = await client.query(`
+    const zonesRes = await client.query(
+      `
       SELECT id, name, sort_order, is_active, created_at
       FROM fs_zones
       WHERE is_active = true
+        ${storeId ? 'AND store_id = $1' : ''}
       ORDER BY sort_order ASC, name ASC
-    `);
+    `,
+      storeId ? [storeId] : []
+    );
 
-    const tablesRes = await client.query(`
+    const tablesRes = await client.query(
+      `
       SELECT
         t.id, t.zone_id, t.label, t.seats, t.status, t.is_active, t.created_at,
         z.name as zone_name,
@@ -71,9 +76,12 @@ export async function getZonesAndTables(tenantSchema: string): Promise<FsZone[]>
       LEFT JOIN fs_ticket_orders tko ON tko.ticket_id = tk.id
       LEFT JOIN orders o ON o.id = tko.order_id AND o.status != 'CANCELLED'
       WHERE t.is_active = true
+        ${storeId ? 'AND z.store_id = $1' : ''}
       GROUP BY t.id, z.name, tk.id, tk.covers, tk.opened_at, tk.notes, sp.full_name
       ORDER BY t.label ASC
-    `);
+    `,
+      storeId ? [storeId] : []
+    );
 
     const openTicketIds = tablesRes.rows.map((r) => r.ticket_id).filter(Boolean);
     const splitsByTicket = new Map<string, Array<{ split_id: string; status: string; amount_primary: number; item_refs: string[]; payment_id: string | null; method?: string; reference_number?: string | null; payment_status?: string; created_at?: string }>>();
@@ -348,24 +356,33 @@ export async function releaseEmptyTable(tenantSchema: string, tableId: string) {
 /**
  * Marca o desmarca un producto como 86 (agotado hoy) llamando a `platform.rpc_fs_toggle_86`.
  */
-export async function toggleProduct86(tenantSchema: string, productId: string, is86 = true) {
-  const res = await pool.query(
-    `SELECT platform.rpc_fs_toggle_86($1, $2, $3) as result`,
-    [tenantSchema, productId, is86]
-  );
+export async function toggleProduct86(tenantSchema: string, productId: string, is86 = true, storeId?: string | null) {
+  const res = storeId
+    ? await pool.query(
+        `SELECT platform.rpc_fs_toggle_86($1, $2, $3, $4) as result`,
+        [tenantSchema, productId, is86, storeId]
+      )
+    : await pool.query(
+        `SELECT platform.rpc_fs_toggle_86($1, $2, $3) as result`,
+        [tenantSchema, productId, is86]
+      );
   return res.rows[0]?.result;
 }
 
 /**
  * Consulta la lista de productos agotados hoy (86) para la vitrina y el POS.
  */
-export async function getDaily86Products(tenantSchema: string): Promise<string[]> {
+export async function getDaily86Products(tenantSchema: string, storeId?: string | null): Promise<string[]> {
   return withTenantDb(tenantSchema, null, async (client) => {
-    const res = await client.query(`
+    const res = await client.query(
+      `
       SELECT product_id
       FROM fs_daily_86
       WHERE service_date = CURRENT_DATE AND is_86 = true
-    `);
+        ${storeId ? 'AND store_id = $1' : ''}
+    `,
+      storeId ? [storeId] : []
+    );
     return res.rows.map((r) => r.product_id);
   });
 }
@@ -373,9 +390,10 @@ export async function getDaily86Products(tenantSchema: string): Promise<string[]
 /**
  * Consulta las comandas activas de cocina para la pantalla KDS.
  */
-export async function getActiveKitchenTickets(tenantSchema: string): Promise<FsKitchenTicket[]> {
+export async function getActiveKitchenTickets(tenantSchema: string, storeId?: string | null): Promise<FsKitchenTicket[]> {
   return withTenantDb(tenantSchema, null, async (client) => {
-    const ticketsRes = await client.query(`
+    const ticketsRes = await client.query(
+      `
       SELECT
         kt.id, kt.order_id, kt.ticket_id, kt.status, kt.fired_at, kt.ready_at,
         kt.served_at, kt.notes, kt.created_at,
@@ -393,12 +411,16 @@ export async function getActiveKitchenTickets(tenantSchema: string): Promise<FsK
       JOIN orders o ON o.id = kt.order_id
       LEFT JOIN fs_table_tickets tk ON tk.id = kt.ticket_id
       LEFT JOIN fs_tables t ON t.id = tk.table_id
-      WHERE kt.status IN ('PENDING', 'FIRED', 'PREPARING', 'READY')
+      WHERE (${storeId ? 'kt.store_id = $1 AND ' : ''}(
+        kt.status IN ('PENDING', 'FIRED', 'PREPARING', 'READY')
          OR (kt.status = 'SERVED' AND kt.served_at >= CURRENT_DATE)
+      ))
       ORDER BY 
         CASE WHEN kt.status = 'SERVED' THEN 1 ELSE 0 END ASC,
         kt.created_at ASC
-    `);
+    `,
+      storeId ? [storeId] : []
+    );
 
     if (ticketsRes.rows.length === 0) return [];
 

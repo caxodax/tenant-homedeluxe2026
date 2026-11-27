@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withTenantDb, pool } from '@/lib/db';
 import { fetchTenantPaymentMethods } from '@/lib/payment-methods';
+import { requireTenantStaffApi, resolveOperationalStoreId } from '@/lib/auth/tenant-guard';
 
 export async function GET(
   request: NextRequest,
@@ -8,6 +9,14 @@ export async function GET(
 ) {
   try {
     const { slug } = await params;
+
+    let resolvedStoreId: string | null = request.nextUrl.searchParams.get('store_id');
+    try {
+      const ctx = await requireTenantStaffApi(slug, 'pos');
+      resolvedStoreId = await resolveOperationalStoreId(ctx, resolvedStoreId);
+    } catch {
+      // Fallback monosede si se invoca fuera de sesión
+    }
 
     const tenantRes = await pool.query(
       `SELECT id, db_schema_name, name, status FROM platform.tenants WHERE slug = $1`,
@@ -26,6 +35,14 @@ export async function GET(
     const activePlugins = pluginsRes.rows.map((r: { plugin_id: string }) => r.plugin_id);
 
     const data = await withTenantDb(db_schema_name, null, async (client) => {
+      let activeStoreId = resolvedStoreId;
+      if (!activeStoreId) {
+        const storeRes = await client.query(`
+          SELECT id FROM stores WHERE is_active = true ORDER BY is_default DESC, created_at ASC LIMIT 1
+        `);
+        activeStoreId = storeRes.rows[0]?.id || null;
+      }
+
       const isFoodServiceActive = activePlugins.includes('food_service');
       const modifierGroupsSql = isFoodServiceActive
         ? `, COALESCE(
@@ -53,16 +70,20 @@ export async function GET(
            ) as modifier_groups`
         : `, '[]'::jsonb as modifier_groups`;
 
-      const pRes = await client.query(`
+      const pRes = await client.query(
+        `
         SELECT 
           p.id, 
           p.name, 
           p.sku, 
           p.barcode,
           p.description,
-          p.price_primary, 
-          p.price_primary as price_usd, 
-          p.current_stock, 
+          COALESCE(spo.price_override, p.price_primary) as price_primary, 
+          COALESCE(spo.price_override, p.price_primary) as price_usd, 
+          COALESCE(
+            (SELECT SUM(inv.quantity) FROM inventory inv WHERE inv.product_id = p.id ${activeStoreId ? 'AND inv.store_id = $1' : ''}),
+            CASE WHEN EXISTS (SELECT 1 FROM inventory inv2 WHERE inv2.product_id = p.id) THEN 0.000 ELSE p.current_stock END
+          ) as current_stock,
           p.min_stock_alert, 
           p.category_id,
           c.name as category_name,
@@ -81,23 +102,28 @@ export async function GET(
           ${modifierGroupsSql}
         FROM products p
         LEFT JOIN categories c ON c.id = p.category_id
-        WHERE p.is_active = true AND p.deleted_at IS NULL
+        LEFT JOIN store_product_overrides spo ON spo.product_id = p.id ${activeStoreId ? 'AND spo.store_id = $1' : 'AND false'}
+        WHERE p.is_active = true 
+          AND p.deleted_at IS NULL
+          AND COALESCE(spo.is_available, true) = true
+          ${
+            activeStoreId
+              ? `AND (
+                  NOT EXISTS (SELECT 1 FROM store_product_scopes sps WHERE sps.product_id = p.id)
+                  OR EXISTS (SELECT 1 FROM store_product_scopes sps WHERE sps.product_id = p.id AND sps.store_id = $1)
+                )`
+              : ''
+          }
         ORDER BY p.name ASC
-      `);
+      `,
+        activeStoreId ? [activeStoreId] : []
+      );
 
       const sRes = await client.query(`
         SELECT business_name, logo_url, primary_color, secondary_color, accent_color,
                primary_currency, exchange_rate, secondary_currency, value
         FROM settings
         WHERE key = 'general'
-        LIMIT 1
-      `);
-
-      const storeRes = await client.query(`
-        SELECT id
-        FROM stores
-        WHERE is_active = true
-        ORDER BY created_at ASC
         LIMIT 1
       `);
 
@@ -153,17 +179,26 @@ export async function GET(
 
       if (activePlugins.includes('food_service')) {
         const [tablesRes, d86Res] = await Promise.all([
-          client.query(`
-            SELECT id, label, status, seats
-            FROM fs_tables
-            WHERE is_active = true
-            ORDER BY label ASC
-          `),
-          client.query(`
+          client.query(
+            `
+            SELECT t.id, t.label, t.status, t.seats
+            FROM fs_tables t
+            LEFT JOIN fs_zones z ON z.id = t.zone_id
+            WHERE t.is_active = true
+              ${activeStoreId ? 'AND z.store_id = $1' : ''}
+            ORDER BY t.label ASC
+          `,
+            activeStoreId ? [activeStoreId] : []
+          ),
+          client.query(
+            `
             SELECT product_id
             FROM fs_daily_86
             WHERE service_date = CURRENT_DATE AND is_86 = true
-          `),
+              ${activeStoreId ? 'AND store_id = $1' : ''}
+          `,
+            activeStoreId ? [activeStoreId] : []
+          ),
         ]);
         fsTables = tablesRes.rows;
         daily86Ids = d86Res.rows.map((r: { product_id: string }) => r.product_id);
@@ -172,7 +207,7 @@ export async function GET(
       return {
         products: pRes.rows,
         settings: sRes.rows[0] ?? null,
-        store_id: storeRes.rows[0]?.id || null,
+        store_id: activeStoreId,
         payment_methods: pmRows,
         categories: catRes.rows,
         delivery_zones: deliveryZones,

@@ -1,6 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { getCachedStorefrontCatalog, getCachedTenantShell } from '@/lib/tenant';
+import { withTenantDb } from '@/lib/db';
 import { StorefrontCatalog } from './components/storefront-catalog';
 
 export const revalidate = 60;
@@ -28,17 +29,26 @@ export default async function StorefrontPage({
     redirect(`/t/${slug}/login`);
   }
 
-  const catalog = await getCachedStorefrontCatalog(
-    slug,
-    shell.tenant.db_schema_name,
-    shell.bufferUnits
-  );
+  const [catalog, stores] = await Promise.all([
+    getCachedStorefrontCatalog(
+      slug,
+      shell.tenant.db_schema_name,
+      shell.bufferUnits
+    ),
+    withTenantDb(shell.tenant.db_schema_name, null, async (client) => {
+      const res = await client.query(
+        `SELECT id, name, address, is_default FROM stores WHERE is_active = true ORDER BY is_default DESC, created_at ASC`
+      );
+      return res.rows as Array<{ id: string; name: string; address: string; is_default: boolean }>;
+    }),
+  ]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 pt-4 sm:pt-6">
       <StorefrontCatalog
         products={catalog.products}
         categories={catalog.categories}
+        stores={stores}
         businessName={shell.settings.business_name || shell.tenant.name}
         logoUrl={shell.settings.logo_url}
         bannerUrl={shell.settings.banner_url}

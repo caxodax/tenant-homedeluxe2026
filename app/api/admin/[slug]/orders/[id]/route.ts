@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { pool, withTenantDb } from '@/lib/db';
-import { requireTenantStaffApi, TenantAuthError } from '@/lib/auth/tenant-guard';
+import { requireTenantStaffApi, resolveOperationalStoreId, TenantAuthError } from '@/lib/auth/tenant-guard';
 import { writeTenantAuditLog } from '@/lib/payment-methods';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
@@ -224,7 +224,9 @@ export async function PATCH(
 ) {
   try {
     const { slug, id } = await params;
-    const { tenant, staff } = await requireTenantStaffApi(slug, 'orders');
+    const ctx = await requireTenantStaffApi(slug, 'orders');
+    const { tenant, staff } = ctx;
+    const scopedStoreId = await resolveOperationalStoreId(ctx, null, { allowConsolidatedForManagers: true });
     const body = await request.json();
     const parsed = patchOrderSchema.safeParse(body);
 
@@ -245,13 +247,16 @@ export async function PATCH(
 
     await withTenantDb(tenant.db_schema_name, staff.id, async (client) => {
       const orderRes = await client.query(
-        `SELECT id, order_number, status, total_primary, total_primary as total_usd, delivery_type FROM orders WHERE id = $1 FOR UPDATE`,
+        `SELECT id, order_number, store_id, status, total_primary, total_primary as total_usd, delivery_type FROM orders WHERE id = $1 FOR UPDATE`,
         [id]
       );
       if ((orderRes.rowCount || 0) === 0) {
         throw new Error('Pedido no encontrado');
       }
       const order = orderRes.rows[0];
+      if (scopedStoreId && order.store_id !== scopedStoreId) {
+        throw new TenantAuthError('No autorizado para modificar pedidos de otra sucursal', 403);
+      }
       orderDeliveryType = order.delivery_type || null;
 
       if (payload.action === 'UPDATE_STATUS') {

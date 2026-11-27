@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withTenantDb } from '@/lib/db';
-import { requireTenantStaffApi, TenantAuthError } from '@/lib/auth/tenant-guard';
+import { requireTenantStaffApi, resolveOperationalStoreId, TenantAuthError } from '@/lib/auth/tenant-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,12 +10,17 @@ export async function GET(
 ) {
   try {
     const { slug } = await params;
-    const { tenant } = await requireTenantStaffApi(slug, 'orders');
+    const ctx = await requireTenantStaffApi(slug, 'orders');
+    const { tenant } = ctx;
+    const storeId = await resolveOperationalStoreId(ctx, request.nextUrl.searchParams.get('store_id'), {
+      allowConsolidatedForManagers: true,
+    });
     const summaryOnly = request.nextUrl.searchParams.get('summary') === '1';
 
     if (summaryOnly) {
       const pendingCount = await withTenantDb(tenant.db_schema_name, null, async (client) => {
-        const res = await client.query(`
+        const res = await client.query(
+          `
           SELECT COUNT(*)::int AS pending_count
           FROM orders o
           LEFT JOIN LATERAL (
@@ -25,9 +30,14 @@ export async function GET(
             ORDER BY created_at DESC
             LIMIT 1
           ) p ON true
-          WHERE o.status IN ('CREATED', 'PENDING_PAYMENT_VERIFICATION')
-             OR (p.status = 'PENDING' AND o.status <> 'CANCELLED')
-        `);
+          WHERE (
+              o.status IN ('CREATED', 'PENDING_PAYMENT_VERIFICATION')
+              OR (p.status = 'PENDING' AND o.status <> 'CANCELLED')
+            )
+            ${storeId ? 'AND o.store_id = $1' : ''}
+        `,
+          storeId ? [storeId] : []
+        );
         return Number(res.rows[0]?.pending_count || 0);
       });
 
@@ -38,10 +48,13 @@ export async function GET(
     }
 
     const orders = await withTenantDb(tenant.db_schema_name, null, async (client) => {
-      const res = await client.query(`
+      const res = await client.query(
+        `
         SELECT
           o.id,
           o.order_number,
+          o.store_id,
+          s.name AS store_name,
           o.customer_name,
           o.customer_phone,
           o.status,
@@ -64,6 +77,7 @@ export async function GET(
           p.proof_image_url AS payment_proof_url,
           (SELECT COUNT(*)::int FROM order_items oi WHERE oi.order_id = o.id) AS items_count
         FROM orders o
+        LEFT JOIN stores s ON s.id = o.store_id
         LEFT JOIN LATERAL (
           SELECT method, status, reference_number, proof_image_url
           FROM payments
@@ -71,9 +85,12 @@ export async function GET(
           ORDER BY created_at DESC
           LIMIT 1
         ) p ON true
+        ${storeId ? 'WHERE o.store_id = $1' : ''}
         ORDER BY o.created_at DESC
         LIMIT 100
-      `);
+      `,
+        storeId ? [storeId] : []
+      );
       return res.rows;
     });
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withTenantDb } from '@/lib/db';
-import { requireTenantStaffApi, TenantAuthError } from '@/lib/auth/tenant-guard';
+import { requireTenantStaffApi, resolveOperationalStoreId, TenantAuthError } from '@/lib/auth/tenant-guard';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,10 +10,79 @@ export async function GET(
 ) {
   try {
     const { slug } = await params;
-    const { tenant } = await requireTenantStaffApi(slug, 'inventory');
-    const schema = tenant.db_schema_name;
+    const ctx = await requireTenantStaffApi(slug, 'inventory');
+    const schema = ctx.tenant.db_schema_name;
+    const storeId = await resolveOperationalStoreId(ctx, request.nextUrl.searchParams.get('store_id'), {
+      allowConsolidatedForManagers: true,
+    });
 
     const result = await withTenantDb(schema, null, async (client) => {
+      if (storeId) {
+        const res = await client.query(
+          `
+          SELECT 
+            p.id, 
+            p.name, 
+            p.sku, 
+            inv.quantity AS current_stock, 
+            inv.min_quantity AS min_stock_alert, 
+            p.image_url,
+            c.name as category_name,
+            s.name as store_name
+          FROM inventory inv
+          JOIN products p ON p.id = inv.product_id
+          JOIN stores s ON s.id = inv.store_id
+          LEFT JOIN categories c ON c.id = p.category_id
+          WHERE inv.store_id = $1
+            AND p.is_active = true 
+            AND p.deleted_at IS NULL
+            AND p.track_inventory = true
+            AND inv.quantity <= inv.min_quantity
+          ORDER BY inv.quantity ASC, p.name ASC
+          LIMIT 25
+        `,
+          [storeId]
+        );
+
+        const countRes = await client.query(
+          `
+          SELECT COUNT(*) as total
+          FROM inventory inv
+          JOIN products p ON p.id = inv.product_id
+          WHERE inv.store_id = $1
+            AND p.is_active = true 
+            AND p.deleted_at IS NULL
+            AND p.track_inventory = true
+            AND inv.quantity <= inv.min_quantity
+        `,
+          [storeId]
+        );
+
+        return {
+          store_id: storeId,
+          count: parseInt(countRes.rows[0]?.total || '0', 10),
+          products: res.rows.map((r: {
+            id: string;
+            name: string;
+            sku: string;
+            current_stock: string | number;
+            min_stock_alert: string | number;
+            image_url: string | null;
+            category_name: string | null;
+            store_name?: string | null;
+          }) => ({
+            id: r.id,
+            name: r.name,
+            sku: r.sku,
+            current_stock: parseFloat(String(r.current_stock || '0')),
+            min_stock_alert: parseFloat(String(r.min_stock_alert || '0')),
+            image_url: r.image_url,
+            category_name: r.category_name,
+            store_name: r.store_name || null,
+          })),
+        };
+      }
+
       const res = await client.query(`
         SELECT 
           p.id, 

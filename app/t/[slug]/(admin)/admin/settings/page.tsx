@@ -27,7 +27,8 @@ import {
   Loader2, 
   Save, 
   Store, 
-  Palette, 
+  Palette,
+  ShieldCheck,
   MessageCircle, 
   Share2, 
   RefreshCw,
@@ -82,6 +83,7 @@ const settingsSchema = z.object({
     tables_enabled: z.boolean(),
     recipes_enabled: z.boolean(),
     banner_style: z.enum(['clean', 'card']),
+    multi_branch_enabled: z.boolean().optional(),
   }),
 });
 
@@ -123,6 +125,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [activePlugins, setActivePlugins] = useState<string[]>([]);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [activeTab, setActiveTab] = useState('general');
   const hasLocalizationPlugin = activePlugins.includes('local_venezuela');
 
@@ -174,6 +177,7 @@ export default function SettingsPage() {
         tables_enabled: true,
         recipes_enabled: false,
         banner_style: 'clean',
+        multi_branch_enabled: false,
       },
     },
   });
@@ -192,6 +196,9 @@ export default function SettingsPage() {
 
       if (Array.isArray(data.active_plugins)) {
         setActivePlugins(data.active_plugins);
+      }
+      if (data.is_super_admin) {
+        setIsSuperAdmin(true);
       }
 
       if (data.settings) {
@@ -229,6 +236,7 @@ export default function SettingsPage() {
             tables_enabled: s.features?.tables_enabled !== false,
             recipes_enabled: s.features?.recipes_enabled === true,
             banner_style: s.features?.banner_style || 'clean',
+            multi_branch_enabled: s.features?.multi_branch_enabled === true,
           },
         });
       }
@@ -713,6 +721,38 @@ export default function SettingsPage() {
                       </label>
                     </div>
                   </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* GOBERNANZA MULTI-SUCURSAL (SOLO SUPER ADMIN) */}
+            {isSuperAdmin && (
+              <Card className="bg-white dark:bg-[#121214] border-amber-300 dark:border-amber-800/60 shadow-xs">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-extrabold uppercase tracking-wider text-slate-950 dark:text-white flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-amber-600" />
+                    Control Super Admin: Red de Tiendas
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <label className="flex items-start gap-3 cursor-pointer p-3 rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-50 dark:bg-zinc-900/50">
+                    <input
+                      type="checkbox"
+                      checked={form.watch('features.multi_branch_enabled') === true}
+                      onChange={(e) => {
+                        form.setValue('features.multi_branch_enabled', e.target.checked, { shouldDirty: true });
+                      }}
+                      className="w-4 h-4 mt-0.5 rounded text-amber-600 cursor-pointer"
+                    />
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-slate-900 dark:text-white">
+                        Habilitar Módulos de Sucursales y Traslados en el Menú
+                      </span>
+                      <span className="text-[11px] text-slate-500 dark:text-zinc-400">
+                        Visible únicamente para Super Admin. Al desmarcarlo, el comercio monosede no ve las rutas de Sucursales ni Traslados.
+                      </span>
+                    </div>
+                  </label>
                 </CardContent>
               </Card>
             )}

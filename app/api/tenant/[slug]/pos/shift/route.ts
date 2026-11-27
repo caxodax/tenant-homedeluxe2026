@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { PoolClient } from 'pg';
 import { pool, withTenantDb } from '@/lib/db';
-import { requireTenantStaffApi, TenantAuthError } from '@/lib/auth/tenant-guard';
+import { requireTenantStaffApi, resolveOperationalStoreId, TenantAuthError } from '@/lib/auth/tenant-guard';
 import { fetchTenantPaymentMethods, writeTenantAuditLog } from '@/lib/payment-methods';
 import { z } from 'zod';
 
@@ -28,7 +28,7 @@ async function getActivePlugins(tenantId: string): Promise<string[]> {
 
 async function computeShiftExpected(
   client: PoolClient,
-  shift: { id: string; opened_at: string; opening_balance_primary: string | number },
+  shift: { id: string; opened_at: string; opening_balance_primary: string | number; store_id?: string | null },
   activePlugins: string[]
 ) {
   const methods = await fetchTenantPaymentMethods(client, {
@@ -45,10 +45,11 @@ async function computeShiftExpected(
      FROM payments py
      JOIN orders o ON o.id = py.order_id
      WHERE o.created_at >= $1
+       ${shift.store_id ? 'AND o.store_id = $2' : ''}
        AND o.status != 'CANCELLED'
        AND py.status != 'REJECTED'
      GROUP BY py.method`,
-    [shift.opened_at]
+    shift.store_id ? [shift.opened_at, shift.store_id] : [shift.opened_at]
   );
 
   const expectedByMethod: Record<string, number> = {};
@@ -91,31 +92,39 @@ function handleError(err: unknown) {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
     const { slug } = await params;
-    const { tenant } = await requireTenantStaffApi(slug, 'pos');
+    const ctx = await requireTenantStaffApi(slug, 'pos');
+    const { tenant } = ctx;
+    const storeId = await resolveOperationalStoreId(ctx, request.nextUrl.searchParams.get('store_id'));
     const activePlugins = await getActivePlugins(tenant.id);
 
     const payload = await withTenantDb(tenant.db_schema_name, null, async (client) => {
       const [regRes, openRes, historyRes] = await Promise.all([
-        client.query(`SELECT id, name, code FROM cash_registers WHERE is_active = true ORDER BY code ASC`),
         client.query(
-          `SELECT cs.*, cr.name AS register_name, cr.code AS register_code
-           FROM cash_shifts cs
-           JOIN cash_registers cr ON cr.id = cs.register_id
-           WHERE cs.status = 'OPEN'
-           ORDER BY cs.opened_at DESC
-           LIMIT 1`
+          `SELECT id, name, code, store_id FROM cash_registers WHERE is_active = true ${storeId ? 'AND store_id = $1' : ''} ORDER BY code ASC`,
+          storeId ? [storeId] : []
         ),
         client.query(
-          `SELECT cs.*, cr.name AS register_name, cr.code AS register_code
+          `SELECT cs.*, cr.name AS register_name, cr.code AS register_code, cr.store_id
            FROM cash_shifts cs
            JOIN cash_registers cr ON cr.id = cs.register_id
+           WHERE cs.status = 'OPEN' ${storeId ? 'AND cr.store_id = $1' : ''}
            ORDER BY cs.opened_at DESC
-           LIMIT 12`
+           LIMIT 1`,
+          storeId ? [storeId] : []
+        ),
+        client.query(
+          `SELECT cs.*, cr.name AS register_name, cr.code AS register_code, cr.store_id
+           FROM cash_shifts cs
+           JOIN cash_registers cr ON cr.id = cs.register_id
+           ${storeId ? 'WHERE cr.store_id = $1' : ''}
+           ORDER BY cs.opened_at DESC
+           LIMIT 12`,
+          storeId ? [storeId] : []
         ),
       ]);
 
@@ -145,9 +154,11 @@ export async function POST(
 ) {
   try {
     const { slug } = await params;
-    const { tenant, staff } = await requireTenantStaffApi(slug, 'pos');
+    const ctx = await requireTenantStaffApi(slug, 'pos');
+    const { tenant, staff } = ctx;
 
     const body = await request.json();
+    const storeId = await resolveOperationalStoreId(ctx, typeof body?.store_id === 'string' ? body.store_id : null);
     const parsed = openShiftSchema.safeParse(body);
     if (!parsed.success) {
       return NextResponse.json(
@@ -160,13 +171,14 @@ export async function POST(
 
     const opened = await withTenantDb(tenant.db_schema_name, staff.id, async (client) => {
       const regRes = await client.query(
-        `SELECT id, name, code FROM cash_registers WHERE code = $1 AND is_active = true LIMIT 1`,
-        [parsed.data.register_code]
+        `SELECT id, name, code, store_id FROM cash_registers WHERE code = $1 AND is_active = true ${storeId ? 'AND store_id = $2' : ''} LIMIT 1`,
+        storeId ? [parsed.data.register_code, storeId] : [parsed.data.register_code]
       );
       let register = regRes.rows[0];
       if (!register) {
         const fallbackReg = await client.query(
-          `SELECT id, name, code FROM cash_registers WHERE is_active = true ORDER BY created_at ASC LIMIT 1`
+          `SELECT id, name, code, store_id FROM cash_registers WHERE is_active = true ${storeId ? 'AND store_id = $1' : ''} ORDER BY created_at ASC LIMIT 1`,
+          storeId ? [storeId] : []
         );
         register = fallbackReg.rows[0];
       }
@@ -207,7 +219,7 @@ export async function POST(
         [register.id, cashierUuid, staff.full_name, parsed.data.opening_balance_primary]
       );
 
-      const newShift = { ...ins.rows[0], register_name: register.name, register_code: register.code };
+      const newShift = { ...ins.rows[0], register_name: register.name, register_code: register.code, store_id: register.store_id };
 
       await writeTenantAuditLog(client, {
         actorId: cashierUuid,
@@ -238,7 +250,9 @@ export async function PATCH(
 ) {
   try {
     const { slug } = await params;
-    const { tenant, staff } = await requireTenantStaffApi(slug, 'pos');
+    const ctx = await requireTenantStaffApi(slug, 'pos');
+    const { tenant, staff } = ctx;
+    const storeId = await resolveOperationalStoreId(ctx);
 
     const body = await request.json();
     const parsed = closeShiftSchema.safeParse(body);
@@ -253,8 +267,12 @@ export async function PATCH(
 
     const closeResult = await withTenantDb(tenant.db_schema_name, staff.id, async (client) => {
       const shiftRes = await client.query(
-        `SELECT * FROM cash_shifts WHERE id = $1 AND status = 'OPEN' LIMIT 1`,
-        [parsed.data.shift_id]
+        `SELECT cs.*, cr.store_id
+         FROM cash_shifts cs
+         JOIN cash_registers cr ON cr.id = cs.register_id
+         WHERE cs.id = $1 AND cs.status = 'OPEN' ${storeId ? 'AND cr.store_id = $2' : ''}
+         LIMIT 1`,
+        storeId ? [parsed.data.shift_id, storeId] : [parsed.data.shift_id]
       );
       if ((shiftRes.rowCount || 0) === 0) {
         throw new Error('Turno de caja no encontrado o ya fue cerrado.');
